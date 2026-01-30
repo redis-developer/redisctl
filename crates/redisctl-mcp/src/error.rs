@@ -4,6 +4,7 @@ use thiserror::Error;
 
 /// Errors that can occur in the MCP server
 #[derive(Error, Debug)]
+#[allow(dead_code)]
 pub enum McpError {
     /// Configuration error
     #[error("Configuration error: {0}")]
@@ -16,6 +17,14 @@ pub enum McpError {
     /// Enterprise API error
     #[error("Enterprise API error: {0}")]
     EnterpriseApi(String),
+
+    /// Redis database error
+    #[error("Redis error: {0}")]
+    Redis(String),
+
+    /// Authentication error
+    #[error("Authentication error: {0}")]
+    Auth(String),
 
     /// Tool execution error
     #[error("Tool execution error: {0}")]
@@ -39,5 +48,11 @@ impl From<anyhow::Error> for McpError {
 impl From<redisctl_config::ConfigError> for McpError {
     fn from(err: redisctl_config::ConfigError) -> Self {
         McpError::Configuration(err.to_string())
+    }
+}
+
+impl From<redis::RedisError> for McpError {
+    fn from(err: redis::RedisError) -> Self {
+        McpError::Redis(err.to_string())
     }
 }
