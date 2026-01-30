@@ -17,7 +17,7 @@ path = "src/main.rs"
 
 [dependencies]
 # MCP framework
-tower-mcp = { version = "0.2", features = ["http", "oauth"] }
+tower-mcp = { version = "0.2.3", features = ["http", "oauth"] }
 schemars = "1.2"
 
 # Internal crates

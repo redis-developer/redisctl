@@ -32,10 +32,7 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list subscriptions: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&account_subs)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&account_subs)
         })
         .build()
         .expect("valid tool")
@@ -66,10 +63,7 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get subscription: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&subscription)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&subscription)
         })
         .build()
         .expect("valid tool")
@@ -102,10 +96,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&databases)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&databases)
         })
         .build()
         .expect("valid tool")
@@ -138,10 +129,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&database)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&database)
         })
         .build()
         .expect("valid tool")
@@ -173,10 +161,7 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get account: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&account)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&account)
         })
         .build()
         .expect("valid tool")
@@ -210,10 +195,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get regions: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&regions)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&regions)
         })
         .build()
         .expect("valid tool")
@@ -243,10 +225,7 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get modules: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&modules)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&modules)
         })
         .build()
         .expect("valid tool")
@@ -278,10 +257,7 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list tasks: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&tasks)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&tasks)
         })
         .build()
         .expect("valid tool")
@@ -312,10 +288,7 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get task: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&task)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&task)
         })
         .build()
         .expect("valid tool")
@@ -349,10 +322,7 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&users)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&users)
         })
         .build()
         .expect("valid tool")
@@ -384,10 +354,7 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list ACL users: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&users)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&users)
         })
         .build()
         .expect("valid tool")
@@ -415,10 +382,7 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list ACL roles: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&roles)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&roles)
         })
         .build()
         .expect("valid tool")
@@ -446,10 +410,7 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list Redis rules: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&rules)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&rules)
         })
         .build()
         .expect("valid tool")
@@ -493,10 +454,7 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get backup status: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&status)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&status)
         })
         .build()
         .expect("valid tool")
@@ -534,10 +492,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get slow log: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&log)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&log)
         })
         .build()
         .expect("valid tool")
@@ -570,10 +525,7 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get tags: {}", e)))?;
 
-            let output = serde_json::to_string_pretty(&tags)
-                .map_err(|e| ToolError::new(format!("Failed to serialize: {}", e)))?;
-
-            Ok(CallToolResult::text(output))
+            CallToolResult::from_serialize(&tags)
         })
         .build()
         .expect("valid tool")
