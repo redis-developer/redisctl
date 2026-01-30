@@ -114,6 +114,55 @@ mod tests {
     }
 
     #[test]
+    fn test_app_state_default_profile_normalized() {
+        // Passing "default" as profile name should be treated as None (use configured default)
+        let state = AppState::new(
+            CredentialSource::Profile(Some("default".to_string())),
+            true,
+            None,
+        )
+        .unwrap();
+
+        // Verify the credential source was normalized to None
+        match &state.credential_source {
+            CredentialSource::Profile(None) => {} // expected
+            other => panic!("Expected Profile(None), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_app_state_default_profile_case_insensitive() {
+        // "DEFAULT" should also be normalized to None
+        let state = AppState::new(
+            CredentialSource::Profile(Some("DEFAULT".to_string())),
+            true,
+            None,
+        )
+        .unwrap();
+
+        match &state.credential_source {
+            CredentialSource::Profile(None) => {} // expected
+            other => panic!("Expected Profile(None), got {:?}", other),
+        }
+    }
+
+    #[test]
+    fn test_app_state_explicit_profile_preserved() {
+        // Non-"default" profile names should be preserved
+        let state = AppState::new(
+            CredentialSource::Profile(Some("my-profile".to_string())),
+            true,
+            None,
+        )
+        .unwrap();
+
+        match &state.credential_source {
+            CredentialSource::Profile(Some(name)) if name == "my-profile" => {} // expected
+            other => panic!("Expected Profile(Some(\"my-profile\")), got {:?}", other),
+        }
+    }
+
+    #[test]
     fn test_cloud_tools_build() {
         let state = Arc::new(AppState::new(CredentialSource::Profile(None), true, None).unwrap());
 

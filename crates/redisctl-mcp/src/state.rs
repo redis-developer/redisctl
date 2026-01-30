@@ -46,6 +46,14 @@ impl AppState {
         read_only: bool,
         database_url: Option<String>,
     ) -> Result<Self> {
+        // Normalize credential source: treat "default" as None (use configured default)
+        let credential_source = match credential_source {
+            CredentialSource::Profile(Some(ref name)) if name.eq_ignore_ascii_case("default") => {
+                CredentialSource::Profile(None)
+            }
+            other => other,
+        };
+
         // Load config if using profile-based auth
         let config = match &credential_source {
             CredentialSource::Profile(_) => Config::load().ok(),
