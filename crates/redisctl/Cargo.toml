@@ -19,8 +19,8 @@ path = "src/main.rs"
 
 [dependencies]
 redisctl-config = { version = "0.2.2", path = "../redisctl-config" }
-redis-cloud = { version = "0.7.6", path = "../redis-cloud", features = ["tower-integration"] }
-redis-enterprise = { version = "0.7.4", path = "../redis-enterprise", features = ["tower-integration"] }
+redis-cloud = { version = "0.7.6", path = "../../../redis-cloud", features = ["tower-integration"] }
+redis-enterprise = { version = "0.7.4", path = "../../../redis-enterprise", features = ["tower-integration"] }
 redisctl-mcp = { version = "0.1.2", path = "../redisctl-mcp", optional = true }
 files-sdk = { workspace = true, optional = true }
 
