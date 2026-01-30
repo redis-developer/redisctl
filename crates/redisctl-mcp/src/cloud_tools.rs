@@ -192,7 +192,6 @@ impl CloudTools {
             payment_method: None,
             payment_method_id: payment_method_id.map(|id| id as i32),
             command_type: None,
-            extra: Value::Null,
         };
         let result = handler
             .create(&request)

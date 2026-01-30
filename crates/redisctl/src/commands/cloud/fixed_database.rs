@@ -313,7 +313,6 @@ pub async fn handle_fixed_database_command(
                 database_id: Some(database_id),
                 adhoc_backup_path: None,
                 command_type: None,
-                extra: serde_json::Value::Null,
             };
 
             let result = handler
@@ -497,7 +496,6 @@ pub async fn handle_fixed_database_command(
                 command_type: None,
                 key: key.clone(),
                 value: value.clone(),
-                extra: serde_json::Value::Null,
             };
 
             let result = handler
@@ -585,7 +583,6 @@ pub async fn handle_fixed_database_command(
                 command_type: None,
                 key: Some(key.clone()),
                 value: value.clone(),
-                extra: serde_json::Value::Null,
             };
 
             let result = handler

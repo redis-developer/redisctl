@@ -13,7 +13,6 @@ use crate::error::Result as CliResult;
 use anyhow::Context;
 use redis_cloud::CloudClient;
 use redis_cloud::connectivity::transit_gateway::{TgwAttachmentRequest, TransitGatewayHandler};
-use serde_json::Value;
 
 /// Parameters for TGW attachment create/update operations
 #[derive(Debug, Default)]
@@ -308,7 +307,6 @@ fn build_tgw_attachment_request(
         aws_account_id: attachment_params.aws_account_id.clone(),
         tgw_id: attachment_params.tgw_id.clone(),
         cidrs,
-        extra: Value::Object(serde_json::Map::new()),
     })
 }
 
