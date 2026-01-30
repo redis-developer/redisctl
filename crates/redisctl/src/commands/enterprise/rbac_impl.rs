@@ -276,7 +276,7 @@ pub async fn get_user_roles(
     let roles = serde_json::json!({
         "user_id": user_id,
         "role": user.role,
-        "role_uids": user.extra.get("role_uids")
+        "role_uids": user.role_uids
     });
 
     let data = handle_output(roles, output_format, query)?;
@@ -297,11 +297,7 @@ pub async fn assign_user_role(
 
     // Get current user to preserve existing data
     let user = handler.get(user_id).await?;
-    let mut role_uids: Vec<u32> = user
-        .extra
-        .get("role_uids")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let mut role_uids: Vec<u32> = user.role_uids.clone().unwrap_or_default();
 
     // Add new role if not already present
     if !role_uids.contains(&role_id) {
@@ -334,11 +330,7 @@ pub async fn remove_user_role(
 
     // Get current user to preserve existing data
     let user = handler.get(user_id).await?;
-    let mut role_uids: Vec<u32> = user
-        .extra
-        .get("role_uids")
-        .and_then(|v| serde_json::from_value(v.clone()).ok())
-        .unwrap_or_default();
+    let mut role_uids: Vec<u32> = user.role_uids.clone().unwrap_or_default();
 
     // Remove the role
     role_uids.retain(|&id| id != role_id);
@@ -514,15 +506,13 @@ pub async fn get_role_permissions(
     let handler = RolesHandler::new(client);
 
     let role = handler.get(id).await?;
-    let permissions = role
-        .extra
-        .get("permissions")
-        .cloned()
-        .unwrap_or_else(|| serde_json::json!([]));
 
     let result = serde_json::json!({
         "role_id": id,
-        "permissions": permissions
+        "management": role.management,
+        "data_access": role.data_access,
+        "bdb_roles": role.bdb_roles,
+        "cluster_roles": role.cluster_roles
     });
 
     let data = handle_output(result, output_format, query)?;
@@ -545,12 +535,9 @@ pub async fn get_role_users(
     let users_with_role: Vec<_> = users
         .into_iter()
         .filter(|u| {
-            if let Some(role_uids) = u.extra.get("role_uids")
-                && let Ok(uids) = serde_json::from_value::<Vec<u32>>(role_uids.clone())
-            {
-                return uids.contains(&role_id);
-            }
-            false
+            u.role_uids
+                .as_ref()
+                .is_some_and(|uids| uids.contains(&role_id))
         })
         .collect();
 
