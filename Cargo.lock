@@ -2673,9 +2673,9 @@ dependencies = [
 
 [[package]]
 name = "redis-enterprise"
-version = "0.7.5"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b08073b6d4d2d80b6a3f65081f7fe2eb04a66938c5ee6cdf5cf043e00a397e"
+checksum = "4bb6f23898eccceae21caf7fcedc4efd43785adb5e4077785d21d3586897e1c6"
 dependencies = [
  "anyhow",
  "async-stream",
