@@ -82,7 +82,7 @@ redisctl cloud database create --subscription 123 --name mydb --wait
 :   JSON, YAML, or tables with JMESPath queries
 
 :material-puzzle: **Library-First Architecture**
-:   Reusable `redis-cloud` and `redis-enterprise` crates
+:   Built on standalone [`redis-cloud`](https://crates.io/crates/redis-cloud) and [`redis-enterprise`](https://crates.io/crates/redis-enterprise) crates
 
 </div>
 

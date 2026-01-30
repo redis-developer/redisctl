@@ -409,14 +409,15 @@ redisctl enterprise cluster get -o yaml
 
 ### Python Bindings
 
-Use the same APIs from Python via PyO3 bindings:
+Use the API client libraries from Python:
 
 ```bash
-pip install redisctl
+pip install redis-cloud redis-enterprise
 ```
 
 ```python
-from redisctl import CloudClient, EnterpriseClient
+from redis_cloud import CloudClient
+from redis_enterprise import EnterpriseClient
 
 # Redis Cloud
 cloud = CloudClient.from_env()
@@ -431,7 +432,8 @@ async def main():
     subs = await cloud.subscriptions()
 ```
 
-[**Python Documentation →**](https://redis-field-engineering.github.io/redisctl-docs/developer/python/)
+- [redis-cloud on PyPI](https://pypi.org/project/redis-cloud/)
+- [redis-enterprise on PyPI](https://pypi.org/project/redis-enterprise/)
 
 ---
 
@@ -451,9 +453,12 @@ async def main():
 
 Individual crate changelogs:
 - [redisctl CLI](crates/redisctl/CHANGELOG.md) - Command-line interface
-- [redis-cloud](crates/redis-cloud/CHANGELOG.md) - Cloud API client library
-- [redis-enterprise](crates/redis-enterprise/CHANGELOG.md) - Enterprise API client library
 - [redisctl-config](crates/redisctl-config/CHANGELOG.md) - Configuration management library
+- [redisctl-mcp](crates/redisctl-mcp/CHANGELOG.md) - MCP server
+
+The API client libraries are maintained in separate repositories:
+- [redis-cloud](https://github.com/redis-developer/redis-cloud-rs) - Redis Cloud API client
+- [redis-enterprise](https://github.com/redis-developer/redis-enterprise-rs) - Redis Enterprise API client
 
 ---
 

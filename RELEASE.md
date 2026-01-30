@@ -8,14 +8,16 @@ The release process produces artifacts for multiple destinations:
 
 | Artifact | Destination | Workflow |
 |----------|-------------|----------|
-| `redis-cloud` crate | crates.io | `release-plz.yml` |
-| `redis-enterprise` crate | crates.io | `release-plz.yml` |
 | `redisctl-config` crate | crates.io | `release-plz.yml` |
 | `redisctl` crate | crates.io | `release-plz.yml` |
+| `redisctl-mcp` crate | crates.io | `release-plz.yml` |
 | CLI binaries | GitHub Releases | `release.yml` |
 | Homebrew formula | redis-developer/homebrew-tap | `release.yml` |
 | Docker images | ghcr.io | `docker.yml` |
-| Python wheels | PyPI | `python-publish.yml` |
+
+**Note:** The `redis-cloud` and `redis-enterprise` crates are maintained in separate repositories:
+- [redis-developer/redis-cloud-rs](https://github.com/redis-developer/redis-cloud-rs)
+- [redis-developer/redis-enterprise-rs](https://github.com/redis-developer/redis-enterprise-rs)
 
 ## Release Flow
 
@@ -38,27 +40,23 @@ The release process produces artifacts for multiple destinations:
                                      │
                                      │ (creates tags like redisctl-v0.7.6)
                                      ▼
-         ┌───────────────────────────┼───────────────────────────┐
-         │                           │                           │
-         ▼                           ▼                           ▼
-┌─────────────────┐     ┌─────────────────────┐     ┌─────────────────────┐
-│  release.yml    │     │    docker.yml       │     │ python-publish.yml  │
-│                 │     │                     │     │                     │
-│ Trigger: tag    │     │ Trigger: tag        │     │ Trigger: release    │
-│ **[0-9]+.*      │     │ redisctl-v* or v*   │     │ published event     │
-│                 │     │                     │     │ (only *-python tags)│
-│ Actions:        │     │ Actions:            │     │                     │
-│ 1. cargo-dist   │     │ 1. Build multi-arch │     │ Actions:            │
-│    plan         │     │    images           │     │ 1. Build wheels for │
-│ 2. Build bins   │     │ 2. Push to ghcr.io  │     │    linux/mac/win    │
-│    for all      │     │    with version     │     │ 2. Build sdist      │
-│    platforms    │     │    tags             │     │ 3. Publish to PyPI  │
-│ 3. Create       │     │                     │     │                     │
-│    GitHub       │     │                     │     │                     │
-│    Release      │     │                     │     │                     │
-│ 4. Update       │     │                     │     │                     │
-│    Homebrew     │     │                     │     │                     │
-└─────────────────┘     └─────────────────────┘     └─────────────────────┘
+         ┌───────────────────────────┴───────────────────────────┐
+         │                                                       │
+         ▼                                                       ▼
+┌─────────────────────────┐                       ┌─────────────────────┐
+│      release.yml        │                       │    docker.yml       │
+│                         │                       │                     │
+│ Trigger: tag            │                       │ Trigger: tag        │
+│ **[0-9]+.*              │                       │ redisctl-v* or v*   │
+│                         │                       │                     │
+│ Actions:                │                       │ Actions:            │
+│ 1. cargo-dist plan      │                       │ 1. Build multi-arch │
+│ 2. Build bins for       │                       │    images           │
+│    all platforms        │                       │ 2. Push to ghcr.io  │
+│ 3. Create GitHub        │                       │    with version     │
+│    Release              │                       │    tags             │
+│ 4. Update Homebrew      │                       │                     │
+└─────────────────────────┘                       └─────────────────────┘
 ```
 
 ## Workflow Details
@@ -127,28 +125,11 @@ git_tag_name = "redisctl-v{{ version }}"
    - `{major}.{minor}` (e.g., `0.7`)
    - `{major}` (e.g., `0`)
 
-### 4. python-publish.yml
-
-**Trigger:** GitHub Release `published` event (only for `*-python` tags)
-
-**What it does:**
-1. Checks if this is a Python release (tag contains `-python` or `python-`)
-2. Builds wheels for:
-   - Linux x86_64 and aarch64 (using maturin)
-   - macOS x86_64 and aarch64
-   - Windows x86_64
-3. Builds source distribution (sdist)
-4. Publishes to PyPI (uses OIDC trusted publishing)
-
-**Note:** Python releases use a separate tag format (e.g., `v0.1.0-python`) to decouple from CLI releases.
-
 ## Tag Formats
 
 | Tag Format | Triggers | Example |
 |------------|----------|---------|
 | `redisctl-v{version}` | release.yml, docker.yml | `redisctl-v0.7.6` |
-| `redis-cloud-v{version}` | release.yml (plan only) | `redis-cloud-v0.7.6` |
-| `v{version}-python` | python-publish.yml | `v0.1.0-python` |
 | `v{version}` | docker.yml | `v0.7.6` |
 
 ## Dependencies Between Workflows
@@ -157,13 +138,9 @@ git_tag_name = "redisctl-v{{ version }}"
 release-plz.yml (creates tags)
        │
        ├──► release.yml (builds binaries, creates GitHub Release)
-       │           │
-       │           └──► python-publish.yml (on release published event)
        │
        └──► docker.yml (builds container images)
 ```
-
-**Critical dependency:** `python-publish.yml` triggers on the `release: published` event, which means it runs AFTER `release.yml` creates the GitHub Release.
 
 ## Failure Modes
 
@@ -203,14 +180,6 @@ release-plz.yml (creates tags)
   - Dockerfile issues
   - GHCR authentication
 
-### Python publish fails
-- **Symptom:** CLI released but no Python package on PyPI
-- **Check:** `python-publish.yml` workflow logs
-- **Recovery:** Manually trigger with `workflow_dispatch`
-- **Common causes:**
-  - pyo3/maturin build issues on specific platforms
-  - PyPI trusted publisher not configured
-
 ## Verification Checklist
 
 After a release, verify:
@@ -218,8 +187,8 @@ After a release, verify:
 - [ ] **crates.io:** All crates published with correct versions
   ```bash
   cargo search redisctl
-  cargo search redis-cloud
-  cargo search redis-enterprise
+  cargo search redisctl-config
+  cargo search redisctl-mcp
   ```
 
 - [ ] **GitHub Release:** Release exists with all binary artifacts
@@ -237,11 +206,6 @@ After a release, verify:
   docker pull ghcr.io/redis-developer/redisctl:{version}
   ```
 
-- [ ] **PyPI:** Package available (if Python release)
-  ```bash
-  pip index versions redisctl
-  ```
-
 ## Manual Release Steps
 
 If automation fails, here's how to manually release:
@@ -249,9 +213,8 @@ If automation fails, here's how to manually release:
 ### Publish to crates.io
 ```bash
 # In dependency order
-cargo publish -p redis-cloud
-cargo publish -p redis-enterprise  
 cargo publish -p redisctl-config
+cargo publish -p redisctl-mcp
 cargo publish -p redisctl
 ```
 
@@ -281,13 +244,6 @@ docker buildx build --platform linux/amd64,linux/arm64 \
   --push .
 ```
 
-### Publish Python
-```bash
-cd crates/redisctl-python
-maturin build --release
-maturin publish
-```
-
 ## Secrets Required
 
 | Secret | Used By | Purpose |
@@ -308,11 +264,6 @@ Some platform builds failed. Check which platforms failed in the `build-local-ar
 
 ### "Homebrew formula not updated"
 The `update-homebrew` job only runs for `redisctl-v*` tags. Check if the `COMMITTER_TOKEN` is valid.
-
-### "Python wheels missing for a platform"
-Check the specific platform's build job. Common issues:
-- macOS x86_64: pyo3 linking issues (need Python headers)
-- Linux: manylinux compatibility
 
 ## Future Improvements
 

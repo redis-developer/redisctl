@@ -92,17 +92,17 @@ Then create a PR on GitHub.
 
 ```
 crates/
-├── redis-cloud/         # Cloud API client
-│   ├── src/handlers/    # API endpoint handlers
-│   └── tests/           # Integration tests
-├── redis-enterprise/    # Enterprise API client
-│   ├── src/handlers/    # API endpoint handlers
-│   └── tests/           # Integration tests
-└── redisctl/           # CLI
-    ├── src/commands/   # Command implementations
-    ├── src/workflows/  # Multi-step workflows
-    └── tests/          # CLI tests
+├── redisctl-config/    # Profile and credential management
+├── redisctl/           # CLI
+│   ├── src/commands/   # Command implementations
+│   ├── src/workflows/  # Multi-step workflows
+│   └── tests/          # CLI tests
+└── redisctl-mcp/       # MCP server
 ```
+
+**External dependencies** (separate repositories):
+- [redis-cloud](https://github.com/redis-developer/redis-cloud-rs) - Cloud API client
+- [redis-enterprise](https://github.com/redis-developer/redis-enterprise-rs) - Enterprise API client
 
 ## Adding a New Command
 

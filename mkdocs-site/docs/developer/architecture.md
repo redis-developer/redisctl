@@ -29,28 +29,41 @@ How redisctl is structured and designed.
 redisctl/
 ├── crates/
 │   ├── redisctl-config/     # Profile and credential management
-│   ├── redis-cloud/         # Cloud API client library
-│   ├── redis-enterprise/    # Enterprise API client library
-│   └── redisctl/            # CLI application
-│       ├── src/commands/    # Command implementations
-│       ├── src/workflows/   # Multi-step workflows
-│       └── tests/           # CLI tests
+│   ├── redisctl/            # CLI application
+│   │   ├── src/commands/    # Command implementations
+│   │   ├── src/workflows/   # Multi-step workflows
+│   │   └── tests/           # CLI tests
+│   └── redisctl-mcp/        # MCP server
 ├── mkdocs-site/             # Documentation (you're reading it)
 └── scripts/                 # Build automation
 ```
 
+**External Dependencies:**
+
+The API client libraries are maintained in separate repositories:
+
+- [redis-cloud](https://github.com/redis-developer/redis-cloud-rs) - Redis Cloud API client
+- [redis-enterprise](https://github.com/redis-developer/redis-enterprise-rs) - Redis Enterprise API client
+
 ## Library-First Design
 
-The CLI is a thin layer over reusable libraries:
+The CLI is a thin layer over the external API client libraries:
 
 ```rust
-// redis-cloud crate
-let client = RedisCloudClient::new(api_key, secret_key);
-let subscriptions = client.subscriptions().list().await?;
+// redis-cloud crate (from crates.io)
+let client = CloudClient::builder()
+    .api_key(api_key)
+    .api_secret(secret_key)
+    .build()?;
+let subscriptions = client.subscription().list().await?;
 
-// redis-enterprise crate
-let client = RedisEnterpriseClient::new(url, user, password);
-let databases = client.databases().list().await?;
+// redis-enterprise crate (from crates.io)
+let client = EnterpriseClient::builder()
+    .base_url(url)
+    .username(user)
+    .password(password)
+    .build()?;
+let databases = client.database().list().await?;
 ```
 
 This enables:
