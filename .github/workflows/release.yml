@@ -285,7 +285,7 @@ jobs:
     needs:
       - plan
       - host
-    # Only run for redisctl releases (not redis-cloud, redis-enterprise, or redisctl-config)
+    # Only run for redisctl releases (not redisctl-config or redisctl-mcp)
     if: ${{ always() && needs.host.result == 'success' && startsWith(needs.plan.outputs.tag, 'redisctl-v') }}
     runs-on: "ubuntu-22.04"
     steps:
