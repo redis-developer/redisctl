@@ -2741,14 +2741,16 @@ dependencies = [
 
 [[package]]
 name = "redis-cloud"
-version = "0.8.0"
+version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "914e6574a6eefa8ce00761621ffd022972741001b1bab5604365d7c3a00a6556"
+checksum = "5c094414e6173191faba96c054f052e09d535c143223a41f9ed0adb24189332e"
 dependencies = [
  "anyhow",
+ "async-stream",
  "async-trait",
  "base64 0.22.1",
  "chrono",
+ "futures-core",
  "reqwest",
  "serde",
  "serde_json",
@@ -2763,9 +2765,9 @@ dependencies = [
 
 [[package]]
 name = "redis-enterprise"
-version = "0.7.5"
+version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "69b08073b6d4d2d80b6a3f65081f7fe2eb04a66938c5ee6cdf5cf043e00a397e"
+checksum = "4bb6f23898eccceae21caf7fcedc4efd43785adb5e4077785d21d3586897e1c6"
 dependencies = [
  "anyhow",
  "async-stream",

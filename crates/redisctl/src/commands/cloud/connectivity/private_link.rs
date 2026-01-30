@@ -10,7 +10,10 @@ use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use anyhow::Context;
 use redis_cloud::PrivateLinkHandler;
-use serde_json::Value;
+use redis_cloud::connectivity::private_link::{
+    PrincipalType, PrivateLinkAddPrincipalRequest, PrivateLinkCreateRequest,
+    PrivateLinkRemovePrincipalRequest,
+};
 
 /// Parameters for PrivateLink create operation
 #[derive(Debug, Default)]
@@ -171,66 +174,112 @@ async fn handle_get(
     Ok(())
 }
 
-/// Normalize principal type (convert aws-account to aws_account for API)
-fn normalize_principal_type(t: &str) -> String {
-    t.replace('-', "_")
+/// Parse principal type string into PrincipalType enum
+fn parse_principal_type(s: &str) -> CliResult<PrincipalType> {
+    // Normalize: convert dashes to underscores and lowercase
+    let normalized = s.to_lowercase().replace('-', "_");
+    match normalized.as_str() {
+        "aws_account" | "awsaccount" => Ok(PrincipalType::AwsAccount),
+        "organization" => Ok(PrincipalType::Organization),
+        "organization_unit" | "organizationunit" => Ok(PrincipalType::OrganizationUnit),
+        "iam_role" | "iamrole" => Ok(PrincipalType::IamRole),
+        "iam_user" | "iamuser" => Ok(PrincipalType::IamUser),
+        "service_principal" | "serviceprincipal" => Ok(PrincipalType::ServicePrincipal),
+        _ => Err(anyhow::anyhow!(
+            "Invalid principal type '{}'. Valid types: aws-account, organization, organization-unit, iam-role, iam-user, service-principal",
+            s
+        ).into()),
+    }
 }
 
-/// Build PrivateLink create payload from parameters
-fn build_create_payload(create_params: &PrivateLinkCreateParams) -> CliResult<Value> {
+/// Build PrivateLink create request from parameters
+fn build_create_request(
+    create_params: &PrivateLinkCreateParams,
+) -> CliResult<PrivateLinkCreateRequest> {
     // If --data is provided, use it as the base (escape hatch)
     if let Some(data) = &create_params.data {
         let content = read_file_input(data)?;
         return Ok(serde_json::from_str(&content).context("Failed to parse JSON input")?);
     }
 
-    // Build payload from first-class parameters
-    let mut payload = serde_json::Map::new();
+    // Build request from first-class parameters
+    let share_name = create_params
+        .share_name
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("--share-name is required"))?;
+    let principal = create_params
+        .principal
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("--principal is required"))?;
+    let principal_type = create_params
+        .principal_type
+        .as_ref()
+        .ok_or_else(|| anyhow::anyhow!("--principal-type is required"))?;
 
-    if let Some(share_name) = &create_params.share_name {
-        payload.insert("shareName".to_string(), Value::String(share_name.clone()));
-    }
-    if let Some(principal) = &create_params.principal {
-        payload.insert("principal".to_string(), Value::String(principal.clone()));
-    }
-    if let Some(principal_type) = &create_params.principal_type {
-        payload.insert(
-            "type".to_string(),
-            Value::String(normalize_principal_type(principal_type)),
-        );
-    }
-    if let Some(alias) = &create_params.alias {
-        payload.insert("alias".to_string(), Value::String(alias.clone()));
-    }
-
-    Ok(Value::Object(payload))
+    Ok(PrivateLinkCreateRequest {
+        share_name,
+        principal,
+        principal_type: parse_principal_type(principal_type)?,
+        alias: create_params.alias.clone(),
+    })
 }
 
-/// Build PrivateLink principal payload from parameters
-fn build_principal_payload(principal_params: &PrivateLinkPrincipalParams) -> CliResult<Value> {
+/// Build PrivateLink add principal request from parameters
+fn build_add_principal_request(
+    principal_params: &PrivateLinkPrincipalParams,
+) -> CliResult<PrivateLinkAddPrincipalRequest> {
     // If --data is provided, use it as the base (escape hatch)
     if let Some(data) = &principal_params.data {
         let content = read_file_input(data)?;
         return Ok(serde_json::from_str(&content).context("Failed to parse JSON input")?);
     }
 
-    // Build payload from first-class parameters
-    let mut payload = serde_json::Map::new();
+    // Build request from first-class parameters
+    let principal = principal_params
+        .principal
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("--principal is required"))?;
 
-    if let Some(principal) = &principal_params.principal {
-        payload.insert("principal".to_string(), Value::String(principal.clone()));
-    }
-    if let Some(principal_type) = &principal_params.principal_type {
-        payload.insert(
-            "type".to_string(),
-            Value::String(normalize_principal_type(principal_type)),
-        );
-    }
-    if let Some(alias) = &principal_params.alias {
-        payload.insert("alias".to_string(), Value::String(alias.clone()));
+    let principal_type = principal_params
+        .principal_type
+        .as_ref()
+        .map(|t| parse_principal_type(t))
+        .transpose()?;
+
+    Ok(PrivateLinkAddPrincipalRequest {
+        principal,
+        principal_type,
+        alias: principal_params.alias.clone(),
+    })
+}
+
+/// Build PrivateLink remove principal request from parameters
+fn build_remove_principal_request(
+    principal_params: &PrivateLinkPrincipalParams,
+) -> CliResult<PrivateLinkRemovePrincipalRequest> {
+    // If --data is provided, use it as the base (escape hatch)
+    if let Some(data) = &principal_params.data {
+        let content = read_file_input(data)?;
+        return Ok(serde_json::from_str(&content).context("Failed to parse JSON input")?);
     }
 
-    Ok(Value::Object(payload))
+    // Build request from first-class parameters
+    let principal = principal_params
+        .principal
+        .clone()
+        .ok_or_else(|| anyhow::anyhow!("--principal is required"))?;
+
+    let principal_type = principal_params
+        .principal_type
+        .as_ref()
+        .map(|t| parse_principal_type(t))
+        .transpose()?;
+
+    Ok(PrivateLinkRemovePrincipalRequest {
+        principal,
+        principal_type,
+        alias: principal_params.alias.clone(),
+    })
 }
 
 /// Create PrivateLink
@@ -240,16 +289,16 @@ async fn handle_create(
     region_id: Option<i32>,
     create_params: &PrivateLinkCreateParams,
 ) -> CliResult<()> {
-    let request = build_create_payload(create_params)?;
+    let request = build_create_request(create_params)?;
 
     let result = if let Some(region) = region_id {
         handler
-            .create_active_active(params.subscription_id, region, request)
+            .create_active_active(params.subscription_id, region, &request)
             .await
             .context("Failed to create Active-Active PrivateLink")?
     } else {
         handler
-            .create(params.subscription_id, request)
+            .create(params.subscription_id, &request)
             .await
             .context("Failed to create PrivateLink")?
     };
@@ -275,16 +324,16 @@ async fn handle_add_principal(
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
-    let request = build_principal_payload(principal_params)?;
+    let request = build_add_principal_request(principal_params)?;
 
     let result = if let Some(region) = region_id {
         handler
-            .add_principals_active_active(subscription_id, region, request)
+            .add_principals_active_active(subscription_id, region, &request)
             .await
             .context("Failed to add principals to Active-Active PrivateLink")?
     } else {
         handler
-            .add_principals(subscription_id, request)
+            .add_principals(subscription_id, &request)
             .await
             .context("Failed to add principals to PrivateLink")?
     };
@@ -303,16 +352,16 @@ async fn handle_remove_principal(
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
-    let request = build_principal_payload(principal_params)?;
+    let request = build_remove_principal_request(principal_params)?;
 
     let result = if let Some(region) = region_id {
         handler
-            .remove_principals_active_active(subscription_id, region, request)
+            .remove_principals_active_active(subscription_id, region, &request)
             .await
             .context("Failed to remove principals from Active-Active PrivateLink")?
     } else {
         handler
-            .remove_principals(subscription_id, request)
+            .remove_principals(subscription_id, &request)
             .await
             .context("Failed to remove principals from PrivateLink")?
     };

@@ -97,8 +97,8 @@ redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "conn
 redisctl-config = { path = "crates/redisctl-config" }
 
 # External crates (from crates.io)
-redis-cloud = "0.8"
-redis-enterprise = "0.7"
+redis-cloud = "0.9"
+redis-enterprise = "0.8"
 
 # Windows CI workaround - ensure these are available in workspace
 shellexpand = "3.1"
