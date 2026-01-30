@@ -1,25 +1,33 @@
 # Libraries
 
-Use redisctl components in your own Rust projects.
+Use the Redis API client libraries in your own Rust or Python projects.
 
 ## Available Crates
 
-| Crate | Description | docs.rs |
-|-------|-------------|---------|
-| `redis-cloud` | Redis Cloud API client | [docs](https://docs.rs/redis-cloud) |
-| `redis-enterprise` | Redis Enterprise API client | [docs](https://docs.rs/redis-enterprise) |
-| `redisctl-config` | Profile and credential management | [docs](https://docs.rs/redisctl-config) |
+| Crate | Description | docs.rs | Repository |
+|-------|-------------|---------|------------|
+| `redis-cloud` | Redis Cloud API client | [docs](https://docs.rs/redis-cloud) | [redis-cloud-rs](https://github.com/redis-developer/redis-cloud-rs) |
+| `redis-enterprise` | Redis Enterprise API client | [docs](https://docs.rs/redis-enterprise) | [redis-enterprise-rs](https://github.com/redis-developer/redis-enterprise-rs) |
+| `redisctl-config` | Profile and credential management | [docs](https://docs.rs/redisctl-config) | [redisctl](https://github.com/redis-developer/redisctl) |
+
+**Note:** `redis-cloud` and `redis-enterprise` are maintained in separate repositories and also provide Python bindings via PyPI.
 
 ## redis-cloud
 
-Redis Cloud API client with full type coverage.
+Redis Cloud API client with full type coverage. Maintained at [github.com/redis-developer/redis-cloud-rs](https://github.com/redis-developer/redis-cloud-rs).
 
 ### Installation
 
+**Rust:**
 ```toml
 [dependencies]
-redis-cloud = "0.7"
+redis-cloud = "0.8"
 tokio = { version = "1", features = ["full"] }
+```
+
+**Python:**
+```bash
+pip install redis-cloud
 ```
 
 ### Example
@@ -49,14 +57,20 @@ async fn main() -> anyhow::Result<()> {
 
 ## redis-enterprise
 
-Redis Enterprise REST API client.
+Redis Enterprise REST API client. Maintained at [github.com/redis-developer/redis-enterprise-rs](https://github.com/redis-developer/redis-enterprise-rs).
 
 ### Installation
 
+**Rust:**
 ```toml
 [dependencies]
 redis-enterprise = "0.7"
 tokio = { version = "1", features = ["full"] }
+```
+
+**Python:**
+```bash
+pip install redis-enterprise
 ```
 
 ### Example
@@ -184,7 +198,16 @@ async fn collect_metrics(client: &RedisEnterpriseClient) -> anyhow::Result<()> {
 
 ## Links
 
-- [GitHub](https://github.com/redis-developer/redisctl)
+**Rust:**
 - [docs.rs/redis-cloud](https://docs.rs/redis-cloud)
 - [docs.rs/redis-enterprise](https://docs.rs/redis-enterprise)
 - [crates.io/crates/redisctl](https://crates.io/crates/redisctl)
+
+**Python:**
+- [pypi.org/project/redis-cloud](https://pypi.org/project/redis-cloud/)
+- [pypi.org/project/redis-enterprise](https://pypi.org/project/redis-enterprise/)
+
+**GitHub:**
+- [redis-developer/redisctl](https://github.com/redis-developer/redisctl)
+- [redis-developer/redis-cloud-rs](https://github.com/redis-developer/redis-cloud-rs)
+- [redis-developer/redis-enterprise-rs](https://github.com/redis-developer/redis-enterprise-rs)

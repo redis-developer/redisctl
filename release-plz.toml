@@ -12,19 +12,6 @@ allow_dirty = true
 # Conventional commit parsing
 pr_labels = ["release"]
 
-# Publish to crates.io in dependency order
-[[package]]
-name = "redis-cloud"
-publish = true
-# Don't create tags for libraries
-git_tag_enable = false
-
-[[package]]
-name = "redis-enterprise"
-publish = true
-# Don't create tags for libraries
-git_tag_enable = false
-
 [[package]]
 name = "redisctl"
 publish = true

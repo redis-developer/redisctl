@@ -18,8 +18,8 @@ schemars = "0.8"
 
 # Internal crates
 redisctl-config = { version = "0.2.2", path = "../redisctl-config" }
-redis-cloud = { version = "0.7.6", path = "../redis-cloud" }
-redis-enterprise = { version = "0.7.4", path = "../redis-enterprise" }
+redis-cloud = { workspace = true }
+redis-enterprise = { workspace = true }
 
 # Redis client for direct database connections
 redis = { workspace = true }

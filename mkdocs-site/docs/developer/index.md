@@ -2,9 +2,9 @@
 
 Build with redisctl and contribute to the project.
 
-## Using redisctl Libraries
+## Using the API Libraries
 
-redisctl is built as reusable libraries available for both Rust and Python:
+The Redis API client libraries are available for both Rust and Python:
 
 ### Rust Crates
 
@@ -14,25 +14,26 @@ redisctl is built as reusable libraries available for both Rust and Python:
 | `redis-enterprise` | Redis Enterprise API client | [docs](https://docs.rs/redis-enterprise) |
 | `redisctl-config` | Profile and credential management | [docs](https://docs.rs/redisctl-config) |
 
-### Python Package
+### Python Packages
 
 | Package | Description | PyPI |
 |---------|-------------|------|
-| `redisctl` | Python bindings for Redis Cloud & Enterprise | [pypi](https://pypi.org/project/redisctl/) |
+| `redis-cloud` | Redis Cloud API client | [pypi](https://pypi.org/project/redis-cloud/) |
+| `redis-enterprise` | Redis Enterprise API client | [pypi](https://pypi.org/project/redis-enterprise/) |
 
-### Example: Using redis-cloud
+### Example: Using redis-cloud (Rust)
 
 ```rust
-use redis_cloud::RedisCloudClient;
+use redis_cloud::CloudClient;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let client = RedisCloudClient::new(
-        "your-api-key",
-        "your-secret-key",
-    );
+    let client = CloudClient::builder()
+        .api_key("your-api-key")
+        .api_secret("your-secret-key")
+        .build()?;
 
-    let subscriptions = client.subscriptions().list().await?;
+    let subscriptions = client.subscription().list().await?;
     for sub in subscriptions {
         println!("{}: {}", sub.id, sub.name);
     }
@@ -46,12 +47,12 @@ async fn main() -> anyhow::Result<()> {
 ### Example: Using Python
 
 ```python
-from redisctl import CloudClient
+from redis_cloud import CloudClient
 
 client = CloudClient.from_env()
 
 subscriptions = client.subscriptions_sync()
-for sub in subscriptions.get('subscriptions', []):
+for sub in subscriptions:
     print(f"{sub['id']}: {sub['name']}")
 ```
 

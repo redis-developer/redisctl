@@ -2,20 +2,13 @@
 resolver = "2"
 members = [
     "crates/redisctl-config",
-    "crates/redis-cloud",
-    "crates/redis-enterprise",
     "crates/redisctl",
     "crates/redisctl-mcp",
-    "crates/redisctl-python",
 ]
 default-members = [
     "crates/redisctl-config",
-    "crates/redis-cloud",
-    "crates/redis-enterprise",
     "crates/redisctl",
     "crates/redisctl-mcp",
-    # Note: redisctl-python is excluded from default members
-    # as it requires Python dev headers to build
 ]
 
 # External dependencies (not part of workspace)
@@ -102,8 +95,10 @@ redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "conn
 
 # Internal crates
 redisctl-config = { path = "crates/redisctl-config" }
-redis-cloud = { path = "crates/redis-cloud" }
-redis-enterprise = { path = "crates/redis-enterprise" }
+
+# External crates (from crates.io)
+redis-cloud = "0.8"
+redis-enterprise = "0.7"
 
 # Windows CI workaround - ensure these are available in workspace
 shellexpand = "3.1"
