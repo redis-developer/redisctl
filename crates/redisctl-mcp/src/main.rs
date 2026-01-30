@@ -149,27 +149,75 @@ fn build_router(state: Arc<AppState>) -> Result<McpRouter> {
     let instructions = r#"
 Redis Cloud and Enterprise MCP Server
 
-This server provides tools for managing Redis Cloud subscriptions and databases,
+This server provides comprehensive tools for managing Redis Cloud subscriptions and databases,
 Redis Enterprise clusters and databases, and direct Redis database operations.
 
 ## Available Tool Categories
 
-### Redis Cloud
+### Redis Cloud - Subscriptions & Databases
 - list_subscriptions: List all Cloud subscriptions
 - get_subscription: Get subscription details
 - list_databases: List databases in a subscription
 - get_database: Get database details
+- get_backup_status: Get database backup status
+- get_slow_log: Get slow query log
+- get_database_tags: Get tags for a database
 
-### Redis Enterprise
-- get_cluster: Get Enterprise cluster information
+### Redis Cloud - Account & Configuration
+- get_account: Get current account information
+- get_regions: Get supported cloud regions
+- get_modules: Get supported Redis modules
+- list_account_users: List team members
+- list_acl_users: List database ACL users
+- list_acl_roles: List ACL roles
+- list_redis_rules: List Redis ACL rules
+
+### Redis Cloud - Tasks
+- list_tasks: List async operations
+- get_task: Get task status
+
+### Redis Enterprise - Cluster
+- get_cluster: Get cluster information
+- get_cluster_stats: Get cluster statistics
+
+### Redis Enterprise - Databases
 - list_enterprise_databases: List all databases
 - get_enterprise_database: Get database details
-- list_nodes: List cluster nodes
+- get_database_stats: Get database statistics
+- get_database_endpoints: Get connection endpoints
+- list_database_alerts: Get alerts for a database
 
-### Redis Database
-- redis_ping: Test connectivity to a Redis database
-- redis_info: Get Redis INFO output
-- redis_keys: List keys matching a pattern
+### Redis Enterprise - Nodes
+- list_nodes: List cluster nodes
+- get_node: Get node details
+- get_node_stats: Get node statistics
+
+### Redis Enterprise - Users & Alerts
+- list_enterprise_users: List cluster users
+- get_enterprise_user: Get user details
+- list_alerts: List all active alerts
+- list_shards: List database shards
+
+### Redis Database - Connection
+- redis_ping: Test connectivity
+- redis_info: Get server information
+- redis_dbsize: Get key count
+- redis_client_list: Get connected clients
+- redis_cluster_info: Get cluster info (if clustered)
+
+### Redis Database - Keys
+- redis_keys: List keys matching pattern (SCAN)
+- redis_get: Get string value
+- redis_type: Get key type
+- redis_ttl: Get key TTL
+- redis_exists: Check key existence
+- redis_memory_usage: Get key memory usage
+
+### Redis Database - Data Structures
+- redis_hgetall: Get all hash fields
+- redis_lrange: Get list range
+- redis_smembers: Get set members
+- redis_zrange: Get sorted set range
 
 ## Authentication
 
@@ -180,20 +228,61 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
     let router = McpRouter::new()
         .server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"))
         .instructions(instructions)
-        // Cloud tools
+        // Cloud - Subscriptions & Databases
         .tool(tools::cloud::list_subscriptions(state.clone()))
         .tool(tools::cloud::get_subscription(state.clone()))
         .tool(tools::cloud::list_databases(state.clone()))
         .tool(tools::cloud::get_database(state.clone()))
-        // Enterprise tools
+        .tool(tools::cloud::get_backup_status(state.clone()))
+        .tool(tools::cloud::get_slow_log(state.clone()))
+        .tool(tools::cloud::get_tags(state.clone()))
+        // Cloud - Account & Configuration
+        .tool(tools::cloud::get_account(state.clone()))
+        .tool(tools::cloud::get_regions(state.clone()))
+        .tool(tools::cloud::get_modules(state.clone()))
+        .tool(tools::cloud::list_account_users(state.clone()))
+        .tool(tools::cloud::list_acl_users(state.clone()))
+        .tool(tools::cloud::list_acl_roles(state.clone()))
+        .tool(tools::cloud::list_redis_rules(state.clone()))
+        // Cloud - Tasks
+        .tool(tools::cloud::list_tasks(state.clone()))
+        .tool(tools::cloud::get_task(state.clone()))
+        // Enterprise - Cluster
         .tool(tools::enterprise::get_cluster(state.clone()))
+        .tool(tools::enterprise::get_cluster_stats(state.clone()))
+        // Enterprise - Databases
         .tool(tools::enterprise::list_databases(state.clone()))
         .tool(tools::enterprise::get_database(state.clone()))
+        .tool(tools::enterprise::get_database_stats(state.clone()))
+        .tool(tools::enterprise::get_database_endpoints(state.clone()))
+        .tool(tools::enterprise::list_database_alerts(state.clone()))
+        // Enterprise - Nodes
         .tool(tools::enterprise::list_nodes(state.clone()))
-        // Redis tools
+        .tool(tools::enterprise::get_node(state.clone()))
+        .tool(tools::enterprise::get_node_stats(state.clone()))
+        // Enterprise - Users & Alerts
+        .tool(tools::enterprise::list_users(state.clone()))
+        .tool(tools::enterprise::get_user(state.clone()))
+        .tool(tools::enterprise::list_alerts(state.clone()))
+        .tool(tools::enterprise::list_shards(state.clone()))
+        // Redis - Connection
         .tool(tools::redis::ping(state.clone()))
         .tool(tools::redis::info(state.clone()))
-        .tool(tools::redis::keys(state.clone()));
+        .tool(tools::redis::dbsize(state.clone()))
+        .tool(tools::redis::client_list(state.clone()))
+        .tool(tools::redis::cluster_info(state.clone()))
+        // Redis - Keys
+        .tool(tools::redis::keys(state.clone()))
+        .tool(tools::redis::get(state.clone()))
+        .tool(tools::redis::key_type(state.clone()))
+        .tool(tools::redis::ttl(state.clone()))
+        .tool(tools::redis::exists(state.clone()))
+        .tool(tools::redis::memory_usage(state.clone()))
+        // Redis - Data Structures
+        .tool(tools::redis::hgetall(state.clone()))
+        .tool(tools::redis::lrange(state.clone()))
+        .tool(tools::redis::smembers(state.clone()))
+        .tool(tools::redis::zrange(state.clone()));
 
     Ok(router)
 }

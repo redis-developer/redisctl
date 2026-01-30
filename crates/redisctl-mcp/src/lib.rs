@@ -118,10 +118,25 @@ mod tests {
         let state = Arc::new(AppState::new(CredentialSource::Profile(None), true, None).unwrap());
 
         // Verify all cloud tools build successfully
+        // Subscriptions & Databases
         let _ = tools::cloud::list_subscriptions(state.clone());
         let _ = tools::cloud::get_subscription(state.clone());
         let _ = tools::cloud::list_databases(state.clone());
         let _ = tools::cloud::get_database(state.clone());
+        let _ = tools::cloud::get_backup_status(state.clone());
+        let _ = tools::cloud::get_slow_log(state.clone());
+        let _ = tools::cloud::get_tags(state.clone());
+        // Account & Configuration
+        let _ = tools::cloud::get_account(state.clone());
+        let _ = tools::cloud::get_regions(state.clone());
+        let _ = tools::cloud::get_modules(state.clone());
+        let _ = tools::cloud::list_account_users(state.clone());
+        let _ = tools::cloud::list_acl_users(state.clone());
+        let _ = tools::cloud::list_acl_roles(state.clone());
+        let _ = tools::cloud::list_redis_rules(state.clone());
+        // Tasks
+        let _ = tools::cloud::list_tasks(state.clone());
+        let _ = tools::cloud::get_task(state.clone());
     }
 
     #[test]
@@ -129,10 +144,24 @@ mod tests {
         let state = Arc::new(AppState::new(CredentialSource::Profile(None), true, None).unwrap());
 
         // Verify all enterprise tools build successfully
+        // Cluster
         let _ = tools::enterprise::get_cluster(state.clone());
+        let _ = tools::enterprise::get_cluster_stats(state.clone());
+        // Databases
         let _ = tools::enterprise::list_databases(state.clone());
         let _ = tools::enterprise::get_database(state.clone());
+        let _ = tools::enterprise::get_database_stats(state.clone());
+        let _ = tools::enterprise::get_database_endpoints(state.clone());
+        let _ = tools::enterprise::list_database_alerts(state.clone());
+        // Nodes
         let _ = tools::enterprise::list_nodes(state.clone());
+        let _ = tools::enterprise::get_node(state.clone());
+        let _ = tools::enterprise::get_node_stats(state.clone());
+        // Users & Alerts
+        let _ = tools::enterprise::list_users(state.clone());
+        let _ = tools::enterprise::get_user(state.clone());
+        let _ = tools::enterprise::list_alerts(state.clone());
+        let _ = tools::enterprise::list_shards(state.clone());
     }
 
     #[test]
@@ -140,9 +169,24 @@ mod tests {
         let state = Arc::new(AppState::new(CredentialSource::Profile(None), true, None).unwrap());
 
         // Verify all redis tools build successfully
+        // Connection
         let _ = tools::redis::ping(state.clone());
         let _ = tools::redis::info(state.clone());
+        let _ = tools::redis::dbsize(state.clone());
+        let _ = tools::redis::client_list(state.clone());
+        let _ = tools::redis::cluster_info(state.clone());
+        // Keys
         let _ = tools::redis::keys(state.clone());
+        let _ = tools::redis::get(state.clone());
+        let _ = tools::redis::key_type(state.clone());
+        let _ = tools::redis::ttl(state.clone());
+        let _ = tools::redis::exists(state.clone());
+        let _ = tools::redis::memory_usage(state.clone());
+        // Data Structures
+        let _ = tools::redis::hgetall(state.clone());
+        let _ = tools::redis::lrange(state.clone());
+        let _ = tools::redis::smembers(state.clone());
+        let _ = tools::redis::zrange(state.clone());
     }
 
     #[test]
