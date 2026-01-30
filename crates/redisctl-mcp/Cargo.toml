@@ -1,23 +1,29 @@
 [package]
 name = "redisctl-mcp"
-version = "0.1.2"
+version = "0.2.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "MCP (Model Context Protocol) server for Redis Cloud and Enterprise"
-readme = "../../README.md"
+readme = "README.md"
 keywords = ["redis", "mcp", "ai", "cloud", "enterprise"]
 categories = ["api-bindings", "development-tools"]
 
+[[bin]]
+name = "redisctl-mcp"
+path = "src/main.rs"
+
 [dependencies]
-# MCP SDK
-rmcp = { version = "0.12", features = ["server", "transport-io", "macros"] }
-schemars = "0.8"
+# MCP framework
+tower-mcp = { version = "0.2", features = ["http", "oauth"] }
+schemars = "1.2"
 
 # Internal crates
 redisctl-config = { version = "0.2.2", path = "../redisctl-config" }
+
+# External API clients
 redis-cloud = { workspace = true }
 redis-enterprise = { workspace = true }
 
@@ -31,9 +37,18 @@ tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = { workspace = true }
-base64 = { workspace = true }
-urlencoding = { workspace = true }
+
+# CLI
+clap = { workspace = true }
+
+# HTTP/OAuth
+tower = { version = "0.5", features = ["timeout", "limit"] }
+
+[features]
+default = ["http"]
+http = []
 
 [dev-dependencies]
 tokio = { workspace = true }
