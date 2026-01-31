@@ -2741,9 +2741,7 @@ dependencies = [
 
 [[package]]
 name = "redis-cloud"
-version = "0.9.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5c094414e6173191faba96c054f052e09d535c143223a41f9ed0adb24189332e"
+version = "0.8.0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2761,13 +2759,12 @@ dependencies = [
  "tracing",
  "typed-builder",
  "url",
+ "wiremock",
 ]
 
 [[package]]
 name = "redis-enterprise"
 version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4bb6f23898eccceae21caf7fcedc4efd43785adb5e4077785d21d3586897e1c6"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2787,6 +2784,7 @@ dependencies = [
  "tracing",
  "typed-builder",
  "url",
+ "wiremock",
 ]
 
 [[package]]
@@ -2875,6 +2873,7 @@ dependencies = [
  "tower-mcp",
  "tracing",
  "tracing-subscriber",
+ "wiremock",
 ]
 
 [[package]]
