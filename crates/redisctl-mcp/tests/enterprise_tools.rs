@@ -242,11 +242,12 @@ async fn test_list_enterprise_databases() {
     let state = Arc::new(AppState::with_enterprise_client(client));
     let tool = enterprise::list_databases(state);
 
-    let result = call_tool_text(&tool, json!({})).await;
+    let result = call_tool_json(&tool, json!({})).await;
 
-    assert!(result.contains("cache-primary"));
-    assert!(result.contains("sessions"));
-    assert!(result.contains("2 database(s)"));
+    let databases = result.as_array().expect("expected array");
+    assert_eq!(databases.len(), 2);
+    assert!(databases.iter().any(|db| db["name"] == "cache-primary"));
+    assert!(databases.iter().any(|db| db["name"] == "sessions"));
 }
 
 #[tokio::test]
@@ -263,12 +264,14 @@ async fn test_list_enterprise_databases_with_filter() {
     let state = Arc::new(AppState::with_enterprise_client(client));
     let tool = enterprise::list_databases(state);
 
-    let result = call_tool_text(&tool, json!({"name_filter": "cache"})).await;
+    let result = call_tool_json(&tool, json!({"name_filter": "cache"})).await;
 
-    assert!(result.contains("cache-primary"));
-    assert!(result.contains("cache-replica"));
-    assert!(!result.contains("sessions")); // Should be filtered out
-    assert!(result.contains("2 database(s)"));
+    let databases = result.as_array().expect("expected array");
+    assert_eq!(databases.len(), 2);
+    assert!(databases.iter().any(|db| db["name"] == "cache-primary"));
+    assert!(databases.iter().any(|db| db["name"] == "cache-replica"));
+    // sessions should be filtered out
+    assert!(!databases.iter().any(|db| db["name"] == "sessions"));
 }
 
 #[tokio::test]
