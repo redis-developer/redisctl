@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.2.0...redisctl-mcp-v0.3.0) - 2026-01-31
+
+### Added
+
+- add MCP resources and prompts to redisctl-mcp ([#619](https://github.com/redis-developer/redisctl/pull/619))
+- *(mcp)* add read-only tool filter using CapabilityFilter ([#618](https://github.com/redis-developer/redisctl/pull/618))
+- *(mcp)* add historical stats, Cloud logs, debug info, and modules tools ([#617](https://github.com/redis-developer/redisctl/pull/617))
+- *(mcp)* add Enterprise logs and aggregate stats tools ([#616](https://github.com/redis-developer/redisctl/pull/616))
+- *(mcp)* add Enterprise license tools ([#615](https://github.com/redis-developer/redisctl/pull/615))
+- *(mcp)* add mock testing support for cloud and enterprise tools ([#611](https://github.com/redis-developer/redisctl/pull/611))
+- *(mcp)* add profile management tools ([#609](https://github.com/redis-developer/redisctl/pull/609))
+
+### Fixed
+
+- *(mcp)* normalize 'default' profile to use configured default ([#608](https://github.com/redis-developer/redisctl/pull/608))
+
+### Other
+
+- upgrade tower-mcp to 0.2.3 and use from_serialize() ([#607](https://github.com/redis-developer/redisctl/pull/607))
+
 ## [0.1.2](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.1.1...redisctl-mcp-v0.1.2) - 2026-01-23
 
 ### Added

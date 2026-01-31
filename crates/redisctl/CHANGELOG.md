@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/redis-developer/redisctl/compare/redisctl-v0.7.7...redisctl-v0.8.0) - 2026-01-31
+
+### Added
+
+- [**breaking**] rewrite redisctl-mcp using tower-mcp framework ([#597](https://github.com/redis-developer/redisctl/pull/597))
+- update to redis-enterprise 0.8 ([#600](https://github.com/redis-developer/redisctl/pull/600))
+- update to redis-cloud 0.9 ([#599](https://github.com/redis-developer/redisctl/pull/599))
+- add one-shot cost-report export command ([#595](https://github.com/redis-developer/redisctl/pull/595))
+
+### Fixed
+
+- handle rate limits (429) and processing-completed state in task polling ([#587](https://github.com/redis-developer/redisctl/pull/587))
+
+### Other
+
+- [**breaking**] extract redis-cloud and redis-enterprise to standalone repos ([#596](https://github.com/redis-developer/redisctl/pull/596))
+
 ## [0.7.7](https://github.com/redis-developer/redisctl/compare/redisctl-v0.7.6...redisctl-v0.7.7) - 2026-01-23
 
 ### Other
