@@ -3,7 +3,8 @@
 use std::sync::Arc;
 
 use redis_enterprise::testing::{
-    AlertFixture, ClusterFixture, DatabaseFixture, MockEnterpriseServer, NodeFixture, UserFixture,
+    AlertFixture, ClusterFixture, DatabaseFixture, LicenseFixture, MockEnterpriseServer,
+    NodeFixture, UserFixture,
 };
 use serde_json::json;
 use tower_mcp::Tool;
@@ -76,6 +77,72 @@ async fn test_get_cluster_stats() {
     let result = call_tool_json(&tool, json!({})).await;
 
     assert!(result.get("avg_latency").is_some() || result.get("total_req").is_some());
+}
+
+// ============================================================================
+// License Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_license() {
+    let server = MockEnterpriseServer::start().await;
+
+    let license = LicenseFixture::new().shards_limit(100).build();
+
+    server.mock_license(license).await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_license(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert_eq!(result["expired"], false);
+    assert_eq!(result["shards_limit"], 100);
+}
+
+#[tokio::test]
+async fn test_get_license_expired() {
+    let server = MockEnterpriseServer::start().await;
+
+    let license = LicenseFixture::expired().build();
+
+    server.mock_license(license).await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_license(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert_eq!(result["expired"], true);
+}
+
+#[tokio::test]
+async fn test_get_license_usage() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/license/usage"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "shards_limit": 100,
+            "shards_used": 45,
+            "nodes_limit": 10,
+            "nodes_used": 3,
+            "ram_limit": 107374182400_i64,
+            "ram_used": 34359738368_i64
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_license_usage(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert_eq!(result["shards_limit"], 100);
+    assert_eq!(result["shards_used"], 45);
 }
 
 // ============================================================================

@@ -196,6 +196,9 @@ mod tests {
         // Cluster
         let _ = tools::enterprise::get_cluster(state.clone());
         let _ = tools::enterprise::get_cluster_stats(state.clone());
+        // License
+        let _ = tools::enterprise::get_license(state.clone());
+        let _ = tools::enterprise::get_license_usage(state.clone());
         // Databases
         let _ = tools::enterprise::list_databases(state.clone());
         let _ = tools::enterprise::get_database(state.clone());
