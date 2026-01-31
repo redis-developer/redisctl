@@ -6,6 +6,7 @@ use redis_enterprise::alerts::AlertHandler;
 use redis_enterprise::bdb::DatabaseHandler;
 use redis_enterprise::cluster::ClusterHandler;
 use redis_enterprise::license::LicenseHandler;
+use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::StatsHandler;
@@ -107,6 +108,75 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
                 .map_err(|e| ToolError::new(format!("Failed to get license usage: {}", e)))?;
 
             CallToolResult::from_serialize(&usage)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Logs tools
+// ============================================================================
+
+/// Input for listing cluster logs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListLogsInput {
+    /// Start time - only return events after this time (ISO 8601 format, e.g., "2024-01-15T10:00:00Z")
+    #[serde(default)]
+    pub start_time: Option<String>,
+    /// End time - only return events before this time (ISO 8601 format)
+    #[serde(default)]
+    pub end_time: Option<String>,
+    /// Sort order: "asc" (oldest first) or "desc" (newest first, default)
+    #[serde(default)]
+    pub order: Option<String>,
+    /// Maximum number of log entries to return
+    #[serde(default)]
+    pub limit: Option<u32>,
+    /// Number of entries to skip (for pagination)
+    #[serde(default)]
+    pub offset: Option<u32>,
+}
+
+/// Build the list_logs tool
+pub fn list_logs(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_logs")
+        .description(
+            "List cluster event logs from Redis Enterprise. Logs include events like database \
+             changes, node status updates, configuration modifications, and alerts. Supports \
+             filtering by time range and pagination.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: ListLogsInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let query = if input.start_time.is_some()
+                || input.end_time.is_some()
+                || input.order.is_some()
+                || input.limit.is_some()
+                || input.offset.is_some()
+            {
+                Some(LogsQuery {
+                    stime: input.start_time,
+                    etime: input.end_time,
+                    order: input.order,
+                    limit: input.limit,
+                    offset: input.offset,
+                })
+            } else {
+                None
+            };
+
+            let handler = LogsHandler::new(client);
+            let logs = handler
+                .list(query)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to list logs: {}", e)))?;
+
+            CallToolResult::from_serialize(&logs)
         })
         .build()
         .expect("valid tool")

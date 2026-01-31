@@ -146,6 +146,81 @@ async fn test_get_license_usage() {
 }
 
 // ============================================================================
+// Logs Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_logs() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/logs"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "time": "2024-01-15T10:30:00Z",
+                "type": "bdb_created"
+            },
+            {
+                "time": "2024-01-15T10:25:00Z",
+                "type": "node_joined"
+            },
+            {
+                "time": "2024-01-15T10:20:00Z",
+                "type": "cluster_config_updated"
+            }
+        ])))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::list_logs(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.is_array());
+    let logs = result.as_array().unwrap();
+    assert_eq!(logs.len(), 3);
+    assert_eq!(logs[0]["type"], "bdb_created");
+    assert_eq!(logs[1]["type"], "node_joined");
+}
+
+#[tokio::test]
+async fn test_list_logs_with_params() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/logs"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "time": "2024-01-15T10:30:00Z",
+                "type": "bdb_created"
+            }
+        ])))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::list_logs(state);
+
+    let result = call_tool_json(
+        &tool,
+        json!({
+            "start_time": "2024-01-15T10:00:00Z",
+            "end_time": "2024-01-15T11:00:00Z",
+            "order": "desc",
+            "limit": 10
+        }),
+    )
+    .await;
+
+    assert!(result.is_array());
+    let logs = result.as_array().unwrap();
+    assert_eq!(logs.len(), 1);
+}
+
+// ============================================================================
 // Database Tests
 // ============================================================================
 

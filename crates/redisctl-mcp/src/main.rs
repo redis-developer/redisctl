@@ -184,6 +184,9 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - get_license: Get license information (type, expiration, features)
 - get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
 
+### Redis Enterprise - Logs
+- list_logs: List cluster event logs (with time range and pagination)
+
 ### Redis Enterprise - Databases
 - list_enterprise_databases: List all databases
 - get_enterprise_database: Get database details
@@ -268,6 +271,8 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - License
         .tool(tools::enterprise::get_license(state.clone()))
         .tool(tools::enterprise::get_license_usage(state.clone()))
+        // Enterprise - Logs
+        .tool(tools::enterprise::list_logs(state.clone()))
         // Enterprise - Databases
         .tool(tools::enterprise::list_databases(state.clone()))
         .tool(tools::enterprise::get_database(state.clone()))
