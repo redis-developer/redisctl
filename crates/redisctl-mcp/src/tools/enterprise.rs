@@ -842,6 +842,40 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
         .expect("valid tool")
 }
 
+/// Input for getting a specific shard
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetShardInput {
+    /// Shard UID (e.g., "1" or "2")
+    pub uid: String,
+}
+
+/// Build the get_shard tool
+pub fn get_shard(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_shard")
+        .description(
+            "Get detailed information about a specific shard in the Redis Enterprise cluster \
+             including role (master/replica), status, and assigned node.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetShardInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = ShardHandler::new(client);
+            let shard = handler
+                .get(&input.uid)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get shard: {}", e)))?;
+
+            CallToolResult::from_serialize(&shard)
+        })
+        .build()
+        .expect("valid tool")
+}
+
 // ============================================================================
 // Database endpoints
 // ============================================================================
