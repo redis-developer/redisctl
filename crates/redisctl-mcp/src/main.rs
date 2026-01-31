@@ -231,14 +231,17 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - redis_dbsize: Get key count
 - redis_client_list: Get connected clients
 - redis_cluster_info: Get cluster info (if clustered)
+- redis_slowlog: Get slow query log entries
 
 ### Redis Database - Keys
 - redis_keys: List keys matching pattern (SCAN)
+- redis_scan: Scan keys with type filter (string, list, set, zset, hash, stream)
 - redis_get: Get string value
 - redis_type: Get key type
 - redis_ttl: Get key TTL
 - redis_exists: Check key existence
 - redis_memory_usage: Get key memory usage
+- redis_object_encoding: Get key internal encoding
 
 ### Redis Database - Data Structures
 - redis_hgetall: Get all hash fields
@@ -343,13 +346,16 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::redis::dbsize(state.clone()))
         .tool(tools::redis::client_list(state.clone()))
         .tool(tools::redis::cluster_info(state.clone()))
+        .tool(tools::redis::slowlog(state.clone()))
         // Redis - Keys
         .tool(tools::redis::keys(state.clone()))
+        .tool(tools::redis::scan(state.clone()))
         .tool(tools::redis::get(state.clone()))
         .tool(tools::redis::key_type(state.clone()))
         .tool(tools::redis::ttl(state.clone()))
         .tool(tools::redis::exists(state.clone()))
         .tool(tools::redis::memory_usage(state.clone()))
+        .tool(tools::redis::object_encoding(state.clone()))
         // Redis - Data Structures
         .tool(tools::redis::hgetall(state.clone()))
         .tool(tools::redis::lrange(state.clone()))

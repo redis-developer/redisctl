@@ -191,15 +191,21 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
 /// Input for listing databases
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListDatabasesInput {
-    /// Optional filter by database name
+    /// Optional filter by database name (case-insensitive substring match)
     #[serde(default)]
     pub name_filter: Option<String>,
+    /// Optional filter by database status (e.g., "active", "pending", "creation-failed")
+    #[serde(default)]
+    pub status_filter: Option<String>,
 }
 
 /// Build the list_databases tool
 pub fn list_databases(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_databases")
-        .description("List all databases on the Redis Enterprise cluster")
+        .description(
+            "List all databases on the Redis Enterprise cluster. Supports filtering by name \
+             (case-insensitive substring match) and status.",
+        )
         .read_only()
         .idempotent()
         .handler_with_state(state, |state, input: ListDatabasesInput| async move {
@@ -214,32 +220,29 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
 
-            let filtered: Vec<_> = if let Some(filter) = &input.name_filter {
-                databases
-                    .into_iter()
-                    .filter(|db| db.name.to_lowercase().contains(&filter.to_lowercase()))
-                    .collect()
-            } else {
-                databases
-            };
-
-            let output = filtered
-                .iter()
-                .map(|db| {
-                    format!(
-                        "- {} (UID: {}): {} shards",
-                        db.name,
-                        db.uid,
-                        db.shards_count
-                            .map(|c| c.to_string())
-                            .unwrap_or_else(|| "?".to_string())
-                    )
+            // Apply name filter
+            let filtered: Vec<_> = databases
+                .into_iter()
+                .filter(|db| {
+                    if let Some(filter) = &input.name_filter {
+                        db.name.to_lowercase().contains(&filter.to_lowercase())
+                    } else {
+                        true
+                    }
                 })
-                .collect::<Vec<_>>()
-                .join("\n");
+                .filter(|db| {
+                    if let Some(filter) = &input.status_filter {
+                        db.status
+                            .as_ref()
+                            .map(|s| s.to_lowercase() == filter.to_lowercase())
+                            .unwrap_or(false)
+                    } else {
+                        true
+                    }
+                })
+                .collect();
 
-            let summary = format!("Found {} database(s)\n\n{}", filtered.len(), output);
-            Ok(CallToolResult::text(summary))
+            CallToolResult::from_serialize(&filtered)
         })
         .build()
         .expect("valid tool")

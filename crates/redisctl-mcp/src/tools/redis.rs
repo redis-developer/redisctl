@@ -862,3 +862,257 @@ pub fn client_list(state: Arc<AppState>) -> Tool {
         .build()
         .expect("valid tool")
 }
+
+// ============================================================================
+// SCAN with type filter
+// ============================================================================
+
+/// Input for SCAN with type filter
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ScanInput {
+    /// Optional Redis URL (uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Key pattern to match (default: "*")
+    #[serde(default = "default_pattern")]
+    pub pattern: String,
+    /// Filter by key type (e.g., "string", "list", "set", "zset", "hash", "stream")
+    #[serde(default)]
+    pub key_type: Option<String>,
+    /// Maximum number of keys to return (default: 100)
+    #[serde(default = "default_limit")]
+    pub limit: usize,
+}
+
+/// Build the scan tool with type filter
+pub fn scan(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_scan")
+        .description(
+            "Scan keys with optional type filter. More efficient than redis_keys when filtering \
+             by type (string, list, set, zset, hash, stream).",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: ScanInput| async move {
+            let url = input
+                .url
+                .or_else(|| state.database_url.clone())
+                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+
+            let client = redis::Client::open(url.as_str())
+                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+            let mut conn = client
+                .get_multiplexed_async_connection()
+                .await
+                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+            let mut cursor: u64 = 0;
+            let mut all_keys: Vec<String> = Vec::new();
+
+            loop {
+                let mut cmd = redis::cmd("SCAN");
+                cmd.arg(cursor)
+                    .arg("MATCH")
+                    .arg(&input.pattern)
+                    .arg("COUNT")
+                    .arg(100);
+
+                // Add TYPE filter if specified
+                if let Some(ref key_type) = input.key_type {
+                    cmd.arg("TYPE").arg(key_type);
+                }
+
+                let (new_cursor, keys): (u64, Vec<String>) = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+
+                all_keys.extend(keys);
+                cursor = new_cursor;
+
+                if cursor == 0 || all_keys.len() >= input.limit {
+                    break;
+                }
+            }
+
+            all_keys.truncate(input.limit);
+
+            let type_info = input
+                .key_type
+                .as_ref()
+                .map(|t| format!(" of type '{}'", t))
+                .unwrap_or_default();
+
+            let output = if all_keys.is_empty() {
+                format!(
+                    "No keys{} found matching pattern '{}'",
+                    type_info, input.pattern
+                )
+            } else {
+                format!(
+                    "Found {} key(s){} matching '{}'\n\n{}",
+                    all_keys.len(),
+                    type_info,
+                    input.pattern,
+                    all_keys.join("\n")
+                )
+            };
+
+            Ok(CallToolResult::text(output))
+        })
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Object encoding
+// ============================================================================
+
+/// Input for OBJECT ENCODING command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ObjectEncodingInput {
+    /// Optional Redis URL (uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Key to check encoding
+    pub key: String,
+}
+
+/// Build the object_encoding tool
+pub fn object_encoding(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_object_encoding")
+        .description(
+            "Get the internal encoding of a key (e.g., embstr, int, raw, quicklist, listpack, \
+             hashtable, intset, skiplist). Useful for understanding memory usage patterns.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: ObjectEncodingInput| async move {
+            let url = input
+                .url
+                .or_else(|| state.database_url.clone())
+                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+
+            let client = redis::Client::open(url.as_str())
+                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+            let mut conn = client
+                .get_multiplexed_async_connection()
+                .await
+                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+            let encoding: Option<String> = redis::cmd("OBJECT")
+                .arg("ENCODING")
+                .arg(&input.key)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| ToolError::new(format!("OBJECT ENCODING failed: {}", e)))?;
+
+            match encoding {
+                Some(enc) => Ok(CallToolResult::text(format!("{}: {}", input.key, enc))),
+                None => Ok(CallToolResult::text(format!(
+                    "{}: key does not exist",
+                    input.key
+                ))),
+            }
+        })
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Slowlog
+// ============================================================================
+
+/// Input for SLOWLOG GET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SlowlogInput {
+    /// Optional Redis URL (uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Number of entries to return (default: 10)
+    #[serde(default = "default_slowlog_count")]
+    pub count: usize,
+}
+
+fn default_slowlog_count() -> usize {
+    10
+}
+
+/// Build the slowlog tool
+pub fn slowlog(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_slowlog")
+        .description(
+            "Get slow query log entries. Useful for identifying slow commands affecting performance.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: SlowlogInput| async move {
+            let url = input
+                .url
+                .or_else(|| state.database_url.clone())
+                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+
+            let client = redis::Client::open(url.as_str())
+                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+            let mut conn = client
+                .get_multiplexed_async_connection()
+                .await
+                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+            // SLOWLOG GET returns nested arrays
+            let entries: Vec<Vec<redis::Value>> = redis::cmd("SLOWLOG")
+                .arg("GET")
+                .arg(input.count)
+                .query_async(&mut conn)
+                .await
+                .map_err(|e| ToolError::new(format!("SLOWLOG GET failed: {}", e)))?;
+
+            if entries.is_empty() {
+                return Ok(CallToolResult::text("No slow queries recorded"));
+            }
+
+            let mut output = format!("Slow log ({} entries):\n\n", entries.len());
+
+            for entry in entries {
+                // Each entry is: [id, timestamp, duration_us, command_args, ...]
+                if entry.len() >= 4 {
+                    let id = format_value(&entry[0]);
+                    let duration_us = format_value(&entry[2]);
+                    let command = if let redis::Value::Array(args) = &entry[3] {
+                        args.iter()
+                            .map(format_value)
+                            .collect::<Vec<_>>()
+                            .join(" ")
+                    } else {
+                        format_value(&entry[3])
+                    };
+
+                    output.push_str(&format!(
+                        "#{} - {} us: {}\n",
+                        id, duration_us, command
+                    ));
+                }
+            }
+
+            Ok(CallToolResult::text(output))
+        })
+        .build()
+        .expect("valid tool")
+}
+
+fn format_value(v: &redis::Value) -> String {
+    match v {
+        redis::Value::Nil => "(nil)".to_string(),
+        redis::Value::Int(i) => i.to_string(),
+        redis::Value::BulkString(b) => String::from_utf8_lossy(b).to_string(),
+        redis::Value::SimpleString(s) => s.clone(),
+        redis::Value::Array(arr) => format!(
+            "[{}]",
+            arr.iter().map(format_value).collect::<Vec<_>>().join(", ")
+        ),
+        _ => format!("{:?}", v),
+    }
+}
