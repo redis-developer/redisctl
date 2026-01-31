@@ -563,3 +563,252 @@ async fn test_get_all_shards_stats() {
     let stats = result["stats"].as_array().unwrap();
     assert_eq!(stats.len(), 2);
 }
+
+// ============================================================================
+// Historical Stats Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_cluster_stats_historical() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/cluster/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "intervals": [
+                {"time": "2024-01-15T10:00:00Z", "metrics": {"cpu_usage": 40.5}},
+                {"time": "2024-01-15T10:05:00Z", "metrics": {"cpu_usage": 42.3}},
+                {"time": "2024-01-15T10:10:00Z", "metrics": {"cpu_usage": 38.1}}
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_cluster_stats(state);
+
+    let result = call_tool_json(
+        &tool,
+        json!({
+            "interval": "5min",
+            "start_time": "2024-01-15T10:00:00Z",
+            "end_time": "2024-01-15T10:15:00Z"
+        }),
+    )
+    .await;
+
+    assert!(result.get("intervals").is_some());
+    let intervals = result["intervals"].as_array().unwrap();
+    assert_eq!(intervals.len(), 3);
+}
+
+#[tokio::test]
+async fn test_get_database_stats_historical() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/bdbs/1/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "intervals": [
+                {"time": "2024-01-15T10:00:00Z", "metrics": {"avg_latency": 0.5}},
+                {"time": "2024-01-15T10:05:00Z", "metrics": {"avg_latency": 0.6}}
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_database_stats(state);
+
+    let result = call_tool_json(
+        &tool,
+        json!({
+            "uid": 1,
+            "interval": "5min"
+        }),
+    )
+    .await;
+
+    assert!(result.get("intervals").is_some());
+    let intervals = result["intervals"].as_array().unwrap();
+    assert_eq!(intervals.len(), 2);
+}
+
+#[tokio::test]
+async fn test_get_node_stats_historical() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/nodes/1/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "intervals": [
+                {"time": "2024-01-15T10:00:00Z", "metrics": {"cpu_usage": 45.0}},
+                {"time": "2024-01-15T11:00:00Z", "metrics": {"cpu_usage": 50.0}}
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_node_stats(state);
+
+    let result = call_tool_json(
+        &tool,
+        json!({
+            "uid": 1,
+            "interval": "1hour",
+            "start_time": "2024-01-15T10:00:00Z"
+        }),
+    )
+    .await;
+
+    assert!(result.get("intervals").is_some());
+    let intervals = result["intervals"].as_array().unwrap();
+    assert_eq!(intervals.len(), 2);
+}
+
+// ============================================================================
+// Debug Info Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_debug_info_tasks() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/debuginfo"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "task_id": "debug-123",
+                "status": "completed",
+                "progress": 100.0,
+                "download_url": "https://example.com/download/debug-123.tar.gz"
+            },
+            {
+                "task_id": "debug-456",
+                "status": "running",
+                "progress": 45.0
+            }
+        ])))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::list_debug_info_tasks(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    let tasks = result.as_array().unwrap();
+    assert_eq!(tasks.len(), 2);
+    assert_eq!(tasks[0]["task_id"], "debug-123");
+    assert_eq!(tasks[0]["status"], "completed");
+    assert_eq!(tasks[1]["task_id"], "debug-456");
+    assert_eq!(tasks[1]["status"], "running");
+}
+
+#[tokio::test]
+async fn test_get_debug_info_status() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/debuginfo/debug-123"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "task_id": "debug-123",
+            "status": "completed",
+            "progress": 100.0,
+            "download_url": "https://example.com/download/debug-123.tar.gz"
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_debug_info_status(state);
+
+    let result = call_tool_json(&tool, json!({"task_id": "debug-123"})).await;
+
+    assert_eq!(result["task_id"], "debug-123");
+    assert_eq!(result["status"], "completed");
+    assert_eq!(result["progress"], 100.0);
+    assert!(result.get("download_url").is_some());
+}
+
+// ============================================================================
+// Module Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_modules() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/modules"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "uid": "redisjson-2.6.0",
+                "module_name": "ReJSON",
+                "semantic_version": "2.6.0",
+                "description": "Native JSON support for Redis",
+                "capabilities": ["JSON"],
+                "is_bundled": true
+            },
+            {
+                "uid": "redisearch-2.8.0",
+                "module_name": "ft",
+                "semantic_version": "2.8.0",
+                "description": "Full-text search and secondary indexing",
+                "capabilities": ["SEARCH"],
+                "is_bundled": true
+            }
+        ])))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::list_modules(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    let modules = result.as_array().unwrap();
+    assert_eq!(modules.len(), 2);
+    assert_eq!(modules[0]["uid"], "redisjson-2.6.0");
+    assert_eq!(modules[0]["module_name"], "ReJSON");
+    assert_eq!(modules[1]["uid"], "redisearch-2.8.0");
+}
+
+#[tokio::test]
+async fn test_get_module() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/modules/redisjson-2.6.0"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "uid": "redisjson-2.6.0",
+            "module_name": "ReJSON",
+            "semantic_version": "2.6.0",
+            "description": "Native JSON support for Redis",
+            "author": "Redis Ltd.",
+            "license": "Redis Source Available License",
+            "capabilities": ["JSON"],
+            "min_redis_version": "7.0.0",
+            "is_bundled": true
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_module(state);
+
+    let result = call_tool_json(&tool, json!({"uid": "redisjson-2.6.0"})).await;
+
+    assert_eq!(result["uid"], "redisjson-2.6.0");
+    assert_eq!(result["module_name"], "ReJSON");
+    assert_eq!(result["semantic_version"], "2.6.0");
+    assert_eq!(result["author"], "Redis Ltd.");
+}

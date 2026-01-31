@@ -167,6 +167,82 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
         .expect("valid tool")
 }
 
+/// Input for getting account system logs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSystemLogsInput {
+    /// Number of entries to skip (for pagination)
+    #[serde(default)]
+    pub offset: Option<i32>,
+    /// Maximum number of entries to return
+    #[serde(default)]
+    pub limit: Option<i32>,
+}
+
+/// Build the get_system_logs tool
+pub fn get_system_logs(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_system_logs")
+        .description(
+            "Get system audit logs for the Redis Cloud account. Includes events like \
+             subscription changes, database modifications, and user actions.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetSystemLogsInput| async move {
+            let client = state
+                .cloud_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+            let handler = AccountHandler::new(client);
+            let logs = handler
+                .get_account_system_logs(input.offset, input.limit)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get system logs: {}", e)))?;
+
+            CallToolResult::from_serialize(&logs)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting account session logs
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSessionLogsInput {
+    /// Number of entries to skip (for pagination)
+    #[serde(default)]
+    pub offset: Option<i32>,
+    /// Maximum number of entries to return
+    #[serde(default)]
+    pub limit: Option<i32>,
+}
+
+/// Build the get_session_logs tool
+pub fn get_session_logs(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_session_logs")
+        .description(
+            "Get session activity logs for the Redis Cloud account. Includes user login/logout \
+             events and session information.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetSessionLogsInput| async move {
+            let client = state
+                .cloud_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+            let handler = AccountHandler::new(client);
+            let logs = handler
+                .get_account_session_logs(input.offset, input.limit)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get session logs: {}", e)))?;
+
+            CallToolResult::from_serialize(&logs)
+        })
+        .build()
+        .expect("valid tool")
+}
+
 /// Input for getting supported regions
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetRegionsInput {

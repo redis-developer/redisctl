@@ -172,6 +172,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - list_acl_roles: List ACL roles
 - list_redis_rules: List Redis ACL rules
 
+### Redis Cloud - Logs
+- get_system_logs: Get system audit logs (subscription/database changes)
+- get_session_logs: Get session activity logs (login/logout events)
+
 ### Redis Cloud - Tasks
 - list_tasks: List async operations
 - get_task: Get task status
@@ -210,6 +214,14 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - get_all_databases_stats: Get stats for all databases in one call
 - get_shard_stats: Get stats for a specific shard
 - get_all_shards_stats: Get stats for all shards in one call
+
+### Redis Enterprise - Debug Info
+- list_debug_info_tasks: List debug info collection tasks
+- get_debug_info_status: Get status of a debug info collection task
+
+### Redis Enterprise - Modules
+- list_modules: List installed Redis modules (RedisJSON, RediSearch, etc.)
+- get_module: Get details about a specific module
 
 ### Redis Database - Connection
 - redis_ping: Test connectivity
@@ -268,6 +280,9 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::cloud::list_acl_users(state.clone()))
         .tool(tools::cloud::list_acl_roles(state.clone()))
         .tool(tools::cloud::list_redis_rules(state.clone()))
+        // Cloud - Logs
+        .tool(tools::cloud::get_system_logs(state.clone()))
+        .tool(tools::cloud::get_session_logs(state.clone()))
         // Cloud - Tasks
         .tool(tools::cloud::list_tasks(state.clone()))
         .tool(tools::cloud::get_task(state.clone()))
@@ -299,6 +314,12 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::enterprise::get_all_databases_stats(state.clone()))
         .tool(tools::enterprise::get_shard_stats(state.clone()))
         .tool(tools::enterprise::get_all_shards_stats(state.clone()))
+        // Enterprise - Debug Info
+        .tool(tools::enterprise::list_debug_info_tasks(state.clone()))
+        .tool(tools::enterprise::get_debug_info_status(state.clone()))
+        // Enterprise - Modules
+        .tool(tools::enterprise::list_modules(state.clone()))
+        .tool(tools::enterprise::get_module(state.clone()))
         // Redis - Connection
         .tool(tools::redis::ping(state.clone()))
         .tool(tools::redis::info(state.clone()))
