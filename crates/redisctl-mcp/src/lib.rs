@@ -216,6 +216,11 @@ mod tests {
         let _ = tools::enterprise::get_user(state.clone());
         let _ = tools::enterprise::list_alerts(state.clone());
         let _ = tools::enterprise::list_shards(state.clone());
+        // Aggregate Stats
+        let _ = tools::enterprise::get_all_nodes_stats(state.clone());
+        let _ = tools::enterprise::get_all_databases_stats(state.clone());
+        let _ = tools::enterprise::get_shard_stats(state.clone());
+        let _ = tools::enterprise::get_all_shards_stats(state.clone());
     }
 
     #[test]

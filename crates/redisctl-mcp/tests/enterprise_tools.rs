@@ -440,3 +440,126 @@ async fn test_get_database_stats() {
 
     assert!(result.get("avg_latency").is_some() || result.get("total_req").is_some());
 }
+
+// ============================================================================
+// Aggregate Stats Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_all_nodes_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/nodes/stats/last"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "stats": [
+                {
+                    "uid": 1,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"cpu_usage": 45.2}}]
+                },
+                {
+                    "uid": 2,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"cpu_usage": 32.1}}]
+                }
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_all_nodes_stats(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("stats").is_some());
+    let stats = result["stats"].as_array().unwrap();
+    assert_eq!(stats.len(), 2);
+}
+
+#[tokio::test]
+async fn test_get_all_databases_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/bdbs/stats/last"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "stats": [
+                {
+                    "uid": 1,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"avg_latency": 0.5}}]
+                },
+                {
+                    "uid": 2,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"avg_latency": 0.3}}]
+                }
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_all_databases_stats(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("stats").is_some());
+    let stats = result["stats"].as_array().unwrap();
+    assert_eq!(stats.len(), 2);
+}
+
+#[tokio::test]
+async fn test_get_shard_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/shards/1/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "intervals": [
+                {"time": "2024-01-15T10:30:00Z", "metrics": {"used_memory": 512000}}
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_shard_stats(state);
+
+    let result = call_tool_json(&tool, json!({"uid": 1})).await;
+
+    assert!(result.get("intervals").is_some());
+}
+
+#[tokio::test]
+async fn test_get_all_shards_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/shards/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "stats": [
+                {
+                    "uid": 1,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"used_memory": 512000}}]
+                },
+                {
+                    "uid": 2,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"used_memory": 256000}}]
+                }
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_all_shards_stats(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("stats").is_some());
+    let stats = result["stats"].as_array().unwrap();
+    assert_eq!(stats.len(), 2);
+}

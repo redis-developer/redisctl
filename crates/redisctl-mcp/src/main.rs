@@ -205,6 +205,12 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - list_alerts: List all active alerts
 - list_shards: List database shards
 
+### Redis Enterprise - Aggregate Stats
+- get_all_nodes_stats: Get stats for all nodes in one call
+- get_all_databases_stats: Get stats for all databases in one call
+- get_shard_stats: Get stats for a specific shard
+- get_all_shards_stats: Get stats for all shards in one call
+
 ### Redis Database - Connection
 - redis_ping: Test connectivity
 - redis_info: Get server information
@@ -288,6 +294,11 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::enterprise::get_user(state.clone()))
         .tool(tools::enterprise::list_alerts(state.clone()))
         .tool(tools::enterprise::list_shards(state.clone()))
+        // Enterprise - Aggregate Stats
+        .tool(tools::enterprise::get_all_nodes_stats(state.clone()))
+        .tool(tools::enterprise::get_all_databases_stats(state.clone()))
+        .tool(tools::enterprise::get_shard_stats(state.clone()))
+        .tool(tools::enterprise::get_all_shards_stats(state.clone()))
         // Redis - Connection
         .tool(tools::redis::ping(state.clone()))
         .tool(tools::redis::info(state.clone()))

@@ -591,6 +591,132 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
         .expect("valid tool")
 }
 
+/// Input for getting all nodes stats
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetAllNodesStatsInput {}
+
+/// Build the get_all_nodes_stats tool
+pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_all_nodes_stats")
+        .description(
+            "Get current statistics for all nodes in the Redis Enterprise cluster in a single \
+             call. Returns aggregated stats per node including CPU, memory, and network metrics.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, _input: GetAllNodesStatsInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = StatsHandler::new(client);
+            let stats = handler
+                .nodes_last()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get all nodes stats: {}", e)))?;
+
+            CallToolResult::from_serialize(&stats)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting all databases stats
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetAllDatabasesStatsInput {}
+
+/// Build the get_all_databases_stats tool
+pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_all_databases_stats")
+        .description(
+            "Get current statistics for all databases in the Redis Enterprise cluster in a \
+             single call. Returns aggregated stats per database including latency, throughput, \
+             and memory usage.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(
+            state,
+            |state, _input: GetAllDatabasesStatsInput| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = StatsHandler::new(client);
+                let stats = handler.databases_last().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get all databases stats: {}", e))
+                })?;
+
+                CallToolResult::from_serialize(&stats)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting shard stats
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetShardStatsInput {
+    /// Shard UID
+    pub uid: u32,
+}
+
+/// Build the get_shard_stats tool
+pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_shard_stats")
+        .description("Get current statistics for a specific shard in the Redis Enterprise cluster")
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetShardStatsInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = StatsHandler::new(client);
+            let stats = handler
+                .shard(input.uid, None)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get shard stats: {}", e)))?;
+
+            CallToolResult::from_serialize(&stats)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting all shards stats
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetAllShardsStatsInput {}
+
+/// Build the get_all_shards_stats tool
+pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_all_shards_stats")
+        .description(
+            "Get current statistics for all shards in the Redis Enterprise cluster in a single \
+             call. Returns aggregated stats per shard.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, _input: GetAllShardsStatsInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = StatsHandler::new(client);
+            let stats = handler
+                .shards(None)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get all shards stats: {}", e)))?;
+
+            CallToolResult::from_serialize(&stats)
+        })
+        .build()
+        .expect("valid tool")
+}
+
 // ============================================================================
 // Shard tools
 // ============================================================================
