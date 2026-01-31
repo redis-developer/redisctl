@@ -249,13 +249,16 @@ mod tests {
         let _ = tools::redis::dbsize(state.clone());
         let _ = tools::redis::client_list(state.clone());
         let _ = tools::redis::cluster_info(state.clone());
+        let _ = tools::redis::slowlog(state.clone());
         // Keys
         let _ = tools::redis::keys(state.clone());
+        let _ = tools::redis::scan(state.clone());
         let _ = tools::redis::get(state.clone());
         let _ = tools::redis::key_type(state.clone());
         let _ = tools::redis::ttl(state.clone());
         let _ = tools::redis::exists(state.clone());
         let _ = tools::redis::memory_usage(state.clone());
+        let _ = tools::redis::object_encoding(state.clone());
         // Data Structures
         let _ = tools::redis::hgetall(state.clone());
         let _ = tools::redis::lrange(state.clone());
