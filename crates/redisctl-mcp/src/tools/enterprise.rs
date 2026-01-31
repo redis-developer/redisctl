@@ -5,8 +5,10 @@ use std::sync::Arc;
 use redis_enterprise::alerts::AlertHandler;
 use redis_enterprise::bdb::DatabaseHandler;
 use redis_enterprise::cluster::ClusterHandler;
+use redis_enterprise::debuginfo::DebugInfoHandler;
 use redis_enterprise::license::LicenseHandler;
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
+use redis_enterprise::modules::ModuleHandler;
 use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
@@ -875,6 +877,147 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
                 CallToolResult::from_serialize(&endpoints)
             },
         )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Debug Info tools
+// ============================================================================
+
+/// Input for listing debug info tasks
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListDebugInfoTasksInput {}
+
+/// Build the list_debug_info_tasks tool
+pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_debug_info_tasks")
+        .description(
+            "List all debug info collection tasks in the Redis Enterprise cluster. Returns task \
+             IDs, statuses (queued, running, completed, failed), and download URLs for completed \
+             collections.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, _input: ListDebugInfoTasksInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = DebugInfoHandler::new(client);
+            let tasks = handler
+                .list()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to list debug info tasks: {}", e)))?;
+
+            CallToolResult::from_serialize(&tasks)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting debug info task status
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetDebugInfoStatusInput {
+    /// The task ID returned when debug info collection was started
+    pub task_id: String,
+}
+
+/// Build the get_debug_info_status tool
+pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_debug_info_status")
+        .description(
+            "Get the status of a debug info collection task. Returns status (queued, running, \
+             completed, failed), progress percentage, download URL (when completed), and error \
+             message (if failed).",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetDebugInfoStatusInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = DebugInfoHandler::new(client);
+            let status = handler
+                .status(&input.task_id)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get debug info status: {}", e)))?;
+
+            CallToolResult::from_serialize(&status)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Module tools
+// ============================================================================
+
+/// Input for listing modules
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListModulesInput {}
+
+/// Build the list_modules tool
+pub fn list_modules(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_modules")
+        .description(
+            "List all Redis modules installed on the Redis Enterprise cluster. Returns module \
+             names, versions, descriptions, and capabilities (e.g., RedisJSON, RediSearch, \
+             RedisTimeSeries).",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, _input: ListModulesInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = ModuleHandler::new(client);
+            let modules = handler
+                .list()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to list modules: {}", e)))?;
+
+            CallToolResult::from_serialize(&modules)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting a specific module
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetModuleInput {
+    /// Module UID
+    pub uid: String,
+}
+
+/// Build the get_module tool
+pub fn get_module(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_module")
+        .description(
+            "Get detailed information about a specific Redis module including version, \
+             description, author, license, capabilities, and platform compatibility.",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetModuleInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = ModuleHandler::new(client);
+            let module = handler
+                .get(&input.uid)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get module: {}", e)))?;
+
+            CallToolResult::from_serialize(&module)
+        })
         .build()
         .expect("valid tool")
 }
