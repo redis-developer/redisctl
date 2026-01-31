@@ -266,3 +266,49 @@ impl Clone for AppState {
         }
     }
 }
+
+#[cfg(any(test, feature = "test-support"))]
+#[allow(dead_code)]
+impl AppState {
+    /// Create test state with a pre-configured Cloud client
+    pub fn with_cloud_client(client: CloudClient) -> Self {
+        Self {
+            credential_source: CredentialSource::Profile(None),
+            read_only: true,
+            database_url: None,
+            config: None,
+            clients: RwLock::new(CachedClients {
+                cloud: Some(client),
+                enterprise: None,
+            }),
+        }
+    }
+
+    /// Create test state with a pre-configured Enterprise client
+    pub fn with_enterprise_client(client: EnterpriseClient) -> Self {
+        Self {
+            credential_source: CredentialSource::Profile(None),
+            read_only: true,
+            database_url: None,
+            config: None,
+            clients: RwLock::new(CachedClients {
+                cloud: None,
+                enterprise: Some(client),
+            }),
+        }
+    }
+
+    /// Create test state with both Cloud and Enterprise clients
+    pub fn with_clients(cloud: CloudClient, enterprise: EnterpriseClient) -> Self {
+        Self {
+            credential_source: CredentialSource::Profile(None),
+            read_only: true,
+            database_url: None,
+            config: None,
+            clients: RwLock::new(CachedClients {
+                cloud: Some(cloud),
+                enterprise: Some(enterprise),
+            }),
+        }
+    }
+}

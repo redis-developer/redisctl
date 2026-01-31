@@ -49,6 +49,11 @@ tower = { version = "0.5", features = ["timeout", "limit"] }
 [features]
 default = ["http"]
 http = []
+test-support = []
 
 [dev-dependencies]
 tokio = { workspace = true }
+redis-cloud = { version = "0.9.1", features = ["test-support"] }
+redis-enterprise = { version = "0.8.1", features = ["test-support"] }
+wiremock = { workspace = true }
+serde_json = { workspace = true }
