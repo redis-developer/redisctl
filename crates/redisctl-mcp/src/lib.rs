@@ -182,7 +182,9 @@ mod tests {
         let _ = tools::cloud::get_regions(state.clone());
         let _ = tools::cloud::get_modules(state.clone());
         let _ = tools::cloud::list_account_users(state.clone());
+        let _ = tools::cloud::get_account_user(state.clone());
         let _ = tools::cloud::list_acl_users(state.clone());
+        let _ = tools::cloud::get_acl_user(state.clone());
         let _ = tools::cloud::list_acl_roles(state.clone());
         let _ = tools::cloud::list_redis_rules(state.clone());
         // Logs
@@ -220,7 +222,9 @@ mod tests {
         let _ = tools::enterprise::list_users(state.clone());
         let _ = tools::enterprise::get_user(state.clone());
         let _ = tools::enterprise::list_alerts(state.clone());
+        // Shards
         let _ = tools::enterprise::list_shards(state.clone());
+        let _ = tools::enterprise::get_shard(state.clone());
         // Aggregate Stats
         let _ = tools::enterprise::get_all_nodes_stats(state.clone());
         let _ = tools::enterprise::get_all_databases_stats(state.clone());
