@@ -239,6 +239,44 @@ mod tests {
     }
 
     #[test]
+    fn test_profile_tools_build() {
+        let state = Arc::new(AppState::new(CredentialSource::Profile(None), true, None).unwrap());
+
+        // Verify all profile tools build successfully
+        // Read operations
+        let _ = tools::profile::list_profiles(state.clone());
+        let _ = tools::profile::show_profile(state.clone());
+        let _ = tools::profile::config_path(state.clone());
+        let _ = tools::profile::validate_config(state.clone());
+        // Write operations
+        let _ = tools::profile::set_default_cloud(state.clone());
+        let _ = tools::profile::set_default_enterprise(state.clone());
+        let _ = tools::profile::delete_profile(state.clone());
+    }
+
+    #[test]
+    fn test_profile_input_deserialization() {
+        // ListProfilesInput
+        let input: tools::profile::ListProfilesInput = serde_json::from_str("{}").unwrap();
+        let _ = input;
+
+        // ShowProfileInput
+        let input: tools::profile::ShowProfileInput =
+            serde_json::from_str(r#"{"name": "my-profile"}"#).unwrap();
+        assert_eq!(input.name, "my-profile");
+
+        // SetDefaultCloudInput
+        let input: tools::profile::SetDefaultCloudInput =
+            serde_json::from_str(r#"{"name": "cloud-profile"}"#).unwrap();
+        assert_eq!(input.name, "cloud-profile");
+
+        // DeleteProfileInput
+        let input: tools::profile::DeleteProfileInput =
+            serde_json::from_str(r#"{"name": "old-profile"}"#).unwrap();
+        assert_eq!(input.name, "old-profile");
+    }
+
+    #[test]
     fn test_cloud_input_deserialization() {
         // ListSubscriptionsInput
         let input: tools::cloud::ListSubscriptionsInput = serde_json::from_str("{}").unwrap();
