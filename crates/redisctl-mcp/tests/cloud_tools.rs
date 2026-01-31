@@ -7,6 +7,7 @@ use redis_cloud::testing::{
 };
 use serde_json::json;
 use tower_mcp::Tool;
+use wiremock::ResponseTemplate;
 
 // Import the tools and state from the MCP crate
 use redisctl_mcp::state::AppState;
@@ -364,4 +365,90 @@ async fn test_get_modules() {
     let modules = result["modules"].as_array().unwrap();
     assert_eq!(modules.len(), 3);
     assert_eq!(modules[0]["name"], "RedisJSON");
+}
+
+// ============================================================================
+// Logs Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_system_logs() {
+    let server = MockCloudServer::start().await;
+
+    server
+        .mock_path(
+            "GET",
+            "/logs",
+            ResponseTemplate::new(200).set_body_json(json!({
+                "entries": [
+                    {
+                        "id": 1,
+                        "time": "2024-01-15T10:30:00Z",
+                        "originator": "admin@example.com",
+                        "apiKeyName": "default-api-key",
+                        "resource": "subscription",
+                        "resourceId": 123,
+                        "action": "create-subscription"
+                    },
+                    {
+                        "id": 2,
+                        "time": "2024-01-15T10:25:00Z",
+                        "originator": "admin@example.com",
+                        "apiKeyName": "default-api-key",
+                        "resource": "database",
+                        "resourceId": 456,
+                        "action": "update-database"
+                    }
+                ]
+            })),
+        )
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_cloud_client(client));
+    let tool = cloud::get_system_logs(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("entries").is_some());
+    let entries = result["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 2);
+}
+
+#[tokio::test]
+async fn test_get_session_logs() {
+    let server = MockCloudServer::start().await;
+
+    server
+        .mock_path(
+            "GET",
+            "/session-logs",
+            ResponseTemplate::new(200).set_body_json(json!({
+                "entries": [
+                    {
+                        "id": "550e8400-e29b-41d4-a716-446655440001",
+                        "time": "2024-01-15T10:30:00Z",
+                        "user": "admin@example.com",
+                        "action": "login"
+                    },
+                    {
+                        "id": "550e8400-e29b-41d4-a716-446655440002",
+                        "time": "2024-01-15T09:00:00Z",
+                        "user": "dev@example.com",
+                        "action": "logout"
+                    }
+                ]
+            })),
+        )
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_cloud_client(client));
+    let tool = cloud::get_session_logs(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("entries").is_some());
+    let entries = result["entries"].as_array().unwrap();
+    assert_eq!(entries.len(), 2);
 }

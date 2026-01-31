@@ -172,6 +172,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - list_acl_roles: List ACL roles
 - list_redis_rules: List Redis ACL rules
 
+### Redis Cloud - Logs
+- get_system_logs: Get system audit logs (subscription/database changes)
+- get_session_logs: Get session activity logs (login/logout events)
+
 ### Redis Cloud - Tasks
 - list_tasks: List async operations
 - get_task: Get task status
@@ -268,6 +272,9 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::cloud::list_acl_users(state.clone()))
         .tool(tools::cloud::list_acl_roles(state.clone()))
         .tool(tools::cloud::list_redis_rules(state.clone()))
+        // Cloud - Logs
+        .tool(tools::cloud::get_system_logs(state.clone()))
+        .tool(tools::cloud::get_session_logs(state.clone()))
         // Cloud - Tasks
         .tool(tools::cloud::list_tasks(state.clone()))
         .tool(tools::cloud::get_task(state.clone()))

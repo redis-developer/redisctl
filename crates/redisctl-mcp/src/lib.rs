@@ -183,6 +183,9 @@ mod tests {
         let _ = tools::cloud::list_acl_users(state.clone());
         let _ = tools::cloud::list_acl_roles(state.clone());
         let _ = tools::cloud::list_redis_rules(state.clone());
+        // Logs
+        let _ = tools::cloud::get_system_logs(state.clone());
+        let _ = tools::cloud::get_session_logs(state.clone());
         // Tasks
         let _ = tools::cloud::list_tasks(state.clone());
         let _ = tools::cloud::get_task(state.clone());

@@ -9,7 +9,7 @@ use redis_enterprise::license::LicenseHandler;
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
-use redis_enterprise::stats::StatsHandler;
+use redis_enterprise::stats::{StatsHandler, StatsQuery};
 use redis_enterprise::users::UserHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -501,27 +501,55 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
 
 /// Input for getting cluster stats
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetClusterStatsInput {}
+pub struct GetClusterStatsInput {
+    /// Time interval for aggregation: "1sec", "10sec", "5min", "15min", "1hour", "12hour", "1week"
+    #[serde(default)]
+    pub interval: Option<String>,
+    /// Start time for historical query (ISO 8601 format, e.g., "2024-01-15T10:00:00Z")
+    #[serde(default)]
+    pub start_time: Option<String>,
+    /// End time for historical query (ISO 8601 format)
+    #[serde(default)]
+    pub end_time: Option<String>,
+}
 
 /// Build the get_cluster_stats tool
 pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_cluster_stats")
-        .description("Get current statistics for the Redis Enterprise cluster")
+        .description(
+            "Get statistics for the Redis Enterprise cluster. By default returns the latest \
+             stats. Optionally specify interval and time range for historical data.",
+        )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetClusterStatsInput| async move {
+        .handler_with_state(state, |state, input: GetClusterStatsInput| async move {
             let client = state
                 .enterprise_client()
                 .await
                 .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
             let handler = StatsHandler::new(client);
-            let stats = handler
-                .cluster_last()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
 
-            CallToolResult::from_serialize(&stats)
+            // If any query params provided, get historical stats
+            if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
+                let query = StatsQuery {
+                    interval: input.interval,
+                    stime: input.start_time,
+                    etime: input.end_time,
+                    metrics: None,
+                };
+                let stats = handler
+                    .cluster(Some(query))
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
+                CallToolResult::from_serialize(&stats)
+            } else {
+                let stats = handler
+                    .cluster_last()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
+                CallToolResult::from_serialize(&stats)
+            }
         })
         .build()
         .expect("valid tool")
@@ -532,13 +560,23 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
 pub struct GetDatabaseStatsInput {
     /// Database UID
     pub uid: u32,
+    /// Time interval for aggregation: "1sec", "10sec", "5min", "15min", "1hour", "12hour", "1week"
+    #[serde(default)]
+    pub interval: Option<String>,
+    /// Start time for historical query (ISO 8601 format, e.g., "2024-01-15T10:00:00Z")
+    #[serde(default)]
+    pub start_time: Option<String>,
+    /// End time for historical query (ISO 8601 format)
+    #[serde(default)]
+    pub end_time: Option<String>,
 }
 
 /// Build the get_database_stats tool
 pub fn get_database_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_stats")
         .description(
-            "Get current statistics for a specific database in the Redis Enterprise cluster",
+            "Get statistics for a specific database. By default returns the latest stats. \
+             Optionally specify interval and time range for historical data.",
         )
         .read_only()
         .idempotent()
@@ -549,12 +587,26 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
                 .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
             let handler = StatsHandler::new(client);
-            let stats = handler
-                .database_last(input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
 
-            CallToolResult::from_serialize(&stats)
+            if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
+                let query = StatsQuery {
+                    interval: input.interval,
+                    stime: input.start_time,
+                    etime: input.end_time,
+                    metrics: None,
+                };
+                let stats = handler
+                    .database(input.uid, Some(query))
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
+                CallToolResult::from_serialize(&stats)
+            } else {
+                let stats = handler
+                    .database_last(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
+                CallToolResult::from_serialize(&stats)
+            }
         })
         .build()
         .expect("valid tool")
@@ -565,12 +617,24 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
 pub struct GetNodeStatsInput {
     /// Node UID
     pub uid: u32,
+    /// Time interval for aggregation: "1sec", "10sec", "5min", "15min", "1hour", "12hour", "1week"
+    #[serde(default)]
+    pub interval: Option<String>,
+    /// Start time for historical query (ISO 8601 format, e.g., "2024-01-15T10:00:00Z")
+    #[serde(default)]
+    pub start_time: Option<String>,
+    /// End time for historical query (ISO 8601 format)
+    #[serde(default)]
+    pub end_time: Option<String>,
 }
 
 /// Build the get_node_stats tool
 pub fn get_node_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_node_stats")
-        .description("Get current statistics for a specific node in the Redis Enterprise cluster")
+        .description(
+            "Get statistics for a specific node. By default returns the latest stats. \
+             Optionally specify interval and time range for historical data.",
+        )
         .read_only()
         .idempotent()
         .handler_with_state(state, |state, input: GetNodeStatsInput| async move {
@@ -580,12 +644,26 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
                 .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
             let handler = StatsHandler::new(client);
-            let stats = handler
-                .node_last(input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
 
-            CallToolResult::from_serialize(&stats)
+            if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
+                let query = StatsQuery {
+                    interval: input.interval,
+                    stime: input.start_time,
+                    etime: input.end_time,
+                    metrics: None,
+                };
+                let stats = handler
+                    .node(input.uid, Some(query))
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
+                CallToolResult::from_serialize(&stats)
+            } else {
+                let stats = handler
+                    .node_last(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
+                CallToolResult::from_serialize(&stats)
+            }
         })
         .build()
         .expect("valid tool")
