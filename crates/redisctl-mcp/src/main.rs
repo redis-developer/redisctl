@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
-use tower_mcp::{McpRouter, transport::StdioTransport};
+use tower_mcp::{CapabilityFilter, DenialBehavior, McpRouter, Tool, transport::StdioTransport};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
@@ -127,8 +127,8 @@ async fn main() -> Result<()> {
         args.database_url.clone(),
     )?);
 
-    // Build router with tools
-    let router = build_router(state.clone())?;
+    // Build router with tools and optional read-only filter
+    let router = build_router(state.clone(), args.read_only)?;
 
     match args.transport {
         Transport::Stdio => {
@@ -145,7 +145,7 @@ async fn main() -> Result<()> {
 }
 
 /// Build the MCP router with all tools
-fn build_router(state: Arc<AppState>) -> Result<McpRouter> {
+fn build_router(state: Arc<AppState>, read_only: bool) -> Result<McpRouter> {
     let instructions = r#"
 Redis Cloud and Enterprise MCP Server
 
@@ -347,6 +347,25 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::profile::set_default_cloud(state.clone()))
         .tool(tools::profile::set_default_enterprise(state.clone()))
         .tool(tools::profile::delete_profile(state.clone()));
+
+    // Apply read-only filter if enabled
+    // This hides write tools entirely from tools/list and returns "method not found"
+    // if they're called directly, providing defense in depth beyond handler-level checks
+    let router = if read_only {
+        info!("Applying read-only filter - write tools will be hidden");
+        router.tool_filter(
+            CapabilityFilter::new(|_session, tool: &Tool| {
+                // Only show tools that are marked as read-only
+                tool.annotations
+                    .as_ref()
+                    .map(|a| a.read_only_hint)
+                    .unwrap_or(false)
+            })
+            .denial_behavior(DenialBehavior::Unauthorized),
+        )
+    } else {
+        router
+    };
 
     Ok(router)
 }

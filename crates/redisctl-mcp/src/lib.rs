@@ -393,4 +393,76 @@ mod tests {
         let err = McpError::ReadOnlyMode;
         assert!(err.to_string().contains("read-only"));
     }
+
+    #[test]
+    fn test_read_only_tool_annotations() {
+        use tower_mcp::{CallToolResult, ToolBuilder};
+
+        // Build a read-only tool
+        let read_tool = ToolBuilder::new("get_data")
+            .description("Read data")
+            .read_only()
+            .idempotent()
+            .handler(|_: serde_json::Value| async { Ok(CallToolResult::text("data")) })
+            .build()
+            .expect("valid tool");
+
+        // Build a write tool (no read_only annotation)
+        let write_tool = ToolBuilder::new("set_data")
+            .description("Write data")
+            .handler(|_: serde_json::Value| async { Ok(CallToolResult::text("ok")) })
+            .build()
+            .expect("valid tool");
+
+        // Verify annotations are set correctly
+        assert!(
+            read_tool
+                .annotations
+                .as_ref()
+                .map(|a| a.read_only_hint)
+                .unwrap_or(false)
+        );
+
+        assert!(
+            !write_tool
+                .annotations
+                .as_ref()
+                .map(|a| a.read_only_hint)
+                .unwrap_or(false)
+        );
+    }
+
+    #[test]
+    fn test_capability_filter_read_only() {
+        use tower_mcp::{CallToolResult, CapabilityFilter, Tool, ToolBuilder};
+
+        // Build test tools
+        let read_tool = ToolBuilder::new("get_data")
+            .description("Read data")
+            .read_only()
+            .handler(|_: serde_json::Value| async { Ok(CallToolResult::text("data")) })
+            .build()
+            .expect("valid tool");
+
+        let write_tool = ToolBuilder::new("set_data")
+            .description("Write data")
+            .handler(|_: serde_json::Value| async { Ok(CallToolResult::text("ok")) })
+            .build()
+            .expect("valid tool");
+
+        // Create a filter that only shows read-only tools
+        let filter = CapabilityFilter::new(|_session, tool: &Tool| {
+            tool.annotations
+                .as_ref()
+                .map(|a| a.read_only_hint)
+                .unwrap_or(false)
+        });
+
+        // Create a mock session
+        let session = tower_mcp::SessionState::new();
+
+        // Verify filter behavior
+        assert!(filter.is_visible(&session, &read_tool));
+        assert!(!filter.is_visible(&session, &write_tool));
+    }
 }
