@@ -219,6 +219,17 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - redis_smembers: Get set members
 - redis_zrange: Get sorted set range
 
+### Profile Management - Read
+- profile_list: List all configured profiles
+- profile_show: Show profile details (credentials masked)
+- profile_path: Show configuration file path
+- profile_validate: Validate configuration file
+
+### Profile Management - Write (requires --read-only=false)
+- profile_set_default_cloud: Set default Cloud profile
+- profile_set_default_enterprise: Set default Enterprise profile
+- profile_delete: Delete a profile
+
 ## Authentication
 
 In stdio mode, credentials are resolved from redisctl profiles.
@@ -282,7 +293,16 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::redis::hgetall(state.clone()))
         .tool(tools::redis::lrange(state.clone()))
         .tool(tools::redis::smembers(state.clone()))
-        .tool(tools::redis::zrange(state.clone()));
+        .tool(tools::redis::zrange(state.clone()))
+        // Profile Management - Read
+        .tool(tools::profile::list_profiles(state.clone()))
+        .tool(tools::profile::show_profile(state.clone()))
+        .tool(tools::profile::config_path(state.clone()))
+        .tool(tools::profile::validate_config(state.clone()))
+        // Profile Management - Write
+        .tool(tools::profile::set_default_cloud(state.clone()))
+        .tool(tools::profile::set_default_enterprise(state.clone()))
+        .tool(tools::profile::delete_profile(state.clone()));
 
     Ok(router)
 }
