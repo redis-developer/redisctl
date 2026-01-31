@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use redis_enterprise::testing::{
-    ClusterFixture, DatabaseFixture, MockEnterpriseServer, NodeFixture, UserFixture,
+    AlertFixture, ClusterFixture, DatabaseFixture, MockEnterpriseServer, NodeFixture, UserFixture,
 };
 use serde_json::json;
 use tower_mcp::Tool;
@@ -250,21 +250,18 @@ async fn test_get_enterprise_user() {
 async fn test_list_alerts() {
     let server = MockEnterpriseServer::start().await;
 
-    Mock::given(method("GET"))
-        .and(path("/v1/alerts"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
-            {
-                "uid": "1",
-                "name": "high_memory_usage",
-                "severity": "warning",
-                "enabled": true,
-                "state": "on",
-                "threshold": "70%",
-                "cluster_alert": true
-            }
-        ])))
-        .mount(server.inner())
-        .await;
+    let alert1 = AlertFixture::new("alert-1", "high_memory_usage")
+        .severity("WARNING")
+        .description("Memory usage above 80%")
+        .build();
+
+    let alert2 = AlertFixture::new("alert-2", "node_cpu_critical")
+        .severity("CRITICAL")
+        .entity_type("node")
+        .entity_uid("1")
+        .build();
+
+    server.mock_alerts_list(vec![alert1, alert2]).await;
 
     let client = server.client();
     let state = Arc::new(AppState::with_enterprise_client(client));
@@ -273,6 +270,10 @@ async fn test_list_alerts() {
     let result = call_tool_json(&tool, json!({})).await;
 
     assert!(result.is_array());
+    let alerts = result.as_array().unwrap();
+    assert_eq!(alerts.len(), 2);
+    assert_eq!(alerts[0]["name"], "high_memory_usage");
+    assert_eq!(alerts[1]["name"], "node_cpu_critical");
 }
 
 #[tokio::test]

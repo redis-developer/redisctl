@@ -7,8 +7,6 @@ use redis_cloud::testing::{
 };
 use serde_json::json;
 use tower_mcp::Tool;
-use wiremock::matchers::{header, method, path};
-use wiremock::{Mock, ResponseTemplate};
 
 // Import the tools and state from the MCP crate
 use redisctl_mcp::state::AppState;
@@ -127,23 +125,8 @@ async fn test_list_databases() {
         .replication(false)
         .build();
 
-    // Use correct API response format (not the simplified mock helper)
-    Mock::given(method("GET"))
-        .and(path("/subscriptions/123/databases"))
-        .and(header("x-api-key", "test-key"))
-        .and(header("x-api-secret-key", "test-secret"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "accountId": 12345,
-            "subscription": [{
-                "subscriptionId": 123,
-                "numberOfDatabases": 2,
-                "databases": [db1, db2],
-                "links": []
-            }],
-            "links": []
-        })))
-        .mount(server.inner())
-        .await;
+    // Use the convenience method - now returns correct nested structure
+    server.mock_databases_list(123, vec![db1, db2]).await;
 
     let client = server.client();
     let state = Arc::new(AppState::with_cloud_client(client));
@@ -229,27 +212,19 @@ async fn test_get_account() {
 async fn test_list_tasks() {
     let server = MockCloudServer::start().await;
 
-    // Use correct API response format - tasks endpoint returns array directly
-    Mock::given(method("GET"))
-        .and(path("/tasks"))
-        .and(header("x-api-key", "test-key"))
-        .and(header("x-api-secret-key", "test-secret"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(vec![
-            json!({
-                "taskId": "task-001",
-                "commandType": "subscriptionCreateRequest",
-                "status": "processing-completed",
-                "description": "Create subscription"
-            }),
-            json!({
-                "taskId": "task-002",
-                "commandType": "databaseCreateRequest",
-                "status": "processing-in-progress",
-                "description": "Create database"
-            }),
-        ]))
-        .mount(server.inner())
-        .await;
+    let task1 = TaskFixture::completed("task-001", 123)
+        .command_type("subscriptionCreateRequest")
+        .description("Create subscription")
+        .build();
+
+    let task2 = TaskFixture::new("task-002")
+        .command_type("databaseCreateRequest")
+        .status("processing-in-progress")
+        .description("Create database")
+        .build();
+
+    // Use convenience method - now returns direct array
+    server.mock_tasks_list(vec![task1, task2]).await;
 
     let client = server.client();
     let state = Arc::new(AppState::with_cloud_client(client));
