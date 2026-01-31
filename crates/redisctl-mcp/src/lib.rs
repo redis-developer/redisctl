@@ -39,6 +39,8 @@
 //! ```
 
 pub mod error;
+pub mod prompts;
+pub mod resources;
 pub mod state;
 pub mod tools;
 

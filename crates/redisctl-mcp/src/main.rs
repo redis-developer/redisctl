@@ -12,6 +12,8 @@ use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 mod error;
+mod prompts;
+mod resources;
 mod state;
 mod tools;
 
@@ -255,6 +257,21 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - profile_set_default_enterprise: Set default Enterprise profile
 - profile_delete: Delete a profile
 
+## Resources
+
+Read-only data accessible via URI:
+- redis://config/path - Configuration file path
+- redis://profiles - List of configured profiles
+- redis://help - Usage instructions and help
+
+## Prompts
+
+Pre-built templates for common workflows:
+- troubleshoot_database - Diagnose database issues
+- analyze_performance - Analyze performance metrics
+- capacity_planning - Help with capacity planning
+- migration_planning - Plan Redis migrations
+
 ## Authentication
 
 In stdio mode, credentials are resolved from redisctl profiles.
@@ -346,7 +363,16 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Profile Management - Write
         .tool(tools::profile::set_default_cloud(state.clone()))
         .tool(tools::profile::set_default_enterprise(state.clone()))
-        .tool(tools::profile::delete_profile(state.clone()));
+        .tool(tools::profile::delete_profile(state.clone()))
+        // Resources
+        .resource(resources::config_path_resource())
+        .resource(resources::profiles_resource())
+        .resource(resources::help_resource())
+        // Prompts
+        .prompt(prompts::troubleshoot_database_prompt())
+        .prompt(prompts::analyze_performance_prompt())
+        .prompt(prompts::capacity_planning_prompt())
+        .prompt(prompts::migration_planning_prompt());
 
     // Apply read-only filter if enabled
     // This hides write tools entirely from tools/list and returns "method not found"
