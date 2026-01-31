@@ -170,7 +170,9 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - get_regions: Get supported cloud regions
 - get_modules: Get supported Redis modules
 - list_account_users: List team members
+- get_account_user: Get team member details by ID
 - list_acl_users: List database ACL users
+- get_acl_user: Get ACL user details by ID
 - list_acl_roles: List ACL roles
 - list_redis_rules: List Redis ACL rules
 
@@ -209,7 +211,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - list_enterprise_users: List cluster users
 - get_enterprise_user: Get user details
 - list_alerts: List all active alerts
-- list_shards: List database shards
+
+### Redis Enterprise - Shards
+- list_shards: List database shards (with optional database filter)
+- get_shard: Get shard details by UID
 
 ### Redis Enterprise - Aggregate Stats
 - get_all_nodes_stats: Get stats for all nodes in one call
@@ -294,7 +299,9 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::cloud::get_regions(state.clone()))
         .tool(tools::cloud::get_modules(state.clone()))
         .tool(tools::cloud::list_account_users(state.clone()))
+        .tool(tools::cloud::get_account_user(state.clone()))
         .tool(tools::cloud::list_acl_users(state.clone()))
+        .tool(tools::cloud::get_acl_user(state.clone()))
         .tool(tools::cloud::list_acl_roles(state.clone()))
         .tool(tools::cloud::list_redis_rules(state.clone()))
         // Cloud - Logs
@@ -326,6 +333,7 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::enterprise::get_user(state.clone()))
         .tool(tools::enterprise::list_alerts(state.clone()))
         .tool(tools::enterprise::list_shards(state.clone()))
+        .tool(tools::enterprise::get_shard(state.clone()))
         // Enterprise - Aggregate Stats
         .tool(tools::enterprise::get_all_nodes_stats(state.clone()))
         .tool(tools::enterprise::get_all_databases_stats(state.clone()))

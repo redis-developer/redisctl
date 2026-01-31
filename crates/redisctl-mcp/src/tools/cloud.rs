@@ -404,6 +404,37 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
         .expect("valid tool")
 }
 
+/// Input for getting a specific account user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetAccountUserInput {
+    /// Account user ID
+    pub user_id: i32,
+}
+
+/// Build the get_account_user tool
+pub fn get_account_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_account_user")
+        .description("Get detailed information about a specific account user (team member) by ID.")
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetAccountUserInput| async move {
+            let client = state
+                .cloud_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+            let handler = UserHandler::new(client);
+            let user = handler
+                .get_user_by_id(input.user_id)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get account user: {}", e)))?;
+
+            CallToolResult::from_serialize(&user)
+        })
+        .build()
+        .expect("valid tool")
+}
+
 // ============================================================================
 // ACL tools (database-level access control)
 // ============================================================================
@@ -431,6 +462,37 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
                 .map_err(|e| ToolError::new(format!("Failed to list ACL users: {}", e)))?;
 
             CallToolResult::from_serialize(&users)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting a specific ACL user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetAclUserInput {
+    /// ACL user ID
+    pub user_id: i32,
+}
+
+/// Build the get_acl_user tool
+pub fn get_acl_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_acl_user")
+        .description("Get detailed information about a specific ACL user by ID.")
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, input: GetAclUserInput| async move {
+            let client = state
+                .cloud_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+            let handler = AclHandler::new(client);
+            let user = handler
+                .get_user_by_id(input.user_id)
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get ACL user: {}", e)))?;
+
+            CallToolResult::from_serialize(&user)
         })
         .build()
         .expect("valid tool")
