@@ -5,6 +5,7 @@ use std::sync::Arc;
 use redis_enterprise::alerts::AlertHandler;
 use redis_enterprise::bdb::DatabaseHandler;
 use redis_enterprise::cluster::ClusterHandler;
+use redis_enterprise::license::LicenseHandler;
 use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::StatsHandler;
@@ -44,6 +45,76 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
         .build()
         .expect("valid tool")
 }
+
+// ============================================================================
+// License tools
+// ============================================================================
+
+/// Input for getting license info
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetLicenseInput {}
+
+/// Build the get_license tool
+pub fn get_license(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_license")
+        .description(
+            "Get Redis Enterprise cluster license information including type, expiration date, \
+             cluster name, owner, and enabled features",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, _input: GetLicenseInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = LicenseHandler::new(client);
+            let license = handler
+                .get()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get license: {}", e)))?;
+
+            CallToolResult::from_serialize(&license)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting license usage
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetLicenseUsageInput {}
+
+/// Build the get_license_usage tool
+pub fn get_license_usage(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_license_usage")
+        .description(
+            "Get Redis Enterprise cluster license utilization statistics including shards, \
+             nodes, and RAM usage against license limits",
+        )
+        .read_only()
+        .idempotent()
+        .handler_with_state(state, |state, _input: GetLicenseUsageInput| async move {
+            let client = state
+                .enterprise_client()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+            let handler = LicenseHandler::new(client);
+            let usage = handler
+                .usage()
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to get license usage: {}", e)))?;
+
+            CallToolResult::from_serialize(&usage)
+        })
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Database tools
+// ============================================================================
 
 /// Input for listing databases
 #[derive(Debug, Deserialize, JsonSchema)]
