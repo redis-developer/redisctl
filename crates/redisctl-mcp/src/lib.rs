@@ -199,6 +199,8 @@ mod tests {
         // License
         let _ = tools::enterprise::get_license(state.clone());
         let _ = tools::enterprise::get_license_usage(state.clone());
+        // Logs
+        let _ = tools::enterprise::list_logs(state.clone());
         // Databases
         let _ = tools::enterprise::list_databases(state.clone());
         let _ = tools::enterprise::get_database(state.clone());
@@ -214,6 +216,11 @@ mod tests {
         let _ = tools::enterprise::get_user(state.clone());
         let _ = tools::enterprise::list_alerts(state.clone());
         let _ = tools::enterprise::list_shards(state.clone());
+        // Aggregate Stats
+        let _ = tools::enterprise::get_all_nodes_stats(state.clone());
+        let _ = tools::enterprise::get_all_databases_stats(state.clone());
+        let _ = tools::enterprise::get_shard_stats(state.clone());
+        let _ = tools::enterprise::get_all_shards_stats(state.clone());
     }
 
     #[test]

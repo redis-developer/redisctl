@@ -146,6 +146,81 @@ async fn test_get_license_usage() {
 }
 
 // ============================================================================
+// Logs Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_list_logs() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/logs"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "time": "2024-01-15T10:30:00Z",
+                "type": "bdb_created"
+            },
+            {
+                "time": "2024-01-15T10:25:00Z",
+                "type": "node_joined"
+            },
+            {
+                "time": "2024-01-15T10:20:00Z",
+                "type": "cluster_config_updated"
+            }
+        ])))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::list_logs(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.is_array());
+    let logs = result.as_array().unwrap();
+    assert_eq!(logs.len(), 3);
+    assert_eq!(logs[0]["type"], "bdb_created");
+    assert_eq!(logs[1]["type"], "node_joined");
+}
+
+#[tokio::test]
+async fn test_list_logs_with_params() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/logs"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!([
+            {
+                "time": "2024-01-15T10:30:00Z",
+                "type": "bdb_created"
+            }
+        ])))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::list_logs(state);
+
+    let result = call_tool_json(
+        &tool,
+        json!({
+            "start_time": "2024-01-15T10:00:00Z",
+            "end_time": "2024-01-15T11:00:00Z",
+            "order": "desc",
+            "limit": 10
+        }),
+    )
+    .await;
+
+    assert!(result.is_array());
+    let logs = result.as_array().unwrap();
+    assert_eq!(logs.len(), 1);
+}
+
+// ============================================================================
 // Database Tests
 // ============================================================================
 
@@ -364,4 +439,127 @@ async fn test_get_database_stats() {
     let result = call_tool_json(&tool, json!({"uid": 1})).await;
 
     assert!(result.get("avg_latency").is_some() || result.get("total_req").is_some());
+}
+
+// ============================================================================
+// Aggregate Stats Tests
+// ============================================================================
+
+#[tokio::test]
+async fn test_get_all_nodes_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/nodes/stats/last"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "stats": [
+                {
+                    "uid": 1,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"cpu_usage": 45.2}}]
+                },
+                {
+                    "uid": 2,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"cpu_usage": 32.1}}]
+                }
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_all_nodes_stats(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("stats").is_some());
+    let stats = result["stats"].as_array().unwrap();
+    assert_eq!(stats.len(), 2);
+}
+
+#[tokio::test]
+async fn test_get_all_databases_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/bdbs/stats/last"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "stats": [
+                {
+                    "uid": 1,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"avg_latency": 0.5}}]
+                },
+                {
+                    "uid": 2,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"avg_latency": 0.3}}]
+                }
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_all_databases_stats(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("stats").is_some());
+    let stats = result["stats"].as_array().unwrap();
+    assert_eq!(stats.len(), 2);
+}
+
+#[tokio::test]
+async fn test_get_shard_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/shards/1/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "intervals": [
+                {"time": "2024-01-15T10:30:00Z", "metrics": {"used_memory": 512000}}
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_shard_stats(state);
+
+    let result = call_tool_json(&tool, json!({"uid": 1})).await;
+
+    assert!(result.get("intervals").is_some());
+}
+
+#[tokio::test]
+async fn test_get_all_shards_stats() {
+    let server = MockEnterpriseServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/v1/shards/stats"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "stats": [
+                {
+                    "uid": 1,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"used_memory": 512000}}]
+                },
+                {
+                    "uid": 2,
+                    "intervals": [{"time": "2024-01-15T10:30:00Z", "metrics": {"used_memory": 256000}}]
+                }
+            ]
+        })))
+        .mount(server.inner())
+        .await;
+
+    let client = server.client();
+    let state = Arc::new(AppState::with_enterprise_client(client));
+    let tool = enterprise::get_all_shards_stats(state);
+
+    let result = call_tool_json(&tool, json!({})).await;
+
+    assert!(result.get("stats").is_some());
+    let stats = result["stats"].as_array().unwrap();
+    assert_eq!(stats.len(), 2);
 }

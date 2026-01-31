@@ -184,6 +184,9 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - get_license: Get license information (type, expiration, features)
 - get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
 
+### Redis Enterprise - Logs
+- list_logs: List cluster event logs (with time range and pagination)
+
 ### Redis Enterprise - Databases
 - list_enterprise_databases: List all databases
 - get_enterprise_database: Get database details
@@ -201,6 +204,12 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - get_enterprise_user: Get user details
 - list_alerts: List all active alerts
 - list_shards: List database shards
+
+### Redis Enterprise - Aggregate Stats
+- get_all_nodes_stats: Get stats for all nodes in one call
+- get_all_databases_stats: Get stats for all databases in one call
+- get_shard_stats: Get stats for a specific shard
+- get_all_shards_stats: Get stats for all shards in one call
 
 ### Redis Database - Connection
 - redis_ping: Test connectivity
@@ -268,6 +277,8 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - License
         .tool(tools::enterprise::get_license(state.clone()))
         .tool(tools::enterprise::get_license_usage(state.clone()))
+        // Enterprise - Logs
+        .tool(tools::enterprise::list_logs(state.clone()))
         // Enterprise - Databases
         .tool(tools::enterprise::list_databases(state.clone()))
         .tool(tools::enterprise::get_database(state.clone()))
@@ -283,6 +294,11 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::enterprise::get_user(state.clone()))
         .tool(tools::enterprise::list_alerts(state.clone()))
         .tool(tools::enterprise::list_shards(state.clone()))
+        // Enterprise - Aggregate Stats
+        .tool(tools::enterprise::get_all_nodes_stats(state.clone()))
+        .tool(tools::enterprise::get_all_databases_stats(state.clone()))
+        .tool(tools::enterprise::get_shard_stats(state.clone()))
+        .tool(tools::enterprise::get_all_shards_stats(state.clone()))
         // Redis - Connection
         .tool(tools::redis::ping(state.clone()))
         .tool(tools::redis::info(state.clone()))
