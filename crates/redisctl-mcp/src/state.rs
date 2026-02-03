@@ -267,7 +267,7 @@ impl Clone for AppState {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
+/// Test helpers for creating AppState with pre-configured clients
 #[allow(dead_code)]
 impl AppState {
     /// Create test state with a pre-configured Cloud client

@@ -15,6 +15,7 @@ use redis_enterprise::stats::{StatsHandler, StatsQuery};
 use redis_enterprise::users::UserHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
@@ -31,20 +32,22 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetClusterInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetClusterInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetClusterInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = ClusterHandler::new(client);
-            let cluster = handler
-                .info()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get cluster info: {}", e)))?;
+                let handler = ClusterHandler::new(client);
+                let cluster = handler
+                    .info()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get cluster info: {}", e)))?;
 
-            CallToolResult::from_serialize(&cluster)
-        })
+                CallToolResult::from_serialize(&cluster)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -66,20 +69,22 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetLicenseInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetLicenseInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetLicenseInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = LicenseHandler::new(client);
-            let license = handler
-                .get()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get license: {}", e)))?;
+                let handler = LicenseHandler::new(client);
+                let license = handler
+                    .get()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get license: {}", e)))?;
 
-            CallToolResult::from_serialize(&license)
-        })
+                CallToolResult::from_serialize(&license)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -97,20 +102,23 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetLicenseUsageInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetLicenseUsageInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetLicenseUsageInput>| async move {
+                let client = state
+                    .enterprise_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
-            let handler = LicenseHandler::new(client);
-            let usage = handler
-                .usage()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get license usage: {}", e)))?;
+                let handler = LicenseHandler::new(client);
+                let usage = handler
+                    .usage()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get license usage: {}", e)))?;
 
-            CallToolResult::from_serialize(&usage)
-        })
+                CallToolResult::from_serialize(&usage)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -149,37 +157,39 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ListLogsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListLogsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListLogsInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let query = if input.start_time.is_some()
-                || input.end_time.is_some()
-                || input.order.is_some()
-                || input.limit.is_some()
-                || input.offset.is_some()
-            {
-                Some(LogsQuery {
-                    stime: input.start_time,
-                    etime: input.end_time,
-                    order: input.order,
-                    limit: input.limit,
-                    offset: input.offset,
-                })
-            } else {
-                None
-            };
+                let query = if input.start_time.is_some()
+                    || input.end_time.is_some()
+                    || input.order.is_some()
+                    || input.limit.is_some()
+                    || input.offset.is_some()
+                {
+                    Some(LogsQuery {
+                        stime: input.start_time,
+                        etime: input.end_time,
+                        order: input.order,
+                        limit: input.limit,
+                        offset: input.offset,
+                    })
+                } else {
+                    None
+                };
 
-            let handler = LogsHandler::new(client);
-            let logs = handler
-                .list(query)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list logs: {}", e)))?;
+                let handler = LogsHandler::new(client);
+                let logs = handler
+                    .list(query)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list logs: {}", e)))?;
 
-            CallToolResult::from_serialize(&logs)
-        })
+                CallToolResult::from_serialize(&logs)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -208,42 +218,44 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ListDatabasesInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = DatabaseHandler::new(client);
-            let databases = handler
-                .list()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let databases = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
 
-            // Apply name filter
-            let filtered: Vec<_> = databases
-                .into_iter()
-                .filter(|db| {
-                    if let Some(filter) = &input.name_filter {
-                        db.name.to_lowercase().contains(&filter.to_lowercase())
-                    } else {
-                        true
-                    }
-                })
-                .filter(|db| {
-                    if let Some(filter) = &input.status_filter {
-                        db.status
-                            .as_ref()
-                            .map(|s| s.to_lowercase() == filter.to_lowercase())
-                            .unwrap_or(false)
-                    } else {
-                        true
-                    }
-                })
-                .collect();
+                // Apply name filter
+                let filtered: Vec<_> = databases
+                    .into_iter()
+                    .filter(|db| {
+                        if let Some(filter) = &input.name_filter {
+                            db.name.to_lowercase().contains(&filter.to_lowercase())
+                        } else {
+                            true
+                        }
+                    })
+                    .filter(|db| {
+                        if let Some(filter) = &input.status_filter {
+                            db.status
+                                .as_ref()
+                                .map(|s| s.to_lowercase() == filter.to_lowercase())
+                                .unwrap_or(false)
+                        } else {
+                            true
+                        }
+                    })
+                    .collect();
 
-            CallToolResult::from_serialize(&filtered)
-        })
+                CallToolResult::from_serialize(&filtered)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -261,20 +273,22 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific Redis Enterprise database")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetDatabaseInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = DatabaseHandler::new(client);
-            let database = handler
-                .get(input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let database = handler
+                    .get(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
 
-            CallToolResult::from_serialize(&database)
-        })
+                CallToolResult::from_serialize(&database)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -289,34 +303,36 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
         .description("List all nodes in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListNodesInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListNodesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListNodesInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = NodeHandler::new(client);
-            let nodes = handler
-                .list()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list nodes: {}", e)))?;
+                let handler = NodeHandler::new(client);
+                let nodes = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list nodes: {}", e)))?;
 
-            let output = nodes
-                .iter()
-                .map(|node| {
-                    format!(
-                        "- Node {} ({}): {}",
-                        node.uid,
-                        node.addr.as_deref().unwrap_or("unknown"),
-                        node.status
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
+                let output = nodes
+                    .iter()
+                    .map(|node| {
+                        format!(
+                            "- Node {} ({}): {}",
+                            node.uid,
+                            node.addr.as_deref().unwrap_or("unknown"),
+                            node.status
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
 
-            let summary = format!("Found {} node(s)\n\n{}", nodes.len(), output);
-            Ok(CallToolResult::text(summary))
-        })
+                let summary = format!("Found {} node(s)\n\n{}", nodes.len(), output);
+                Ok(CallToolResult::text(summary))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -340,20 +356,22 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetNodeInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetNodeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = NodeHandler::new(client);
-            let node = handler
-                .get(input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get node: {}", e)))?;
+                let handler = NodeHandler::new(client);
+                let node = handler
+                    .get(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get node: {}", e)))?;
 
-            CallToolResult::from_serialize(&node)
-        })
+                CallToolResult::from_serialize(&node)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -372,34 +390,36 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
         .description("List all users in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListUsersInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListUsersInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListUsersInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = UserHandler::new(client);
-            let users = handler
-                .list()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
+                let handler = UserHandler::new(client);
+                let users = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
 
-            let output = users
-                .iter()
-                .map(|user| {
-                    format!(
-                        "- {} (UID: {}): {}",
-                        user.name.as_deref().unwrap_or("(unnamed)"),
-                        user.uid,
-                        user.email
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join("\n");
+                let output = users
+                    .iter()
+                    .map(|user| {
+                        format!(
+                            "- {} (UID: {}): {}",
+                            user.name.as_deref().unwrap_or("(unnamed)"),
+                            user.uid,
+                            user.email
+                        )
+                    })
+                    .collect::<Vec<_>>()
+                    .join("\n");
 
-            let summary = format!("Found {} user(s)\n\n{}", users.len(), output);
-            Ok(CallToolResult::text(summary))
-        })
+                let summary = format!("Found {} user(s)\n\n{}", users.len(), output);
+                Ok(CallToolResult::text(summary))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -419,20 +439,22 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetUserInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetUserInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = UserHandler::new(client);
-            let user = handler
-                .get(input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get user: {}", e)))?;
+                let handler = UserHandler::new(client);
+                let user = handler
+                    .get(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get user: {}", e)))?;
 
-            CallToolResult::from_serialize(&user)
-        })
+                CallToolResult::from_serialize(&user)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -451,20 +473,22 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
         .description("List all active alerts in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListAlertsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListAlertsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAlertsInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = AlertHandler::new(client);
-            let alerts = handler
-                .list()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list alerts: {}", e)))?;
+                let handler = AlertHandler::new(client);
+                let alerts = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list alerts: {}", e)))?;
 
-            CallToolResult::from_serialize(&alerts)
-        })
+                CallToolResult::from_serialize(&alerts)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -482,20 +506,23 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
         .description("List all alerts for a specific database in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ListDatabaseAlertsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListDatabaseAlertsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabaseAlertsInput>| async move {
+                let client = state
+                    .enterprise_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
-            let handler = AlertHandler::new(client);
-            let alerts = handler
-                .list_by_database(input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list database alerts: {}", e)))?;
+                let handler = AlertHandler::new(client);
+                let alerts = handler
+                    .list_by_database(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list database alerts: {}", e)))?;
 
-            CallToolResult::from_serialize(&alerts)
-        })
+                CallToolResult::from_serialize(&alerts)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -527,35 +554,38 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetClusterStatsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
-
-            let handler = StatsHandler::new(client);
-
-            // If any query params provided, get historical stats
-            if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
-                let query = StatsQuery {
-                    interval: input.interval,
-                    stime: input.start_time,
-                    etime: input.end_time,
-                    metrics: None,
-                };
-                let stats = handler
-                    .cluster(Some(query))
+        .extractor_handler_typed::<_, _, _, GetClusterStatsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetClusterStatsInput>| async move {
+                let client = state
+                    .enterprise_client()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
-                CallToolResult::from_serialize(&stats)
-            } else {
-                let stats = handler
-                    .cluster_last()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
-                CallToolResult::from_serialize(&stats)
-            }
-        })
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+                let handler = StatsHandler::new(client);
+
+                // If any query params provided, get historical stats
+                if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
+                    let query = StatsQuery {
+                        interval: input.interval,
+                        stime: input.start_time,
+                        etime: input.end_time,
+                        metrics: None,
+                    };
+                    let stats = handler
+                        .cluster(Some(query))
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
+                    CallToolResult::from_serialize(&stats)
+                } else {
+                    let stats = handler
+                        .cluster_last()
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to get cluster stats: {}", e)))?;
+                    CallToolResult::from_serialize(&stats)
+                }
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -585,34 +615,37 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetDatabaseStatsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
-
-            let handler = StatsHandler::new(client);
-
-            if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
-                let query = StatsQuery {
-                    interval: input.interval,
-                    stime: input.start_time,
-                    etime: input.end_time,
-                    metrics: None,
-                };
-                let stats = handler
-                    .database(input.uid, Some(query))
+        .extractor_handler_typed::<_, _, _, GetDatabaseStatsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseStatsInput>| async move {
+                let client = state
+                    .enterprise_client()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
-                CallToolResult::from_serialize(&stats)
-            } else {
-                let stats = handler
-                    .database_last(input.uid)
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
-                CallToolResult::from_serialize(&stats)
-            }
-        })
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+
+                let handler = StatsHandler::new(client);
+
+                if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
+                    let query = StatsQuery {
+                        interval: input.interval,
+                        stime: input.start_time,
+                        etime: input.end_time,
+                        metrics: None,
+                    };
+                    let stats = handler
+                        .database(input.uid, Some(query))
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
+                    CallToolResult::from_serialize(&stats)
+                } else {
+                    let stats = handler
+                        .database_last(input.uid)
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to get database stats: {}", e)))?;
+                    CallToolResult::from_serialize(&stats)
+                }
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -642,34 +675,39 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetNodeStatsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetNodeStatsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeStatsInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = StatsHandler::new(client);
+                let handler = StatsHandler::new(client);
 
-            if input.interval.is_some() || input.start_time.is_some() || input.end_time.is_some() {
-                let query = StatsQuery {
-                    interval: input.interval,
-                    stime: input.start_time,
-                    etime: input.end_time,
-                    metrics: None,
-                };
-                let stats = handler
-                    .node(input.uid, Some(query))
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
-                CallToolResult::from_serialize(&stats)
-            } else {
-                let stats = handler
-                    .node_last(input.uid)
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
-                CallToolResult::from_serialize(&stats)
-            }
-        })
+                if input.interval.is_some()
+                    || input.start_time.is_some()
+                    || input.end_time.is_some()
+                {
+                    let query = StatsQuery {
+                        interval: input.interval,
+                        stime: input.start_time,
+                        etime: input.end_time,
+                        metrics: None,
+                    };
+                    let stats = handler
+                        .node(input.uid, Some(query))
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
+                    CallToolResult::from_serialize(&stats)
+                } else {
+                    let stats = handler
+                        .node_last(input.uid)
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
+                    CallToolResult::from_serialize(&stats)
+                }
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -687,20 +725,23 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetAllNodesStatsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetAllNodesStatsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAllNodesStatsInput>| async move {
+                let client = state
+                    .enterprise_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
-            let handler = StatsHandler::new(client);
-            let stats = handler
-                .nodes_last()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get all nodes stats: {}", e)))?;
+                let handler = StatsHandler::new(client);
+                let stats = handler
+                    .nodes_last()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get all nodes stats: {}", e)))?;
 
-            CallToolResult::from_serialize(&stats)
-        })
+                CallToolResult::from_serialize(&stats)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -719,9 +760,9 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(
+        .extractor_handler_typed::<_, _, _, GetAllDatabasesStatsInput>(
             state,
-            |state, _input: GetAllDatabasesStatsInput| async move {
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAllDatabasesStatsInput>| async move {
                 let client = state.enterprise_client().await.map_err(|e| {
                     ToolError::new(format!("Failed to get Enterprise client: {}", e))
                 })?;
@@ -751,20 +792,22 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
         .description("Get current statistics for a specific shard in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetShardStatsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetShardStatsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetShardStatsInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = StatsHandler::new(client);
-            let stats = handler
-                .shard(input.uid, None)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get shard stats: {}", e)))?;
+                let handler = StatsHandler::new(client);
+                let stats = handler
+                    .shard(input.uid, None)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get shard stats: {}", e)))?;
 
-            CallToolResult::from_serialize(&stats)
-        })
+                CallToolResult::from_serialize(&stats)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -782,20 +825,23 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetAllShardsStatsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetAllShardsStatsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAllShardsStatsInput>| async move {
+                let client = state
+                    .enterprise_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
-            let handler = StatsHandler::new(client);
-            let stats = handler
-                .shards(None)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get all shards stats: {}", e)))?;
+                let handler = StatsHandler::new(client);
+                let stats = handler
+                    .shards(None)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get all shards stats: {}", e)))?;
 
-            CallToolResult::from_serialize(&stats)
-        })
+                CallToolResult::from_serialize(&stats)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -820,27 +866,29 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ListShardsInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListShardsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListShardsInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = ShardHandler::new(client);
-            let shards = if let Some(db_uid) = input.database_uid {
-                handler
-                    .list_by_database(db_uid)
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
-            } else {
-                handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
-            };
+                let handler = ShardHandler::new(client);
+                let shards = if let Some(db_uid) = input.database_uid {
+                    handler
+                        .list_by_database(db_uid)
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
+                } else {
+                    handler
+                        .list()
+                        .await
+                        .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
+                };
 
-            CallToolResult::from_serialize(&shards)
-        })
+                CallToolResult::from_serialize(&shards)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -861,20 +909,22 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetShardInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetShardInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetShardInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = ShardHandler::new(client);
-            let shard = handler
-                .get(&input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get shard: {}", e)))?;
+                let handler = ShardHandler::new(client);
+                let shard = handler
+                    .get(&input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get shard: {}", e)))?;
 
-            CallToolResult::from_serialize(&shard)
-        })
+                CallToolResult::from_serialize(&shard)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -898,9 +948,9 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(
+        .extractor_handler_typed::<_, _, _, GetDatabaseEndpointsInput>(
             state,
-            |state, input: GetDatabaseEndpointsInput| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseEndpointsInput>| async move {
                 let client = state.enterprise_client().await.map_err(|e| {
                     ToolError::new(format!("Failed to get Enterprise client: {}", e))
                 })?;
@@ -936,20 +986,23 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListDebugInfoTasksInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListDebugInfoTasksInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListDebugInfoTasksInput>| async move {
+                let client = state
+                    .enterprise_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
-            let handler = DebugInfoHandler::new(client);
-            let tasks = handler
-                .list()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list debug info tasks: {}", e)))?;
+                let handler = DebugInfoHandler::new(client);
+                let tasks = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list debug info tasks: {}", e)))?;
 
-            CallToolResult::from_serialize(&tasks)
-        })
+                CallToolResult::from_serialize(&tasks)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -971,20 +1024,23 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetDebugInfoStatusInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetDebugInfoStatusInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetDebugInfoStatusInput>| async move {
+                let client = state
+                    .enterprise_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
-            let handler = DebugInfoHandler::new(client);
-            let status = handler
-                .status(&input.task_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get debug info status: {}", e)))?;
+                let handler = DebugInfoHandler::new(client);
+                let status = handler
+                    .status(&input.task_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get debug info status: {}", e)))?;
 
-            CallToolResult::from_serialize(&status)
-        })
+                CallToolResult::from_serialize(&status)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -1007,20 +1063,22 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListModulesInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListModulesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListModulesInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = ModuleHandler::new(client);
-            let modules = handler
-                .list()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list modules: {}", e)))?;
+                let handler = ModuleHandler::new(client);
+                let modules = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list modules: {}", e)))?;
 
-            CallToolResult::from_serialize(&modules)
-        })
+                CallToolResult::from_serialize(&modules)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -1041,20 +1099,22 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetModuleInput| async move {
-            let client = state
-                .enterprise_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetModuleInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetModuleInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
 
-            let handler = ModuleHandler::new(client);
-            let module = handler
-                .get(&input.uid)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get module: {}", e)))?;
+                let handler = ModuleHandler::new(client);
+                let module = handler
+                    .get(&input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get module: {}", e)))?;
 
-            CallToolResult::from_serialize(&module)
-        })
+                CallToolResult::from_serialize(&module)
+            },
+        )
         .build()
         .expect("valid tool")
 }

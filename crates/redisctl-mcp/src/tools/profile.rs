@@ -5,6 +5,7 @@ use std::sync::Arc;
 use redisctl_config::{Config, DeploymentType, ProfileCredentials};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
@@ -31,54 +32,57 @@ pub fn list_profiles(state: Arc<AppState>) -> Tool {
         .description("List all configured redisctl profiles with their types and default status")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |_state, _input: ListProfilesInput| async move {
-            let config = Config::load()
-                .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListProfilesInput>(
+            state,
+            |State(_state): State<Arc<AppState>>, Json(_input): Json<ListProfilesInput>| async move {
+                let config = Config::load()
+                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
 
-            let profiles: Vec<ProfileSummary> = config
-                .list_profiles()
-                .iter()
-                .map(|(name, profile)| {
-                    let deployment_type = match profile.deployment_type {
-                        DeploymentType::Cloud => "cloud",
-                        DeploymentType::Enterprise => "enterprise",
-                        DeploymentType::Database => "database",
-                    };
+                let profiles: Vec<ProfileSummary> = config
+                    .list_profiles()
+                    .iter()
+                    .map(|(name, profile)| {
+                        let deployment_type = match profile.deployment_type {
+                            DeploymentType::Cloud => "cloud",
+                            DeploymentType::Enterprise => "enterprise",
+                            DeploymentType::Database => "database",
+                        };
 
-                    let is_default = match profile.deployment_type {
-                        DeploymentType::Cloud => config.default_cloud.as_ref() == Some(name),
-                        DeploymentType::Enterprise => {
-                            config.default_enterprise.as_ref() == Some(name)
+                        let is_default = match profile.deployment_type {
+                            DeploymentType::Cloud => config.default_cloud.as_ref() == Some(name),
+                            DeploymentType::Enterprise => {
+                                config.default_enterprise.as_ref() == Some(name)
+                            }
+                            DeploymentType::Database => config.default_database.as_ref() == Some(name),
+                        };
+
+                        ProfileSummary {
+                            name: (*name).clone(),
+                            deployment_type: deployment_type.to_string(),
+                            is_default,
                         }
-                        DeploymentType::Database => config.default_database.as_ref() == Some(name),
-                    };
+                    })
+                    .collect();
 
-                    ProfileSummary {
-                        name: (*name).clone(),
-                        deployment_type: deployment_type.to_string(),
-                        is_default,
-                    }
-                })
-                .collect();
+                if profiles.is_empty() {
+                    return Ok(CallToolResult::text(
+                        "No profiles configured. Use 'redisctl profile set' to create one.",
+                    ));
+                }
 
-            if profiles.is_empty() {
-                return Ok(CallToolResult::text(
-                    "No profiles configured. Use 'redisctl profile set' to create one.",
-                ));
-            }
+                // Format as a nice table-like output
+                let mut output = format!("Found {} profile(s):\n\n", profiles.len());
+                for p in &profiles {
+                    let default_marker = if p.is_default { " (default)" } else { "" };
+                    output.push_str(&format!(
+                        "- {}: {}{}\n",
+                        p.name, p.deployment_type, default_marker
+                    ));
+                }
 
-            // Format as a nice table-like output
-            let mut output = format!("Found {} profile(s):\n\n", profiles.len());
-            for p in &profiles {
-                let default_marker = if p.is_default { " (default)" } else { "" };
-                output.push_str(&format!(
-                    "- {}: {}{}\n",
-                    p.name, p.deployment_type, default_marker
-                ));
-            }
-
-            Ok(CallToolResult::text(output))
-        })
+                Ok(CallToolResult::text(output))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -153,96 +157,101 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
         .description("Show details of a specific profile. Credentials are masked for security.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |_state, input: ShowProfileInput| async move {
-            let config = Config::load()
-                .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ShowProfileInput>(
+            state,
+            |State(_state): State<Arc<AppState>>, Json(input): Json<ShowProfileInput>| async move {
+                let config = Config::load()
+                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
 
-            let profile = config
-                .profiles
-                .get(&input.name)
-                .ok_or_else(|| ToolError::new(format!("Profile '{}' not found", input.name)))?;
+                let profile = config
+                    .profiles
+                    .get(&input.name)
+                    .ok_or_else(|| ToolError::new(format!("Profile '{}' not found", input.name)))?;
 
-            let deployment_type = match profile.deployment_type {
-                DeploymentType::Cloud => "cloud",
-                DeploymentType::Enterprise => "enterprise",
-                DeploymentType::Database => "database",
-            };
+                let deployment_type = match profile.deployment_type {
+                    DeploymentType::Cloud => "cloud",
+                    DeploymentType::Enterprise => "enterprise",
+                    DeploymentType::Database => "database",
+                };
 
-            let is_default = match profile.deployment_type {
-                DeploymentType::Cloud => config.default_cloud.as_ref() == Some(&input.name),
-                DeploymentType::Enterprise => {
-                    config.default_enterprise.as_ref() == Some(&input.name)
-                }
-                DeploymentType::Database => config.default_database.as_ref() == Some(&input.name),
-            };
+                let is_default = match profile.deployment_type {
+                    DeploymentType::Cloud => config.default_cloud.as_ref() == Some(&input.name),
+                    DeploymentType::Enterprise => {
+                        config.default_enterprise.as_ref() == Some(&input.name)
+                    }
+                    DeploymentType::Database => {
+                        config.default_database.as_ref() == Some(&input.name)
+                    }
+                };
 
-            let (cloud, enterprise, database) = match &profile.credentials {
-                ProfileCredentials::Cloud {
-                    api_key,
-                    api_secret,
-                    api_url,
-                } => (
-                    Some(MaskedCloudCredentials {
-                        api_key: mask_credential(api_key),
-                        api_secret: mask_credential(api_secret),
-                        api_url: api_url.clone(),
-                    }),
-                    None,
-                    None,
-                ),
-                ProfileCredentials::Enterprise {
-                    url,
-                    username,
-                    password,
-                    insecure,
-                } => (
-                    None,
-                    Some(MaskedEnterpriseCredentials {
-                        url: url.clone(),
-                        username: username.clone(),
-                        password: password
-                            .as_ref()
-                            .map(|p| mask_credential(p))
-                            .unwrap_or_else(|| "(not set)".to_string()),
-                        insecure: *insecure,
-                    }),
-                    None,
-                ),
-                ProfileCredentials::Database {
-                    host,
-                    port,
-                    password,
-                    tls,
-                    username,
+                let (cloud, enterprise, database) = match &profile.credentials {
+                    ProfileCredentials::Cloud {
+                        api_key,
+                        api_secret,
+                        api_url,
+                    } => (
+                        Some(MaskedCloudCredentials {
+                            api_key: mask_credential(api_key),
+                            api_secret: mask_credential(api_secret),
+                            api_url: api_url.clone(),
+                        }),
+                        None,
+                        None,
+                    ),
+                    ProfileCredentials::Enterprise {
+                        url,
+                        username,
+                        password,
+                        insecure,
+                    } => (
+                        None,
+                        Some(MaskedEnterpriseCredentials {
+                            url: url.clone(),
+                            username: username.clone(),
+                            password: password
+                                .as_ref()
+                                .map(|p| mask_credential(p))
+                                .unwrap_or_else(|| "(not set)".to_string()),
+                            insecure: *insecure,
+                        }),
+                        None,
+                    ),
+                    ProfileCredentials::Database {
+                        host,
+                        port,
+                        password,
+                        tls,
+                        username,
+                        database,
+                    } => (
+                        None,
+                        None,
+                        Some(MaskedDatabaseCredentials {
+                            host: host.clone(),
+                            port: *port,
+                            password: password
+                                .as_ref()
+                                .map(|p| mask_credential(p))
+                                .unwrap_or_else(|| "(not set)".to_string()),
+                            tls: *tls,
+                            username: username.clone(),
+                            database: *database,
+                        }),
+                    ),
+                };
+
+                let details = MaskedProfileDetails {
+                    name: input.name,
+                    deployment_type: deployment_type.to_string(),
+                    is_default,
+                    cloud,
+                    enterprise,
                     database,
-                } => (
-                    None,
-                    None,
-                    Some(MaskedDatabaseCredentials {
-                        host: host.clone(),
-                        port: *port,
-                        password: password
-                            .as_ref()
-                            .map(|p| mask_credential(p))
-                            .unwrap_or_else(|| "(not set)".to_string()),
-                        tls: *tls,
-                        username: username.clone(),
-                        database: *database,
-                    }),
-                ),
-            };
+                };
 
-            let details = MaskedProfileDetails {
-                name: input.name,
-                deployment_type: deployment_type.to_string(),
-                is_default,
-                cloud,
-                enterprise,
-                database,
-            };
-
-            CallToolResult::from_serialize(&details)
-        })
+                CallToolResult::from_serialize(&details)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -404,38 +413,41 @@ pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_set_default_cloud")
         .description("Set the default profile for Cloud commands. Requires write access.")
         .idempotent()
-        .handler_with_state(state, |state, input: SetDefaultCloudInput| async move {
-            // Check write permission
-            if !state.is_write_allowed() {
-                return Err(McpError::tool("Write operations require --read-only=false"));
-            }
+        .extractor_handler_typed::<_, _, _, SetDefaultCloudInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SetDefaultCloudInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool("Write operations require --read-only=false"));
+                }
 
-            let mut config = Config::load()
-                .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                let mut config = Config::load()
+                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
 
-            // Verify profile exists and is a cloud profile
-            let profile = config
-                .profiles
-                .get(&input.name)
-                .ok_or_else(|| ToolError::new(format!("Profile '{}' not found", input.name)))?;
+                // Verify profile exists and is a cloud profile
+                let profile = config
+                    .profiles
+                    .get(&input.name)
+                    .ok_or_else(|| ToolError::new(format!("Profile '{}' not found", input.name)))?;
 
-            if !matches!(profile.deployment_type, DeploymentType::Cloud) {
-                return Err(McpError::tool(format!(
-                    "Profile '{}' is not a cloud profile (type: {:?})",
-                    input.name, profile.deployment_type
-                )));
-            }
+                if !matches!(profile.deployment_type, DeploymentType::Cloud) {
+                    return Err(McpError::tool(format!(
+                        "Profile '{}' is not a cloud profile (type: {:?})",
+                        input.name, profile.deployment_type
+                    )));
+                }
 
-            config.default_cloud = Some(input.name.clone());
-            config
-                .save()
-                .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+                config.default_cloud = Some(input.name.clone());
+                config
+                    .save()
+                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
 
-            Ok(CallToolResult::text(format!(
-                "Default cloud profile set to '{}'",
-                input.name
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "Default cloud profile set to '{}'",
+                    input.name
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -452,9 +464,9 @@ pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_set_default_enterprise")
         .description("Set the default profile for Enterprise commands. Requires write access.")
         .idempotent()
-        .handler_with_state(
+        .extractor_handler_typed::<_, _, _, SetDefaultEnterpriseInput>(
             state,
-            |state, input: SetDefaultEnterpriseInput| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<SetDefaultEnterpriseInput>| async move {
                 // Check write permission
                 if !state.is_write_allowed() {
                     return Err(McpError::tool("Write operations require --read-only=false"));
@@ -502,35 +514,38 @@ pub struct DeleteProfileInput {
 pub fn delete_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_delete")
         .description("Delete a profile from the configuration. Requires write access.")
-        .handler_with_state(state, |state, input: DeleteProfileInput| async move {
-            // Check write permission
-            if !state.is_write_allowed() {
-                return Err(McpError::tool("Write operations require --read-only=false"));
-            }
+        .extractor_handler_typed::<_, _, _, DeleteProfileInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<DeleteProfileInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool("Write operations require --read-only=false"));
+                }
 
-            let mut config = Config::load()
-                .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                let mut config = Config::load()
+                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
 
-            // Check if profile exists
-            if !config.profiles.contains_key(&input.name) {
-                return Err(McpError::tool(format!(
-                    "Profile '{}' not found",
+                // Check if profile exists
+                if !config.profiles.contains_key(&input.name) {
+                    return Err(McpError::tool(format!(
+                        "Profile '{}' not found",
+                        input.name
+                    )));
+                }
+
+                // Remove the profile (also clears defaults if this was a default)
+                config.remove_profile(&input.name);
+
+                config
+                    .save()
+                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "Profile '{}' deleted",
                     input.name
-                )));
-            }
-
-            // Remove the profile (also clears defaults if this was a default)
-            config.remove_profile(&input.name);
-
-            config
-                .save()
-                .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
-
-            Ok(CallToolResult::text(format!(
-                "Profile '{}' deleted",
-                input.name
-            )))
-        })
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }

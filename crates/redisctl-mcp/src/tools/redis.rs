@@ -4,6 +4,7 @@ use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
+use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
@@ -22,30 +23,33 @@ pub fn ping(state: Arc<AppState>) -> Tool {
         .description("Test connectivity to a Redis database by sending a PING command")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: PingInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, PingInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<PingInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let response: String = redis::cmd("PING")
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("PING failed: {}", e)))?;
+                let response: String = redis::cmd("PING")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("PING failed: {}", e)))?;
 
-            Ok(CallToolResult::text(format!(
-                "Connected successfully. Response: {}",
-                response
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "Connected successfully. Response: {}",
+                    response
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -67,32 +71,35 @@ pub fn info(state: Arc<AppState>) -> Tool {
         .description("Get Redis server information using the INFO command")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: InfoInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, InfoInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<InfoInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let mut cmd = redis::cmd("INFO");
-            if let Some(section) = &input.section {
-                cmd.arg(section);
-            }
+                let mut cmd = redis::cmd("INFO");
+                if let Some(section) = &input.section {
+                    cmd.arg(section);
+                }
 
-            let info: String = cmd
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("INFO failed: {}", e)))?;
+                let info: String = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("INFO failed: {}", e)))?;
 
-            Ok(CallToolResult::text(info))
-        })
+                Ok(CallToolResult::text(info))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -128,59 +135,62 @@ pub fn keys(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: KeysInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, KeysInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<KeysInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
-
-            // Use SCAN to safely iterate keys
-            let mut cursor: u64 = 0;
-            let mut all_keys: Vec<String> = Vec::new();
-
-            loop {
-                let (new_cursor, keys): (u64, Vec<String>) = redis::cmd("SCAN")
-                    .arg(cursor)
-                    .arg("MATCH")
-                    .arg(&input.pattern)
-                    .arg("COUNT")
-                    .arg(100)
-                    .query_async(&mut conn)
+                let mut conn = client
+                    .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-                all_keys.extend(keys);
-                cursor = new_cursor;
+                // Use SCAN to safely iterate keys
+                let mut cursor: u64 = 0;
+                let mut all_keys: Vec<String> = Vec::new();
 
-                if cursor == 0 || all_keys.len() >= input.limit {
-                    break;
+                loop {
+                    let (new_cursor, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                        .arg(cursor)
+                        .arg("MATCH")
+                        .arg(&input.pattern)
+                        .arg("COUNT")
+                        .arg(100)
+                        .query_async(&mut conn)
+                        .await
+                        .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+
+                    all_keys.extend(keys);
+                    cursor = new_cursor;
+
+                    if cursor == 0 || all_keys.len() >= input.limit {
+                        break;
+                    }
                 }
-            }
 
-            // Truncate to limit
-            all_keys.truncate(input.limit);
+                // Truncate to limit
+                all_keys.truncate(input.limit);
 
-            let output = if all_keys.is_empty() {
-                format!("No keys found matching pattern '{}'", input.pattern)
-            } else {
-                format!(
-                    "Found {} key(s) matching '{}'\n\n{}",
-                    all_keys.len(),
-                    input.pattern,
-                    all_keys.join("\n")
-                )
-            };
+                let output = if all_keys.is_empty() {
+                    format!("No keys found matching pattern '{}'", input.pattern)
+                } else {
+                    format!(
+                        "Found {} key(s) matching '{}'\n\n{}",
+                        all_keys.len(),
+                        input.pattern,
+                        all_keys.join("\n")
+                    )
+                };
 
-            Ok(CallToolResult::text(output))
-        })
+                Ok(CallToolResult::text(output))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -205,34 +215,37 @@ pub fn get(state: Arc<AppState>) -> Tool {
         .description("Get the value of a key from Redis")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, GetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let value: Option<String> = redis::cmd("GET")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("GET failed: {}", e)))?;
+                let value: Option<String> = redis::cmd("GET")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("GET failed: {}", e)))?;
 
-            match value {
-                Some(v) => Ok(CallToolResult::text(v)),
-                None => Ok(CallToolResult::text(format!(
-                    "(nil) - key '{}' not found",
-                    input.key
-                ))),
-            }
-        })
+                match value {
+                    Some(v) => Ok(CallToolResult::text(v)),
+                    None => Ok(CallToolResult::text(format!(
+                        "(nil) - key '{}' not found",
+                        input.key
+                    ))),
+                }
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -253,28 +266,31 @@ pub fn key_type(state: Arc<AppState>) -> Tool {
         .description("Get the type of a key (string, list, set, zset, hash, stream)")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: TypeInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, TypeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<TypeInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let key_type: String = redis::cmd("TYPE")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("TYPE failed: {}", e)))?;
+                let key_type: String = redis::cmd("TYPE")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("TYPE failed: {}", e)))?;
 
-            Ok(CallToolResult::text(format!("{}: {}", input.key, key_type)))
-        })
+                Ok(CallToolResult::text(format!("{}: {}", input.key, key_type)))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -295,34 +311,37 @@ pub fn ttl(state: Arc<AppState>) -> Tool {
         .description("Get the time-to-live (TTL) of a key in seconds. Returns -1 if no expiry, -2 if key doesn't exist.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: TtlInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, TtlInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let ttl: i64 = redis::cmd("TTL")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("TTL failed: {}", e)))?;
+                let ttl: i64 = redis::cmd("TTL")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("TTL failed: {}", e)))?;
 
-            let message = match ttl {
-                -2 => format!("{}: key does not exist", input.key),
-                -1 => format!("{}: no expiry set", input.key),
-                _ => format!("{}: {} seconds remaining", input.key, ttl),
-            };
+                let message = match ttl {
+                    -2 => format!("{}: key does not exist", input.key),
+                    -1 => format!("{}: no expiry set", input.key),
+                    _ => format!("{}: {} seconds remaining", input.key, ttl),
+                };
 
-            Ok(CallToolResult::text(message))
-        })
+                Ok(CallToolResult::text(message))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -343,36 +362,39 @@ pub fn exists(state: Arc<AppState>) -> Tool {
         .description("Check if one or more keys exist. Returns the count of keys that exist.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ExistsInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, ExistsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ExistsInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let mut cmd = redis::cmd("EXISTS");
-            for key in &input.keys {
-                cmd.arg(key);
-            }
+                let mut cmd = redis::cmd("EXISTS");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
 
-            let count: i64 = cmd
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("EXISTS failed: {}", e)))?;
+                let count: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("EXISTS failed: {}", e)))?;
 
-            Ok(CallToolResult::text(format!(
-                "{} of {} key(s) exist",
-                count,
-                input.keys.len()
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "{} of {} key(s) exist",
+                    count,
+                    input.keys.len()
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -391,30 +413,33 @@ pub fn dbsize(state: Arc<AppState>) -> Tool {
         .description("Get the number of keys in the currently selected database")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: DbsizeInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, DbsizeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<DbsizeInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let size: i64 = redis::cmd("DBSIZE")
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("DBSIZE failed: {}", e)))?;
+                let size: i64 = redis::cmd("DBSIZE")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("DBSIZE failed: {}", e)))?;
 
-            Ok(CallToolResult::text(format!(
-                "Database contains {} keys",
-                size
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "Database contains {} keys",
+                    size
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -435,35 +460,38 @@ pub fn memory_usage(state: Arc<AppState>) -> Tool {
         .description("Get the memory usage of a key in bytes")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: MemoryUsageInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, MemoryUsageInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<MemoryUsageInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let bytes: Option<i64> = redis::cmd("MEMORY")
-                .arg("USAGE")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("MEMORY USAGE failed: {}", e)))?;
+                let bytes: Option<i64> = redis::cmd("MEMORY")
+                    .arg("USAGE")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("MEMORY USAGE failed: {}", e)))?;
 
-            match bytes {
-                Some(b) => Ok(CallToolResult::text(format!("{}: {} bytes", input.key, b))),
-                None => Ok(CallToolResult::text(format!(
-                    "{}: key does not exist",
-                    input.key
-                ))),
-            }
-        })
+                match bytes {
+                    Some(b) => Ok(CallToolResult::text(format!("{}: {} bytes", input.key, b))),
+                    None => Ok(CallToolResult::text(format!(
+                        "{}: key does not exist",
+                        input.key
+                    ))),
+                }
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -488,46 +516,49 @@ pub fn hgetall(state: Arc<AppState>) -> Tool {
         .description("Get all fields and values from a hash")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: HgetallInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, HgetallInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HgetallInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let result: Vec<(String, String)> = redis::cmd("HGETALL")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("HGETALL failed: {}", e)))?;
+                let result: Vec<(String, String)> = redis::cmd("HGETALL")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("HGETALL failed: {}", e)))?;
 
-            if result.is_empty() {
-                return Ok(CallToolResult::text(format!(
-                    "(empty hash or key '{}' not found)",
-                    input.key
-                )));
-            }
+                if result.is_empty() {
+                    return Ok(CallToolResult::text(format!(
+                        "(empty hash or key '{}' not found)",
+                        input.key
+                    )));
+                }
 
-            let output = result
-                .iter()
-                .map(|(k, v)| format!("{}: {}", k, v))
-                .collect::<Vec<_>>()
-                .join("\n");
+                let output = result
+                    .iter()
+                    .map(|(k, v)| format!("{}: {}", k, v))
+                    .collect::<Vec<_>>()
+                    .join("\n");
 
-            Ok(CallToolResult::text(format!(
-                "Hash '{}' ({} fields):\n{}",
-                input.key,
-                result.len(),
-                output
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "Hash '{}' ({} fields):\n{}",
+                    input.key,
+                    result.len(),
+                    output
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -562,49 +593,52 @@ pub fn lrange(state: Arc<AppState>) -> Tool {
         .description("Get a range of elements from a list. Use start=0, stop=-1 for all elements.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: LrangeInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, LrangeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<LrangeInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let result: Vec<String> = redis::cmd("LRANGE")
-                .arg(&input.key)
-                .arg(input.start)
-                .arg(input.stop)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("LRANGE failed: {}", e)))?;
+                let result: Vec<String> = redis::cmd("LRANGE")
+                    .arg(&input.key)
+                    .arg(input.start)
+                    .arg(input.stop)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("LRANGE failed: {}", e)))?;
 
-            if result.is_empty() {
-                return Ok(CallToolResult::text(format!(
-                    "(empty list or key '{}' not found)",
-                    input.key
-                )));
-            }
+                if result.is_empty() {
+                    return Ok(CallToolResult::text(format!(
+                        "(empty list or key '{}' not found)",
+                        input.key
+                    )));
+                }
 
-            let output = result
-                .iter()
-                .enumerate()
-                .map(|(i, v)| format!("{}: {}", i, v))
-                .collect::<Vec<_>>()
-                .join("\n");
+                let output = result
+                    .iter()
+                    .enumerate()
+                    .map(|(i, v)| format!("{}: {}", i, v))
+                    .collect::<Vec<_>>()
+                    .join("\n");
 
-            Ok(CallToolResult::text(format!(
-                "List '{}' ({} elements):\n{}",
-                input.key,
-                result.len(),
-                output
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "List '{}' ({} elements):\n{}",
+                    input.key,
+                    result.len(),
+                    output
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -629,40 +663,43 @@ pub fn smembers(state: Arc<AppState>) -> Tool {
         .description("Get all members of a set")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: SmembersInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, SmembersInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SmembersInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let result: Vec<String> = redis::cmd("SMEMBERS")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("SMEMBERS failed: {}", e)))?;
+                let result: Vec<String> = redis::cmd("SMEMBERS")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("SMEMBERS failed: {}", e)))?;
 
-            if result.is_empty() {
-                return Ok(CallToolResult::text(format!(
-                    "(empty set or key '{}' not found)",
-                    input.key
-                )));
-            }
+                if result.is_empty() {
+                    return Ok(CallToolResult::text(format!(
+                        "(empty set or key '{}' not found)",
+                        input.key
+                    )));
+                }
 
-            Ok(CallToolResult::text(format!(
-                "Set '{}' ({} members):\n{}",
-                input.key,
-                result.len(),
-                result.join("\n")
-            )))
-        })
+                Ok(CallToolResult::text(format!(
+                    "Set '{}' ({} members):\n{}",
+                    input.key,
+                    result.len(),
+                    result.join("\n")
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -696,81 +733,84 @@ pub fn zrange(state: Arc<AppState>) -> Tool {
         .description("Get a range of members from a sorted set by index. Use withscores=true to include scores.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ZrangeInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, ZrangeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZrangeInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
-
-            if input.withscores {
-                let result: Vec<(String, f64)> = redis::cmd("ZRANGE")
-                    .arg(&input.key)
-                    .arg(input.start)
-                    .arg(input.stop)
-                    .arg("WITHSCORES")
-                    .query_async(&mut conn)
+                let mut conn = client
+                    .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("ZRANGE failed: {}", e)))?;
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-                if result.is_empty() {
-                    return Ok(CallToolResult::text(format!(
-                        "(empty sorted set or key '{}' not found)",
-                        input.key
-                    )));
+                if input.withscores {
+                    let result: Vec<(String, f64)> = redis::cmd("ZRANGE")
+                        .arg(&input.key)
+                        .arg(input.start)
+                        .arg(input.stop)
+                        .arg("WITHSCORES")
+                        .query_async(&mut conn)
+                        .await
+                        .map_err(|e| ToolError::new(format!("ZRANGE failed: {}", e)))?;
+
+                    if result.is_empty() {
+                        return Ok(CallToolResult::text(format!(
+                            "(empty sorted set or key '{}' not found)",
+                            input.key
+                        )));
+                    }
+
+                    let output = result
+                        .iter()
+                        .enumerate()
+                        .map(|(i, (member, score))| format!("{}: {} (score: {})", i, member, score))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    Ok(CallToolResult::text(format!(
+                        "Sorted set '{}' ({} members):\n{}",
+                        input.key,
+                        result.len(),
+                        output
+                    )))
+                } else {
+                    let result: Vec<String> = redis::cmd("ZRANGE")
+                        .arg(&input.key)
+                        .arg(input.start)
+                        .arg(input.stop)
+                        .query_async(&mut conn)
+                        .await
+                        .map_err(|e| ToolError::new(format!("ZRANGE failed: {}", e)))?;
+
+                    if result.is_empty() {
+                        return Ok(CallToolResult::text(format!(
+                            "(empty sorted set or key '{}' not found)",
+                            input.key
+                        )));
+                    }
+
+                    let output = result
+                        .iter()
+                        .enumerate()
+                        .map(|(i, v)| format!("{}: {}", i, v))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    Ok(CallToolResult::text(format!(
+                        "Sorted set '{}' ({} members):\n{}",
+                        input.key,
+                        result.len(),
+                        output
+                    )))
                 }
-
-                let output = result
-                    .iter()
-                    .enumerate()
-                    .map(|(i, (member, score))| format!("{}: {} (score: {})", i, member, score))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                Ok(CallToolResult::text(format!(
-                    "Sorted set '{}' ({} members):\n{}",
-                    input.key,
-                    result.len(),
-                    output
-                )))
-            } else {
-                let result: Vec<String> = redis::cmd("ZRANGE")
-                    .arg(&input.key)
-                    .arg(input.start)
-                    .arg(input.stop)
-                    .query_async(&mut conn)
-                    .await
-                    .map_err(|e| ToolError::new(format!("ZRANGE failed: {}", e)))?;
-
-                if result.is_empty() {
-                    return Ok(CallToolResult::text(format!(
-                        "(empty sorted set or key '{}' not found)",
-                        input.key
-                    )));
-                }
-
-                let output = result
-                    .iter()
-                    .enumerate()
-                    .map(|(i, v)| format!("{}: {}", i, v))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                Ok(CallToolResult::text(format!(
-                    "Sorted set '{}' ({} members):\n{}",
-                    input.key,
-                    result.len(),
-                    output
-                )))
-            }
-        })
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -793,28 +833,31 @@ pub fn cluster_info(state: Arc<AppState>) -> Tool {
         .description("Get Redis Cluster information (only works on cluster-enabled databases)")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ClusterInfoInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, ClusterInfoInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ClusterInfoInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let info: String = redis::cmd("CLUSTER")
-                .arg("INFO")
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("CLUSTER INFO failed: {}", e)))?;
+                let info: String = redis::cmd("CLUSTER")
+                    .arg("INFO")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("CLUSTER INFO failed: {}", e)))?;
 
-            Ok(CallToolResult::text(info))
-        })
+                Ok(CallToolResult::text(info))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -833,32 +876,35 @@ pub fn client_list(state: Arc<AppState>) -> Tool {
         .description("Get list of client connections to the Redis server")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ClientListInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, ClientListInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ClientListInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let clients: String = redis::cmd("CLIENT")
-                .arg("LIST")
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("CLIENT LIST failed: {}", e)))?;
+                let clients: String = redis::cmd("CLIENT")
+                    .arg("LIST")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("CLIENT LIST failed: {}", e)))?;
 
-            let count = clients.lines().count();
-            Ok(CallToolResult::text(format!(
-                "{} connected client(s):\n\n{}",
-                count, clients
-            )))
-        })
+                let count = clients.lines().count();
+                Ok(CallToolResult::text(format!(
+                    "{} connected client(s):\n\n{}",
+                    count, clients
+                )))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -893,74 +939,77 @@ pub fn scan(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ScanInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, ScanInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ScanInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
-
-            let mut cursor: u64 = 0;
-            let mut all_keys: Vec<String> = Vec::new();
-
-            loop {
-                let mut cmd = redis::cmd("SCAN");
-                cmd.arg(cursor)
-                    .arg("MATCH")
-                    .arg(&input.pattern)
-                    .arg("COUNT")
-                    .arg(100);
-
-                // Add TYPE filter if specified
-                if let Some(ref key_type) = input.key_type {
-                    cmd.arg("TYPE").arg(key_type);
-                }
-
-                let (new_cursor, keys): (u64, Vec<String>) = cmd
-                    .query_async(&mut conn)
+                let mut conn = client
+                    .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-                all_keys.extend(keys);
-                cursor = new_cursor;
+                let mut cursor: u64 = 0;
+                let mut all_keys: Vec<String> = Vec::new();
 
-                if cursor == 0 || all_keys.len() >= input.limit {
-                    break;
+                loop {
+                    let mut cmd = redis::cmd("SCAN");
+                    cmd.arg(cursor)
+                        .arg("MATCH")
+                        .arg(&input.pattern)
+                        .arg("COUNT")
+                        .arg(100);
+
+                    // Add TYPE filter if specified
+                    if let Some(ref key_type) = input.key_type {
+                        cmd.arg("TYPE").arg(key_type);
+                    }
+
+                    let (new_cursor, keys): (u64, Vec<String>) =
+                        cmd.query_async(&mut conn)
+                            .await
+                            .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+
+                    all_keys.extend(keys);
+                    cursor = new_cursor;
+
+                    if cursor == 0 || all_keys.len() >= input.limit {
+                        break;
+                    }
                 }
-            }
 
-            all_keys.truncate(input.limit);
+                all_keys.truncate(input.limit);
 
-            let type_info = input
-                .key_type
-                .as_ref()
-                .map(|t| format!(" of type '{}'", t))
-                .unwrap_or_default();
+                let type_info = input
+                    .key_type
+                    .as_ref()
+                    .map(|t| format!(" of type '{}'", t))
+                    .unwrap_or_default();
 
-            let output = if all_keys.is_empty() {
-                format!(
-                    "No keys{} found matching pattern '{}'",
-                    type_info, input.pattern
-                )
-            } else {
-                format!(
-                    "Found {} key(s){} matching '{}'\n\n{}",
-                    all_keys.len(),
-                    type_info,
-                    input.pattern,
-                    all_keys.join("\n")
-                )
-            };
+                let output = if all_keys.is_empty() {
+                    format!(
+                        "No keys{} found matching pattern '{}'",
+                        type_info, input.pattern
+                    )
+                } else {
+                    format!(
+                        "Found {} key(s){} matching '{}'\n\n{}",
+                        all_keys.len(),
+                        type_info,
+                        input.pattern,
+                        all_keys.join("\n")
+                    )
+                };
 
-            Ok(CallToolResult::text(output))
-        })
+                Ok(CallToolResult::text(output))
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -988,35 +1037,39 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ObjectEncodingInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, ObjectEncodingInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ObjectEncodingInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            let encoding: Option<String> = redis::cmd("OBJECT")
-                .arg("ENCODING")
-                .arg(&input.key)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("OBJECT ENCODING failed: {}", e)))?;
+                let encoding: Option<String> = redis::cmd("OBJECT")
+                    .arg("ENCODING")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("OBJECT ENCODING failed: {}", e)))?;
 
-            match encoding {
-                Some(enc) => Ok(CallToolResult::text(format!("{}: {}", input.key, enc))),
-                None => Ok(CallToolResult::text(format!(
-                    "{}: key does not exist",
-                    input.key
-                ))),
-            }
-        })
+                match encoding {
+                    Some(enc) => Ok(CallToolResult::text(format!("{}: {}", input.key, enc))),
+                    None => Ok(CallToolResult::text(format!(
+                        "{}: key does not exist",
+                        input.key
+                    ))),
+                }
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -1048,57 +1101,57 @@ pub fn slowlog(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: SlowlogInput| async move {
-            let url = input
-                .url
-                .or_else(|| state.database_url.clone())
-                .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+        .extractor_handler_typed::<_, _, _, SlowlogInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SlowlogInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
 
-            let client = redis::Client::open(url.as_str())
-                .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
 
-            let mut conn = client
-                .get_multiplexed_async_connection()
-                .await
-                .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
 
-            // SLOWLOG GET returns nested arrays
-            let entries: Vec<Vec<redis::Value>> = redis::cmd("SLOWLOG")
-                .arg("GET")
-                .arg(input.count)
-                .query_async(&mut conn)
-                .await
-                .map_err(|e| ToolError::new(format!("SLOWLOG GET failed: {}", e)))?;
+                // SLOWLOG GET returns nested arrays
+                let entries: Vec<Vec<redis::Value>> = redis::cmd("SLOWLOG")
+                    .arg("GET")
+                    .arg(input.count)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("SLOWLOG GET failed: {}", e)))?;
 
-            if entries.is_empty() {
-                return Ok(CallToolResult::text("No slow queries recorded"));
-            }
-
-            let mut output = format!("Slow log ({} entries):\n\n", entries.len());
-
-            for entry in entries {
-                // Each entry is: [id, timestamp, duration_us, command_args, ...]
-                if entry.len() >= 4 {
-                    let id = format_value(&entry[0]);
-                    let duration_us = format_value(&entry[2]);
-                    let command = if let redis::Value::Array(args) = &entry[3] {
-                        args.iter()
-                            .map(format_value)
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    } else {
-                        format_value(&entry[3])
-                    };
-
-                    output.push_str(&format!(
-                        "#{} - {} us: {}\n",
-                        id, duration_us, command
-                    ));
+                if entries.is_empty() {
+                    return Ok(CallToolResult::text("No slow queries recorded"));
                 }
-            }
 
-            Ok(CallToolResult::text(output))
-        })
+                let mut output = format!("Slow log ({} entries):\n\n", entries.len());
+
+                for entry in entries {
+                    // Each entry is: [id, timestamp, duration_us, command_args, ...]
+                    if entry.len() >= 4 {
+                        let id = format_value(&entry[0]);
+                        let duration_us = format_value(&entry[2]);
+                        let command = if let redis::Value::Array(args) = &entry[3] {
+                            args.iter()
+                                .map(format_value)
+                                .collect::<Vec<_>>()
+                                .join(" ")
+                        } else {
+                            format_value(&entry[3])
+                        };
+
+                        output.push_str(&format!("#{} - {} us: {}\n", id, duration_us, command));
+                    }
+                }
+
+                Ok(CallToolResult::text(output))
+            },
+        )
         .build()
         .expect("valid tool")
 }

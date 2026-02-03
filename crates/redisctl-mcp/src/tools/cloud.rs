@@ -6,6 +6,7 @@ use redis_cloud::flexible::{DatabaseHandler, SubscriptionHandler};
 use redis_cloud::{AccountHandler, AclHandler, TaskHandler, UserHandler};
 use schemars::JsonSchema;
 use serde::Deserialize;
+use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
@@ -20,20 +21,23 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
         .description("List all Redis Cloud subscriptions accessible with the current credentials. Returns JSON with subscription details.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListSubscriptionsInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListSubscriptionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListSubscriptionsInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = SubscriptionHandler::new(client);
-            let account_subs = handler
-                .get_all_subscriptions()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list subscriptions: {}", e)))?;
+                let handler = SubscriptionHandler::new(client);
+                let account_subs = handler
+                    .get_all_subscriptions()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list subscriptions: {}", e)))?;
 
-            CallToolResult::from_serialize(&account_subs)
-        })
+                CallToolResult::from_serialize(&account_subs)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -51,20 +55,23 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific Redis Cloud subscription. Returns JSON with full subscription details.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetSubscriptionInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetSubscriptionInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetSubscriptionInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = SubscriptionHandler::new(client);
-            let subscription = handler
-                .get_subscription_by_id(input.subscription_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get subscription: {}", e)))?;
+                let handler = SubscriptionHandler::new(client);
+                let subscription = handler
+                    .get_subscription_by_id(input.subscription_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get subscription: {}", e)))?;
 
-            CallToolResult::from_serialize(&subscription)
-        })
+                CallToolResult::from_serialize(&subscription)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -84,20 +91,23 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: ListDatabasesInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = DatabaseHandler::new(client);
-            let databases = handler
-                .get_subscription_databases(input.subscription_id, None, None)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let databases = handler
+                    .get_subscription_databases(input.subscription_id, None, None)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
 
-            CallToolResult::from_serialize(&databases)
-        })
+                CallToolResult::from_serialize(&databases)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -117,20 +127,23 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific Redis Cloud database. Returns JSON with full database configuration.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetDatabaseInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = DatabaseHandler::new(client);
-            let database = handler
-                .get_subscription_database_by_id(input.subscription_id, input.database_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let database = handler
+                    .get_subscription_database_by_id(input.subscription_id, input.database_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
 
-            CallToolResult::from_serialize(&database)
-        })
+                CallToolResult::from_serialize(&database)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -149,20 +162,23 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
         .description("Get information about the current Redis Cloud account including name, ID, and settings.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetAccountInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetAccountInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAccountInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AccountHandler::new(client);
-            let account = handler
-                .get_current_account()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get account: {}", e)))?;
+                let handler = AccountHandler::new(client);
+                let account = handler
+                    .get_current_account()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get account: {}", e)))?;
 
-            CallToolResult::from_serialize(&account)
-        })
+                CallToolResult::from_serialize(&account)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -187,20 +203,23 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetSystemLogsInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetSystemLogsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetSystemLogsInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AccountHandler::new(client);
-            let logs = handler
-                .get_account_system_logs(input.offset, input.limit)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get system logs: {}", e)))?;
+                let handler = AccountHandler::new(client);
+                let logs = handler
+                    .get_account_system_logs(input.offset, input.limit)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get system logs: {}", e)))?;
 
-            CallToolResult::from_serialize(&logs)
-        })
+                CallToolResult::from_serialize(&logs)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -225,20 +244,23 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetSessionLogsInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetSessionLogsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetSessionLogsInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AccountHandler::new(client);
-            let logs = handler
-                .get_account_session_logs(input.offset, input.limit)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get session logs: {}", e)))?;
+                let handler = AccountHandler::new(client);
+                let logs = handler
+                    .get_account_session_logs(input.offset, input.limit)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get session logs: {}", e)))?;
 
-            CallToolResult::from_serialize(&logs)
-        })
+                CallToolResult::from_serialize(&logs)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -259,20 +281,23 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetRegionsInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetRegionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetRegionsInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AccountHandler::new(client);
-            let regions = handler
-                .get_supported_regions(input.provider)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get regions: {}", e)))?;
+                let handler = AccountHandler::new(client);
+                let regions = handler
+                    .get_supported_regions(input.provider)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get regions: {}", e)))?;
 
-            CallToolResult::from_serialize(&regions)
-        })
+                CallToolResult::from_serialize(&regions)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -289,20 +314,23 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: GetModulesInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetModulesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<GetModulesInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AccountHandler::new(client);
-            let modules = handler
-                .get_supported_database_modules()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get modules: {}", e)))?;
+                let handler = AccountHandler::new(client);
+                let modules = handler
+                    .get_supported_database_modules()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get modules: {}", e)))?;
 
-            CallToolResult::from_serialize(&modules)
-        })
+                CallToolResult::from_serialize(&modules)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -321,20 +349,23 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
         .description("List all async tasks in the Redis Cloud account. Tasks track long-running operations like database creation.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListTasksInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListTasksInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListTasksInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = TaskHandler::new(client);
-            let tasks = handler
-                .get_all_tasks()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list tasks: {}", e)))?;
+                let handler = TaskHandler::new(client);
+                let tasks = handler
+                    .get_all_tasks()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list tasks: {}", e)))?;
 
-            CallToolResult::from_serialize(&tasks)
-        })
+                CallToolResult::from_serialize(&tasks)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -352,20 +383,23 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
         .description("Get status and details of a specific async task by ID.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetTaskInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetTaskInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetTaskInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = TaskHandler::new(client);
-            let task = handler
-                .get_task_by_id(input.task_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get task: {}", e)))?;
+                let handler = TaskHandler::new(client);
+                let task = handler
+                    .get_task_by_id(input.task_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get task: {}", e)))?;
 
-            CallToolResult::from_serialize(&task)
-        })
+                CallToolResult::from_serialize(&task)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -386,20 +420,23 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListAccountUsersInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListAccountUsersInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAccountUsersInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = UserHandler::new(client);
-            let users = handler
-                .get_all_users()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
+                let handler = UserHandler::new(client);
+                let users = handler
+                    .get_all_users()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
 
-            CallToolResult::from_serialize(&users)
-        })
+                CallToolResult::from_serialize(&users)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -417,20 +454,23 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific account user (team member) by ID.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetAccountUserInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetAccountUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetAccountUserInput>| async move {
+                let client = state.cloud_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Cloud client: {}", e))
+                })?;
 
-            let handler = UserHandler::new(client);
-            let user = handler
-                .get_user_by_id(input.user_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get account user: {}", e)))?;
+                let handler = UserHandler::new(client);
+                let user = handler
+                    .get_user_by_id(input.user_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get account user: {}", e)))?;
 
-            CallToolResult::from_serialize(&user)
-        })
+                CallToolResult::from_serialize(&user)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -449,20 +489,23 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
         .description("List all ACL users (database-level Redis users for authentication).")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListAclUsersInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListAclUsersInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAclUsersInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AclHandler::new(client);
-            let users = handler
-                .get_all_acl_users()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list ACL users: {}", e)))?;
+                let handler = AclHandler::new(client);
+                let users = handler
+                    .get_all_acl_users()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list ACL users: {}", e)))?;
 
-            CallToolResult::from_serialize(&users)
-        })
+                CallToolResult::from_serialize(&users)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -480,20 +523,23 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific ACL user by ID.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetAclUserInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetAclUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetAclUserInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AclHandler::new(client);
-            let user = handler
-                .get_user_by_id(input.user_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get ACL user: {}", e)))?;
+                let handler = AclHandler::new(client);
+                let user = handler
+                    .get_user_by_id(input.user_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get ACL user: {}", e)))?;
 
-            CallToolResult::from_serialize(&user)
-        })
+                CallToolResult::from_serialize(&user)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -508,20 +554,23 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
         .description("List all ACL roles (permission templates for database access).")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListAclRolesInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListAclRolesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAclRolesInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AclHandler::new(client);
-            let roles = handler
-                .get_roles()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list ACL roles: {}", e)))?;
+                let handler = AclHandler::new(client);
+                let roles = handler
+                    .get_roles()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list ACL roles: {}", e)))?;
 
-            CallToolResult::from_serialize(&roles)
-        })
+                CallToolResult::from_serialize(&roles)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -536,20 +585,23 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
         .description("List all Redis ACL rules (command permissions for Redis users).")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, _input: ListRedisRulesInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, ListRedisRulesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListRedisRulesInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = AclHandler::new(client);
-            let rules = handler
-                .get_all_redis_rules()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to list Redis rules: {}", e)))?;
+                let handler = AclHandler::new(client);
+                let rules = handler
+                    .get_all_redis_rules()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list Redis rules: {}", e)))?;
 
-            CallToolResult::from_serialize(&rules)
-        })
+                CallToolResult::from_serialize(&rules)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -576,24 +628,27 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
         .description("Get backup status and history for a Redis Cloud database.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetBackupStatusInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetBackupStatusInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetBackupStatusInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = DatabaseHandler::new(client);
-            let status = handler
-                .get_database_backup_status(
-                    input.subscription_id,
-                    input.database_id,
-                    input.region_name,
-                )
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get backup status: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let status = handler
+                    .get_database_backup_status(
+                        input.subscription_id,
+                        input.database_id,
+                        input.region_name,
+                    )
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get backup status: {}", e)))?;
 
-            CallToolResult::from_serialize(&status)
-        })
+                CallToolResult::from_serialize(&status)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -618,20 +673,23 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetSlowLogInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetSlowLogInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetSlowLogInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = DatabaseHandler::new(client);
-            let log = handler
-                .get_slow_log(input.subscription_id, input.database_id, input.region_name)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get slow log: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let log = handler
+                    .get_slow_log(input.subscription_id, input.database_id, input.region_name)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get slow log: {}", e)))?;
 
-            CallToolResult::from_serialize(&log)
-        })
+                CallToolResult::from_serialize(&log)
+            },
+        )
         .build()
         .expect("valid tool")
 }
@@ -651,20 +709,23 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
         .description("Get tags attached to a Redis Cloud database.")
         .read_only()
         .idempotent()
-        .handler_with_state(state, |state, input: GetTagsInput| async move {
-            let client = state
-                .cloud_client()
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+        .extractor_handler_typed::<_, _, _, GetTagsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetTagsInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
-            let handler = DatabaseHandler::new(client);
-            let tags = handler
-                .get_tags(input.subscription_id, input.database_id)
-                .await
-                .map_err(|e| ToolError::new(format!("Failed to get tags: {}", e)))?;
+                let handler = DatabaseHandler::new(client);
+                let tags = handler
+                    .get_tags(input.subscription_id, input.database_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get tags: {}", e)))?;
 
-            CallToolResult::from_serialize(&tags)
-        })
+                CallToolResult::from_serialize(&tags)
+            },
+        )
         .build()
         .expect("valid tool")
 }
