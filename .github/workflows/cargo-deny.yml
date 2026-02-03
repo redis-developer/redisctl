@@ -44,10 +44,7 @@ jobs:
       - name: Cache cargo
         uses: Swatinem/rust-cache@v2
 
-      - name: Install cargo-deny
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-deny@0.18.9
-
-      - name: Run cargo-deny
-        run: cargo deny --all-features check ${{ matrix.checks }}
+      - name: Install and run cargo-deny
+        run: |
+          cargo install cargo-deny --version 0.18.9 --locked
+          cargo deny --all-features check ${{ matrix.checks }}
