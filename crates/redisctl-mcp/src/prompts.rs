@@ -62,6 +62,7 @@ Based on the results and the reported symptoms, identify the root cause and sugg
                 }],
             })
         })
+        .build()
 }
 
 /// Build a prompt for analyzing performance metrics
@@ -119,6 +120,7 @@ Provide actionable recommendations with expected impact."#,
                 }],
             })
         })
+        .build()
 }
 
 /// Build a prompt for capacity planning
@@ -174,6 +176,7 @@ Please help me by:
                 }],
             })
         })
+        .build()
 }
 
 /// Build a prompt for migration planning
@@ -228,6 +231,7 @@ Please help me create a migration plan by:
                 }],
             })
         })
+        .build()
 }
 
 #[cfg(test)]

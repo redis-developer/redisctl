@@ -17,11 +17,11 @@ use redisctl_mcp::tools::enterprise;
 
 /// Helper to call a tool and get text result
 async fn call_tool_text(tool: &Tool, input: serde_json::Value) -> String {
-    let result = tool.call(input).await.expect("tool call succeeded");
+    let result = tool.call(input).await;
     result
         .content
         .first()
-        .and_then(|c| c.as_text())
+        .and_then(|c: &tower_mcp::Content| c.as_text())
         .unwrap_or_default()
         .to_string()
 }

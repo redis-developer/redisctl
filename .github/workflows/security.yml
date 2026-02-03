@@ -41,10 +41,7 @@ jobs:
         with:
           cache-on-failure: true
 
-      - name: Install cargo-audit
-        uses: taiki-e/install-action@v2
-        with:
-          tool: cargo-audit@0.22.0
-
-      - name: Run security audit
-        run: cargo audit --deny warnings
+      - name: Install and run cargo-audit
+        run: |
+          cargo install cargo-audit --version 0.22.0 --locked
+          cargo audit --deny warnings

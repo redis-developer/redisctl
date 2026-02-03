@@ -26,6 +26,7 @@ pub fn config_path_resource() -> Resource {
                 }],
             })
         })
+        .build()
 }
 
 /// Build a resource exposing the list of configured profiles
@@ -57,6 +58,7 @@ pub fn profiles_resource() -> Resource {
                 }],
             })
         })
+        .build()
 }
 
 /// Build a resource exposing server instructions/help
@@ -115,7 +117,7 @@ mod tests {
         assert_eq!(resource.uri, "redis://help");
         assert_eq!(resource.name, "Help");
 
-        let result = resource.read().await.unwrap();
+        let result = resource.read().await;
         assert_eq!(result.contents.len(), 1);
         assert!(
             result.contents[0]
@@ -131,7 +133,7 @@ mod tests {
         let resource = config_path_resource();
         assert_eq!(resource.uri, "redis://config/path");
 
-        let result = resource.read().await.unwrap();
+        let result = resource.read().await;
         assert_eq!(result.contents.len(), 1);
         // Should return either a path or error message
         assert!(result.contents[0].text.is_some());
@@ -142,7 +144,7 @@ mod tests {
         let resource = profiles_resource();
         assert_eq!(resource.uri, "redis://profiles");
 
-        let result = resource.read().await.unwrap();
+        let result = resource.read().await;
         assert_eq!(result.contents.len(), 1);
         // Should return JSON (either profiles or error)
         let text = result.contents[0].text.as_ref().unwrap();
