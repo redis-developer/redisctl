@@ -34,8 +34,7 @@ redisctl/
 │   │   ├── src/workflows/   # Multi-step workflows
 │   │   └── tests/           # CLI tests
 │   └── redisctl-mcp/        # MCP server
-├── mkdocs-site/             # Documentation (you're reading it)
-└── scripts/                 # Build automation
+└── docs/                    # Documentation (you're reading it)
 ```
 
 **External Dependencies:**

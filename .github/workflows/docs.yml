@@ -5,7 +5,7 @@ on:
     branches: [main]
     paths:
       - "**.md"
-      - "mkdocs-site/**"
+      - "docs/**"
       - ".github/workflows/docs.yml"
       - "CHANGELOG.md"
       - "CONTRIBUTING.md"
@@ -14,7 +14,7 @@ on:
     branches: [main]
     paths:
       - "**.md"
-      - "mkdocs-site/**"
+      - "docs/**"
       - ".github/workflows/docs.yml"
       - "CHANGELOG.md"
       - "CONTRIBUTING.md"
@@ -46,7 +46,7 @@ jobs:
           markdownlint '**/*.md' \
             --ignore node_modules \
             --ignore target \
-            --ignore mkdocs-site/site \
+            --ignore docs/site \
             --disable MD013 MD033 MD041
         continue-on-error: true # Don't fail CI for markdown issues
 
@@ -74,14 +74,14 @@ jobs:
 
       - name: Build documentation
         run: |
-          cd mkdocs-site
+          cd docs
           mkdocs build --strict
 
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: docs-site
-          path: mkdocs-site/site
+          path: docs/site
           retention-days: 1
 
   # Check for broken links in documentation
@@ -103,7 +103,7 @@ jobs:
             --exclude-path target
             --exclude-path node_modules
             --exclude-path .git
-            --exclude-path mkdocs-site/site
+            --exclude-path docs/site
             --exclude "https://github.com/redis-developer/redisctl/pull/.*"
             --exclude "https://github.com/redis-developer/redisctl/issues/.*"
             .
@@ -175,7 +175,7 @@ jobs:
 
       - name: Build documentation
         run: |
-          cd mkdocs-site
+          cd docs
           mkdocs build
 
       - name: Deploy to redisctl-docs
@@ -184,5 +184,5 @@ jobs:
           personal_token: ${{ secrets.DOCS_DEPLOY_TOKEN }}
           external_repository: redis-field-engineering/redisctl-docs
           publish_branch: gh-pages
-          publish_dir: ./mkdocs-site/site
+          publish_dir: ./docs/site
           commit_message: "docs: update from redis-developer/redisctl@${{ github.sha }}"
