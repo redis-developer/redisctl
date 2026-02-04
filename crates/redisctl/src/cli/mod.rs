@@ -184,6 +184,10 @@ pub enum Commands {
     #[command(subcommand, visible_alias = "fk")]
     FilesKey(FilesKeyCommands),
 
+    /// Database operations (direct Redis connections)
+    #[command(subcommand)]
+    Db(DbCommands),
+
     /// Version information
     #[command(visible_alias = "ver", visible_alias = "v")]
     Version,
@@ -464,5 +468,42 @@ pub enum FilesKeyCommands {
         /// Remove from specific profile
         #[arg(long, conflicts_with_all = ["keyring", "global"])]
         profile: Option<String>,
+    },
+}
+
+/// Database commands for direct Redis operations
+#[derive(Subcommand, Debug)]
+pub enum DbCommands {
+    /// Open redis-cli with profile credentials
+    #[command(visible_alias = "connect", visible_alias = "cli")]
+    #[command(after_help = "EXAMPLES:
+    # Open redis-cli using a database profile
+    redisctl db open --profile my-cache
+
+    # Print the command without executing (for debugging)
+    redisctl db open --profile my-cache --dry-run
+
+    # Pass additional arguments to redis-cli
+    redisctl db open --profile my-cache -- -n 1
+
+    # Use a specific redis-cli binary
+    redisctl db open --profile my-cache --redis-cli /usr/local/bin/redis-cli
+")]
+    Open {
+        /// Database profile to use (must be a 'database' type profile)
+        #[arg(long, short)]
+        profile: String,
+
+        /// Print the redis-cli command without executing
+        #[arg(long)]
+        dry_run: bool,
+
+        /// Path to redis-cli binary (defaults to 'redis-cli' in PATH)
+        #[arg(long, default_value = "redis-cli")]
+        redis_cli: String,
+
+        /// Additional arguments to pass to redis-cli
+        #[arg(last = true)]
+        args: Vec<String>,
     },
 }

@@ -997,7 +997,7 @@ dependencies = [
  "thiserror 2.0.17",
  "tokio",
  "tracing",
- "which",
+ "which 8.0.0",
 ]
 
 [[package]]
@@ -2873,6 +2873,7 @@ dependencies = [
  "tracing-subscriber",
  "unicode-segmentation",
  "urlencoding",
+ "which 7.0.3",
  "wiremock",
  "zip",
 ]
@@ -4690,6 +4691,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5e8f38b596e2a359b755342473520a99421e43658548c79489ee221b728c107"
 dependencies = [
  "hashbrown 0.15.5",
+]
+
+[[package]]
+name = "which"
+version = "7.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "24d643ce3fd3e5b54854602a080f34fb10ab75e0b813ee32d00ca2b44fa74762"
+dependencies = [
+ "either",
+ "env_home",
+ "rustix",
+ "winsafe",
 ]
 
 [[package]]
