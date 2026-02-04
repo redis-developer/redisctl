@@ -62,6 +62,7 @@ tower = { version = "0.5", features = ["util", "timeout", "buffer", "ready-cache
 tower-resilience = { version = "0.1", features = ["circuitbreaker", "retry", "ratelimiter"] }
 regex = "1.12.2"
 zip = "6.0.0"
+which = "7"
 
 [target.'cfg(unix)'.dependencies]
 pager = "0.16"

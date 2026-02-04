@@ -154,6 +154,8 @@ async fn execute_command(cli: &Cli, conn_mgr: &ConnectionManager) -> Result<(), 
             )
             .await
         }
+
+        Commands::Db(db_cmd) => commands::db::handle_db_command(db_cmd, conn_mgr, cli.output).await,
     };
 
     let duration = start.elapsed();
@@ -216,6 +218,12 @@ fn format_command(command: &Commands) -> String {
                 Set { .. } => "files-key set [key redacted]".to_string(),
                 Get { profile } => format!("files-key get {:?}", profile),
                 Remove { .. } => "files-key remove".to_string(),
+            }
+        }
+        Commands::Db(cmd) => {
+            use cli::DbCommands::*;
+            match cmd {
+                Open { profile, .. } => format!("db open --profile {}", profile),
             }
         }
     }
