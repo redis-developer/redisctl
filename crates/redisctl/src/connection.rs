@@ -220,6 +220,11 @@ impl ConnectionManager {
         } else {
             None
         };
+        let env_ca_cert = if use_env_vars {
+            std::env::var("REDIS_ENTERPRISE_CA_CERT").ok()
+        } else {
+            None
+        };
 
         if env_url.is_some() {
             debug!("Found REDIS_ENTERPRISE_URL environment variable");
@@ -233,8 +238,11 @@ impl ConnectionManager {
         if env_insecure.is_some() {
             debug!("Found REDIS_ENTERPRISE_INSECURE environment variable");
         }
+        if env_ca_cert.is_some() {
+            debug!("Found REDIS_ENTERPRISE_CA_CERT environment variable");
+        }
 
-        let (final_url, final_username, final_password, final_insecure) =
+        let (final_url, final_username, final_password, final_insecure, final_ca_cert) =
             if let (Some(url), Some(user)) = (&env_url, &env_user) {
                 // Environment variables provide complete credentials
                 info!("Using Redis Enterprise credentials from environment variables");
@@ -243,7 +251,8 @@ impl ConnectionManager {
                     .as_ref()
                     .map(|s| s.to_lowercase() == "true" || s == "1")
                     .unwrap_or(false);
-                (url.clone(), user.clone(), password, insecure)
+                let ca_cert = env_ca_cert.clone();
+                (url.clone(), user.clone(), password, insecure, ca_cert)
             } else {
                 // Resolve the profile using type-specific logic
                 let resolved_profile_name = self.config.resolve_enterprise_profile(profile_name)?;
@@ -270,7 +279,7 @@ impl ConnectionManager {
                 }
 
                 // Use the new resolve method which handles keyring lookup
-                let (url, username, password, insecure) = profile
+                let (url, username, password, insecure, profile_ca_cert) = profile
                     .resolve_enterprise_credentials()
                     .context("Failed to resolve Enterprise credentials")?
                     .context("Profile is not configured for Redis Enterprise")?;
@@ -279,7 +288,8 @@ impl ConnectionManager {
                 let has_overrides = env_url.is_some()
                     || env_user.is_some()
                     || env_password.is_some()
-                    || env_insecure.is_some();
+                    || env_insecure.is_some()
+                    || env_ca_cert.is_some();
 
                 // Allow partial environment variable overrides
                 let final_url = env_url.unwrap_or(url);
@@ -289,12 +299,20 @@ impl ConnectionManager {
                     .as_ref()
                     .map(|s| s.to_lowercase() == "true" || s == "1")
                     .unwrap_or(insecure);
+                // Env var overrides profile ca_cert
+                let final_ca_cert = env_ca_cert.or(profile_ca_cert);
 
                 if has_overrides {
                     debug!("Applied partial environment variable overrides");
                 }
 
-                (final_url, final_user, final_password, final_insecure)
+                (
+                    final_url,
+                    final_user,
+                    final_password,
+                    final_insecure,
+                    final_ca_cert,
+                )
             };
 
         info!("Connecting to Redis Enterprise: {}", final_url);
@@ -308,6 +326,14 @@ impl ConnectionManager {
             }
         );
         debug!("Insecure mode: {}", final_insecure);
+        debug!(
+            "CA cert: {}",
+            if final_ca_cert.is_some() {
+                "configured"
+            } else {
+                "not set"
+            }
+        );
 
         // Build the Enterprise client
         let mut builder = redis_enterprise::EnterpriseClient::builder()
@@ -325,6 +351,12 @@ impl ConnectionManager {
         if final_insecure {
             builder = builder.insecure(true);
             debug!("SSL certificate verification disabled");
+        }
+
+        // Add CA certificate if provided
+        if let Some(ref ca_cert_path) = final_ca_cert {
+            builder = builder.ca_cert(ca_cert_path);
+            debug!("Using custom CA certificate: {}", ca_cert_path);
         }
 
         let client = builder

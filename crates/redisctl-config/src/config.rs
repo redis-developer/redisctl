@@ -77,6 +77,9 @@ pub enum ProfileCredentials {
         password: Option<String>, // Optional for interactive prompting
         #[serde(default)]
         insecure: bool,
+        /// Path to custom CA certificate for TLS verification (Kubernetes deployments)
+        #[serde(default)]
+        ca_cert: Option<String>,
     },
     Database {
         host: String,
@@ -124,18 +127,21 @@ impl Profile {
     }
 
     /// Returns Enterprise credentials if this is an Enterprise profile
-    pub fn enterprise_credentials(&self) -> Option<(&str, &str, Option<&str>, bool)> {
+    #[allow(clippy::type_complexity)]
+    pub fn enterprise_credentials(&self) -> Option<(&str, &str, Option<&str>, bool, Option<&str>)> {
         match &self.credentials {
             ProfileCredentials::Enterprise {
                 url,
                 username,
                 password,
                 insecure,
+                ca_cert,
             } => Some((
                 url.as_str(),
                 username.as_str(),
                 password.as_deref(),
                 *insecure,
+                ca_cert.as_deref(),
             )),
             _ => None,
         }
@@ -192,13 +198,14 @@ impl Profile {
     #[allow(clippy::type_complexity)]
     pub fn resolve_enterprise_credentials(
         &self,
-    ) -> Result<Option<(String, String, Option<String>, bool)>> {
+    ) -> Result<Option<(String, String, Option<String>, bool, Option<String>)>> {
         match &self.credentials {
             ProfileCredentials::Enterprise {
                 url,
                 username,
                 password,
                 insecure,
+                ca_cert,
             } => {
                 let store = CredentialStore::new();
 
@@ -232,6 +239,7 @@ impl Profile {
                     resolved_username,
                     resolved_password,
                     *insecure,
+                    ca_cert.clone(),
                 )))
             }
             _ => Ok(None),
@@ -787,6 +795,7 @@ api_url = "${REDIS_TEST_URL:-https://api.redislabs.com/v1}"
                 username: "admin".to_string(),
                 password: Some("password".to_string()),
                 insecure: false,
+                ca_cert: None,
             },
             files_api_key: None,
             resilience: None,
@@ -864,6 +873,7 @@ api_url = "${REDIS_TEST_URL:-https://api.redislabs.com/v1}"
                 username: "admin".to_string(),
                 password: Some("password".to_string()),
                 insecure: false,
+                ca_cert: None,
             },
             files_api_key: None,
             resilience: None,

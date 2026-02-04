@@ -32,6 +32,7 @@ pub async fn handle_profile_command(
             username,
             password,
             insecure,
+            ca_cert,
             host,
             port,
             no_tls,
@@ -50,6 +51,7 @@ pub async fn handle_profile_command(
                 username,
                 password,
                 insecure,
+                ca_cert,
                 host,
                 port,
                 no_tls,
@@ -108,12 +110,15 @@ async fn handle_list(
                             }
                         }
                         redisctl_config::DeploymentType::Enterprise => {
-                            if let Some((url, username, _, insecure)) =
+                            if let Some((url, username, _, insecure, ca_cert)) =
                                 profile.enterprise_credentials()
                             {
                                 obj["url"] = serde_json::json!(url);
                                 obj["username"] = serde_json::json!(username);
                                 obj["insecure"] = serde_json::json!(insecure);
+                                if let Some(cert_path) = ca_cert {
+                                    obj["ca_cert"] = serde_json::json!(cert_path);
+                                }
                             }
                         }
                         redisctl_config::DeploymentType::Database => {
@@ -176,7 +181,8 @@ async fn handle_list(
                         }
                     }
                     redisctl_config::DeploymentType::Enterprise => {
-                        if let Some((url, username, _, insecure)) = profile.enterprise_credentials()
+                        if let Some((url, username, _, insecure, _ca_cert)) =
+                            profile.enterprise_credentials()
                         {
                             details = format!(
                                 "URL: {}, User: {}{}",
@@ -274,7 +280,7 @@ async fn handle_show(
                             }
                         }
                         redisctl_config::DeploymentType::Enterprise => {
-                            if let Some((url, username, has_password, insecure)) =
+                            if let Some((url, username, has_password, insecure, ca_cert)) =
                                 profile.enterprise_credentials()
                             {
                                 output_data["url"] = serde_json::json!(url);
@@ -282,6 +288,9 @@ async fn handle_show(
                                 output_data["password_configured"] =
                                     serde_json::json!(has_password.is_some());
                                 output_data["insecure"] = serde_json::json!(insecure);
+                                if let Some(cert_path) = ca_cert {
+                                    output_data["ca_cert"] = serde_json::json!(cert_path);
+                                }
                             }
                         }
                         redisctl_config::DeploymentType::Database => {
@@ -322,7 +331,7 @@ async fn handle_show(
                             }
                         }
                         redisctl_config::DeploymentType::Enterprise => {
-                            if let Some((url, username, has_password, insecure)) =
+                            if let Some((url, username, has_password, insecure, ca_cert)) =
                                 profile.enterprise_credentials()
                             {
                                 println!("URL: {}", url);
@@ -336,6 +345,9 @@ async fn handle_show(
                                     }
                                 );
                                 println!("Insecure: {}", insecure);
+                                if let Some(cert_path) = ca_cert {
+                                    println!("CA Cert: {}", cert_path);
+                                }
                             }
                         }
                         redisctl_config::DeploymentType::Database => {
@@ -389,6 +401,7 @@ async fn handle_set(
     username: &Option<String>,
     password: &Option<String>,
     insecure: &bool,
+    ca_cert: &Option<String>,
     host: &Option<String>,
     port: &Option<u16>,
     no_tls: &bool,
@@ -514,6 +527,7 @@ async fn handle_set(
                     username: stored_username,
                     password: stored_password,
                     insecure: *insecure,
+                    ca_cert: ca_cert.clone(),
                 },
                 files_api_key: None,
                 resilience: None,
@@ -859,11 +873,13 @@ async fn handle_validate(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlErr
                 }
             },
             redisctl_config::DeploymentType::Enterprise => match profile.enterprise_credentials() {
-                Some((url, username, password, _insecure)) => {
+                Some((url, username, password, _insecure, _ca_cert)) => {
                     if username.is_empty() {
                         println!("✗ Missing username");
                         has_errors = true;
-                    } else if password.is_none() || password.as_ref().is_none_or(|p| p.is_empty()) {
+                    } else if password.is_none()
+                        || password.as_ref().is_none_or(|p: &&str| p.is_empty())
+                    {
                         println!("⚠ Missing password (will be prompted)");
                         has_warnings = true;
                     } else {

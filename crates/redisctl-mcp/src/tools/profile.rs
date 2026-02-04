@@ -121,6 +121,8 @@ struct MaskedEnterpriseCredentials {
     username: String,
     password: String,
     insecure: bool,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ca_cert: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -203,6 +205,7 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
                         username,
                         password,
                         insecure,
+                        ca_cert,
                     } => (
                         None,
                         Some(MaskedEnterpriseCredentials {
@@ -213,6 +216,7 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
                                 .map(|p| mask_credential(p))
                                 .unwrap_or_else(|| "(not set)".to_string()),
                             insecure: *insecure,
+                            ca_cert: ca_cert.clone(),
                         }),
                         None,
                     ),

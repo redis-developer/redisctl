@@ -127,6 +127,36 @@ redisctl profile show prod
 cat ~/.config/redisctl/config.toml
 ```
 
+## TLS Certificate Configuration
+
+### Kubernetes Deployments
+
+Redis Enterprise clusters deployed on Kubernetes typically use self-signed certificates. Instead of disabling TLS verification with `REDIS_ENTERPRISE_INSECURE=true`, you can provide the cluster's CA certificate for secure connections:
+
+```bash
+# Extract CA cert from Kubernetes secret
+kubectl get secret rec-proxy-cert -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
+
+# Use the CA cert for verification
+export REDIS_ENTERPRISE_CA_CERT="./ca.crt"
+export REDIS_ENTERPRISE_URL="https://rec-api.redis.svc:9443"
+export REDIS_ENTERPRISE_USER="admin@cluster.local"
+export REDIS_ENTERPRISE_PASSWORD="password"
+
+redisctl enterprise cluster get
+```
+
+### When to Use Each Option
+
+| Option | Use Case |
+|--------|----------|
+| `REDIS_ENTERPRISE_CA_CERT` | Kubernetes, self-signed certs where you have the CA |
+| `REDIS_ENTERPRISE_INSECURE=true` | Local development, testing only |
+| Neither | Production clusters with trusted certificates |
+
+!!! warning "Avoid Insecure Mode in Production"
+    Using `REDIS_ENTERPRISE_INSECURE=true` disables all certificate verification and should only be used for local development. For Kubernetes deployments, always use `REDIS_ENTERPRISE_CA_CERT` with the cluster's CA certificate.
+
 ## Revoking Credentials
 
 ### Redis Cloud

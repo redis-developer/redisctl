@@ -253,6 +253,7 @@ impl std::fmt::Display for HttpMethod {
 
 /// Profile management commands
 #[derive(Subcommand, Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum ProfileCommands {
     /// List all configured profiles
     #[command(visible_alias = "ls", visible_alias = "l")]
@@ -340,6 +341,10 @@ pub enum ProfileCommands {
         /// Allow insecure connections (for Enterprise profiles)
         #[arg(long)]
         insecure: bool,
+
+        /// Path to custom CA certificate for TLS verification (for Enterprise/Kubernetes profiles)
+        #[arg(long)]
+        ca_cert: Option<String>,
 
         /// Redis host (for Database profiles)
         #[arg(long, required_if_eq("type", "database"))]
