@@ -1,0 +1,20 @@
+[package]
+name = "redisctl-core"
+version = "0.1.0"
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "Core business logic for redisctl - SPIKE/EXPERIMENTAL"
+
+[dependencies]
+redis-cloud = { workspace = true }
+redis-enterprise = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+wiremock = { workspace = true }
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }

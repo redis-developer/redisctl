@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/redisctl-config",
+    "crates/redisctl-core",  # SPIKE - experimental
     "crates/redisctl",
     "crates/redisctl-mcp",
 ]
