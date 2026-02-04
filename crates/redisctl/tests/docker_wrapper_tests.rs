@@ -121,3 +121,219 @@ async fn test_dw_redis_info() {
     let info: String = redis::cmd("INFO").arg("server").query(&mut con).unwrap();
     assert!(info.contains("redis_version"));
 }
+
+// =============================================================================
+// DB OPEN COMMAND TESTS
+// These test the 'db open' command using docker-wrapper Redis container.
+// =============================================================================
+
+use assert_cmd::Command;
+use predicates::prelude::*;
+use tempfile::TempDir;
+
+/// Create a temporary config file with a database profile pointing to our test Redis
+fn create_test_config(
+    port: u16,
+    password: Option<&str>,
+    tls: bool,
+) -> (TempDir, std::path::PathBuf) {
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let config_path = temp_dir.path().join("config.toml");
+
+    let password_line = password
+        .map(|p| format!("password = \"{}\"", p))
+        .unwrap_or_default();
+
+    let config_content = format!(
+        r#"
+[profiles.test-redis]
+deployment_type = "database"
+host = "localhost"
+port = {}
+tls = {}
+username = "default"
+{}
+"#,
+        port, tls, password_line
+    );
+
+    std::fs::write(&config_path, config_content).expect("Failed to write config");
+    (temp_dir, config_path)
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_dry_run() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let (_temp_dir, config_path) = create_test_config(ctx.port, None, false);
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "open",
+        "--profile",
+        "test-redis",
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("-h localhost"))
+        .stdout(predicate::str::contains(format!("-p {}", ctx.port)));
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_dry_run_with_password() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let (_temp_dir, config_path) = create_test_config(ctx.port, Some("secret123"), false);
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "open",
+        "--profile",
+        "test-redis",
+        "--dry-run",
+    ]);
+
+    // Password should be redacted in dry-run output
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("-a ***"))
+        .stdout(predicate::str::contains("-h localhost"));
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_dry_run_with_tls() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let (_temp_dir, config_path) = create_test_config(ctx.port, None, true);
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "open",
+        "--profile",
+        "test-redis",
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("--tls"));
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_dry_run_with_extra_args() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let (_temp_dir, config_path) = create_test_config(ctx.port, None, false);
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "open",
+        "--profile",
+        "test-redis",
+        "--dry-run",
+        "--",
+        "-n",
+        "1",
+        "--scan",
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("-n 1"))
+        .stdout(predicate::str::contains("--scan"));
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_nonexistent_profile() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let (_temp_dir, config_path) = create_test_config(ctx.port, None, false);
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "open",
+        "--profile",
+        "nonexistent",
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("Profile 'nonexistent' not found"));
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_wrong_profile_type() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let temp_dir = TempDir::new().expect("Failed to create temp dir");
+    let config_path = temp_dir.path().join("config.toml");
+
+    // Create an enterprise profile instead of database
+    let config_content = format!(
+        r#"
+[profiles.enterprise-profile]
+deployment_type = "enterprise"
+url = "https://localhost:{}"
+username = "admin"
+"#,
+        ctx.port
+    );
+
+    std::fs::write(&config_path, config_content).expect("Failed to write config");
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "open",
+        "--profile",
+        "enterprise-profile",
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .failure()
+        .stderr(predicate::str::contains("is not a database profile"));
+}
+
+#[tokio::test]
+#[ignore = "Requires Docker - run with --ignored"]
+async fn test_db_open_cli_alias() {
+    let ctx = get_redis().await.expect("Failed to get Redis container");
+    let (_temp_dir, config_path) = create_test_config(ctx.port, None, false);
+
+    // Test the 'cli' alias
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+    cmd.args([
+        "--config-file",
+        config_path.to_str().unwrap(),
+        "db",
+        "cli",
+        "--profile",
+        "test-redis",
+        "--dry-run",
+    ]);
+
+    cmd.assert()
+        .success()
+        .stdout(predicate::str::contains("redis-cli"));
+}
