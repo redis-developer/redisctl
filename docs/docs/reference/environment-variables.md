@@ -18,6 +18,7 @@ Complete reference of environment variables supported by redisctl.
 | `REDIS_ENTERPRISE_USER` | Username | `admin@cluster.local` |
 | `REDIS_ENTERPRISE_PASSWORD` | Password | `your-password` |
 | `REDIS_ENTERPRISE_INSECURE` | Allow self-signed certs | `true` or `false` |
+| `REDIS_ENTERPRISE_CA_CERT` | Path to custom CA certificate (for Kubernetes/self-signed) | `/path/to/ca.pem` |
 
 ## Files.com (Support Package Upload)
 
@@ -54,6 +55,18 @@ Complete reference of environment variables supported by redisctl.
     export REDIS_ENTERPRISE_USER="admin@cluster.local"
     export REDIS_ENTERPRISE_PASSWORD="password"
     export REDIS_ENTERPRISE_INSECURE="true"
+
+    redisctl enterprise cluster get
+    ```
+
+=== "Redis Enterprise (Kubernetes)"
+
+    ```bash
+    # Use custom CA certificate for Kubernetes deployments
+    export REDIS_ENTERPRISE_URL="https://rec-api.redis.svc:9443"
+    export REDIS_ENTERPRISE_USER="admin@cluster.local"
+    export REDIS_ENTERPRISE_PASSWORD="password"
+    export REDIS_ENTERPRISE_CA_CERT="/var/run/secrets/redis/ca.crt"
 
     redisctl enterprise cluster get
     ```

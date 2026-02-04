@@ -185,7 +185,7 @@ impl AppState {
                     .with_context(|| format!("Profile '{}' not found", resolved_profile_name))?;
 
                 // Get credentials
-                let (url, username, password, insecure) = profile
+                let (url, username, password, insecure, ca_cert) = profile
                     .resolve_enterprise_credentials()
                     .context("Failed to resolve enterprise credentials")?
                     .context("No enterprise credentials in profile")?;
@@ -197,6 +197,10 @@ impl AppState {
 
                 if let Some(pwd) = password {
                     builder = builder.password(&pwd);
+                }
+
+                if let Some(cert_path) = ca_cert {
+                    builder = builder.ca_cert(&cert_path);
                 }
 
                 builder.build().context("Failed to build Enterprise client")
