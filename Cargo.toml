@@ -18,7 +18,7 @@ version = "0.3.1"
 version = "0.6.2"
 edition = "2024"
 rust-version = "1.89"
-authors = ["Josh Rotenberg <joshrotenberg@gmail.com>"]
+authors = ["Josh Rotenberg <josh.rotenberg@redis.com>"]
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/redis-developer/redisctl"
 homepage = "https://github.com/redis-developer/redisctl"
@@ -63,7 +63,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 async-trait = "0.1"
 
 # HTTP and APIs
-reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "multipart"] }
+reqwest = { version = "0.13", default-features = false, features = ["json", "rustls", "multipart"] }
 url = "2.5"
 base64 = "0.22"
 urlencoding = "2.1"
