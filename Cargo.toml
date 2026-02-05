@@ -83,7 +83,14 @@ jmespath = "0.4"
 # Password input
 rpassword = "7.4"
 
+# Tower and resilience
+tower = { version = "0.5", features = ["util", "timeout", "buffer", "ready-cache", "limit"] }
+
+# Secure credential storage
+keyring = { version = "3.6", features = ["apple-native", "windows-native", "linux-native"] }
+
 # Testing
+tempfile = "3.8"
 wiremock = "0.6"
 mockall = "0.13"
 serial_test = "3.1"
