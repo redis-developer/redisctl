@@ -84,6 +84,46 @@ docker run --rm \
   enterprise support-package cluster --output-dir /output
 ```
 
+## MCP Server
+
+The Docker image also includes `redisctl-mcp` for AI assistant integration:
+
+```bash
+# Run MCP server with environment credentials
+docker run -i --rm \
+  -e REDIS_ENTERPRISE_URL \
+  -e REDIS_ENTERPRISE_USER \
+  -e REDIS_ENTERPRISE_PASSWORD \
+  ghcr.io/redis-developer/redisctl \
+  redisctl-mcp --read-only=false
+
+# Or mount config for profile-based auth
+docker run -i --rm \
+  -v ~/.config/redisctl:/root/.config/redisctl:ro \
+  ghcr.io/redis-developer/redisctl \
+  redisctl-mcp --profile my-profile
+```
+
+For IDE configuration (note the `-i` flag for stdin):
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-v", "~/.config/redisctl:/root/.config/redisctl:ro",
+        "ghcr.io/redis-developer/redisctl",
+        "redisctl-mcp", "--profile", "my-profile"
+      ]
+    }
+  }
+}
+```
+
+**Note:** Native installation is recommended for MCP usage since Docker adds latency to each tool call.
+
 ## Image Tags
 
 | Tag | Description |
