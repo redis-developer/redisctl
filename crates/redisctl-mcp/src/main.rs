@@ -164,6 +164,7 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - get_backup_status: Get database backup status
 - get_slow_log: Get slow query log
 - get_database_tags: Get tags for a database
+- get_database_certificate: Get TLS/SSL certificate for a database
 
 ### Redis Cloud - Account & Configuration
 - get_account: Get current account information
@@ -238,6 +239,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 ### Redis Enterprise - Modules
 - list_modules: List installed Redis modules (RedisJSON, RediSearch, etc.)
 - get_module: Get details about a specific module
+
+### Redis Enterprise - Roles
+- list_enterprise_roles: List all roles in the cluster
+- get_enterprise_role: Get role details and permissions
 
 ### Redis Enterprise - Write Operations (require --read-only=false)
 - backup_enterprise_database: Trigger a database backup and wait for completion
@@ -314,6 +319,7 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::cloud::get_backup_status(state.clone()))
         .tool(tools::cloud::get_slow_log(state.clone()))
         .tool(tools::cloud::get_tags(state.clone()))
+        .tool(tools::cloud::get_database_certificate(state.clone()))
         // Cloud - Account & Configuration
         .tool(tools::cloud::get_account(state.clone()))
         .tool(tools::cloud::get_regions(state.clone()))
@@ -373,6 +379,9 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - Modules
         .tool(tools::enterprise::list_modules(state.clone()))
         .tool(tools::enterprise::get_module(state.clone()))
+        // Enterprise - Roles
+        .tool(tools::enterprise::list_roles(state.clone()))
+        .tool(tools::enterprise::get_role(state.clone()))
         // Enterprise - Write Operations (require --read-only=false)
         .tool(tools::enterprise::backup_enterprise_database(state.clone()))
         .tool(tools::enterprise::import_enterprise_database(state.clone()))

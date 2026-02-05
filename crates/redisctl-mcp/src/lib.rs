@@ -201,6 +201,7 @@ mod tests {
         let _ = tools::cloud::import_database(state.clone());
         let _ = tools::cloud::delete_subscription(state.clone());
         let _ = tools::cloud::flush_database(state.clone());
+        let _ = tools::cloud::get_database_certificate(state.clone());
     }
 
     #[test]
@@ -244,6 +245,9 @@ mod tests {
         // Modules
         let _ = tools::enterprise::list_modules(state.clone());
         let _ = tools::enterprise::get_module(state.clone());
+        // Roles
+        let _ = tools::enterprise::list_roles(state.clone());
+        let _ = tools::enterprise::get_role(state.clone());
         // Write operations
         let _ = tools::enterprise::backup_enterprise_database(state.clone());
         let _ = tools::enterprise::import_enterprise_database(state.clone());

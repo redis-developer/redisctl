@@ -11,6 +11,7 @@ use redis_enterprise::license::LicenseHandler;
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::modules::ModuleHandler;
 use redis_enterprise::nodes::NodeHandler;
+use redis_enterprise::roles::RolesHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
 use redis_enterprise::users::UserHandler;
@@ -1458,6 +1459,79 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
                     "message": "Database flushed successfully",
                     "bdb_uid": input.bdb_uid
                 }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Role tools
+// ============================================================================
+
+/// Input for listing roles (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListRolesInput {}
+
+/// Build the list_roles tool
+pub fn list_roles(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_enterprise_roles")
+        .description(
+            "List all roles in the Redis Enterprise cluster. Returns role names, \
+             permissions (management, data_access), and database-specific role assignments.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ListRolesInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListRolesInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = RolesHandler::new(client);
+                let roles = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list roles: {}", e)))?;
+
+                CallToolResult::from_serialize(&roles)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting a specific role
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetRoleInput {
+    /// Role UID
+    pub uid: u32,
+}
+
+/// Build the get_role tool
+pub fn get_role(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_role")
+        .description(
+            "Get detailed information about a specific role including permissions \
+             and database role assignments.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetRoleInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetRoleInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = RolesHandler::new(client);
+                let role = handler
+                    .get(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get role: {}", e)))?;
+
+                CallToolResult::from_serialize(&role)
             },
         )
         .build()
