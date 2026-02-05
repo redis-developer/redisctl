@@ -1310,3 +1310,122 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
         .build()
         .expect("valid tool")
 }
+
+// ============================================================================
+// Create subscription
+// ============================================================================
+
+/// Input for creating a subscription
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateSubscriptionInput {
+    /// Subscription name
+    pub name: String,
+    /// Cloud provider: "AWS", "GCP", or "Azure"
+    pub cloud_provider: String,
+    /// Cloud region (e.g., "us-east-1" for AWS, "us-central1" for GCP)
+    pub region: String,
+    /// Cloud account ID (use list_cloud_accounts to find available accounts, or use 1 for internal account)
+    #[serde(default = "default_cloud_account_id")]
+    pub cloud_account_id: i32,
+    /// Database name for the initial database
+    pub database_name: String,
+    /// Memory limit in GB for the initial database
+    pub memory_limit_in_gb: f64,
+    /// Database protocol: "redis" (default), "stack", or "memcached"
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
+    /// Enable replication for high availability (default: true)
+    #[serde(default = "default_replication")]
+    pub replication: bool,
+    /// Timeout in seconds (default: 1800 - subscriptions take longer)
+    #[serde(default = "default_subscription_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_cloud_account_id() -> i32 {
+    1 // Default internal account
+}
+
+fn default_subscription_timeout() -> u64 {
+    1800 // Subscriptions can take a while
+}
+
+/// Build the create_subscription tool
+pub fn create_subscription(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_subscription")
+        .description(
+            "Create a new Redis Cloud Pro subscription with an initial database. \
+             This is a simplified interface for common subscription creation scenarios. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateSubscriptionInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateSubscriptionInput>| async move {
+                use redis_cloud::flexible::subscriptions::{
+                    SubscriptionCreateRequest, SubscriptionDatabaseSpec, SubscriptionRegionSpec,
+                    SubscriptionSpec,
+                };
+                use redisctl_core::cloud::create_subscription_and_wait;
+
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Build the subscription request
+                let request = SubscriptionCreateRequest::builder()
+                    .name(&input.name)
+                    .cloud_providers(vec![SubscriptionSpec {
+                        provider: Some(input.cloud_provider.clone()),
+                        cloud_account_id: Some(input.cloud_account_id),
+                        regions: vec![SubscriptionRegionSpec {
+                            region: input.region.clone(),
+                            multiple_availability_zones: None,
+                            preferred_availability_zones: None,
+                            networking: None,
+                        }],
+                    }])
+                    .databases(vec![SubscriptionDatabaseSpec {
+                        name: input.database_name.clone(),
+                        protocol: input.protocol.clone(),
+                        memory_limit_in_gb: Some(input.memory_limit_in_gb),
+                        dataset_size_in_gb: None,
+                        support_oss_cluster_api: None,
+                        data_persistence: None,
+                        replication: Some(input.replication),
+                        throughput_measurement: None,
+                        local_throughput_measurement: None,
+                        modules: None,
+                        quantity: None,
+                        average_item_size_in_bytes: None,
+                        resp_version: None,
+                        redis_version: None,
+                        sharding_type: None,
+                        query_performance_factor: None,
+                    }])
+                    .build();
+
+                // Use Layer 2 workflow
+                let subscription = create_subscription_and_wait(
+                    &client,
+                    &request,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to create subscription: {}", e)))?;
+
+                CallToolResult::from_serialize(&subscription)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
