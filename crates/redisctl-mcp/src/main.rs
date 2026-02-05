@@ -244,6 +244,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - list_enterprise_roles: List all roles in the cluster
 - get_enterprise_role: Get role details and permissions
 
+### Redis Enterprise - ACLs
+- list_enterprise_acls: List all Redis ACLs
+- get_enterprise_acl: Get ACL details and rules
+
 ### Redis Enterprise - Write Operations (require --read-only=false)
 - backup_enterprise_database: Trigger a database backup and wait for completion
 - import_enterprise_database: Import data into a database and wait for completion
@@ -382,6 +386,9 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - Roles
         .tool(tools::enterprise::list_roles(state.clone()))
         .tool(tools::enterprise::get_role(state.clone()))
+        // Enterprise - ACLs
+        .tool(tools::enterprise::list_redis_acls(state.clone()))
+        .tool(tools::enterprise::get_redis_acl(state.clone()))
         // Enterprise - Write Operations (require --read-only=false)
         .tool(tools::enterprise::backup_enterprise_database(state.clone()))
         .tool(tools::enterprise::import_enterprise_database(state.clone()))

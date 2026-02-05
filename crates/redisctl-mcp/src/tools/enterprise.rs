@@ -11,6 +11,7 @@ use redis_enterprise::license::LicenseHandler;
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::modules::ModuleHandler;
 use redis_enterprise::nodes::NodeHandler;
+use redis_enterprise::redis_acls::RedisAclHandler;
 use redis_enterprise::roles::RolesHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
@@ -1532,6 +1533,79 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
                     .map_err(|e| ToolError::new(format!("Failed to get role: {}", e)))?;
 
                 CallToolResult::from_serialize(&role)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Redis ACL tools
+// ============================================================================
+
+/// Input for listing Redis ACLs (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListRedisAclsInput {}
+
+/// Build the list_redis_acls tool
+pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_enterprise_acls")
+        .description(
+            "List all Redis ACLs in the Redis Enterprise cluster. Returns ACL names, \
+             rules, and associated databases.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ListRedisAclsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(_input): Json<ListRedisAclsInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = RedisAclHandler::new(client);
+                let acls = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list ACLs: {}", e)))?;
+
+                CallToolResult::from_serialize(&acls)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting a specific Redis ACL
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetRedisAclInput {
+    /// ACL UID
+    pub uid: u32,
+}
+
+/// Build the get_redis_acl tool
+pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_acl")
+        .description(
+            "Get detailed information about a specific Redis ACL including the ACL rule string \
+             and associated databases.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetRedisAclInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetRedisAclInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = RedisAclHandler::new(client);
+                let acl = handler
+                    .get(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get ACL: {}", e)))?;
+
+                CallToolResult::from_serialize(&acl)
             },
         )
         .build()
