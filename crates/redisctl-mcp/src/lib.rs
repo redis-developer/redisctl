@@ -248,6 +248,9 @@ mod tests {
         // Roles
         let _ = tools::enterprise::list_roles(state.clone());
         let _ = tools::enterprise::get_role(state.clone());
+        // ACLs
+        let _ = tools::enterprise::list_redis_acls(state.clone());
+        let _ = tools::enterprise::get_redis_acl(state.clone());
         // Write operations
         let _ = tools::enterprise::backup_enterprise_database(state.clone());
         let _ = tools::enterprise::import_enterprise_database(state.clone());
