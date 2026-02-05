@@ -241,6 +241,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 ### Redis Enterprise - Write Operations (require --read-only=false)
 - backup_enterprise_database: Trigger a database backup and wait for completion
 - import_enterprise_database: Import data into a database and wait for completion
+- create_enterprise_database: Create a new database
+- update_enterprise_database: Update database configuration
+- delete_enterprise_database: Delete a database
+- flush_enterprise_database: Flush all data from a database
 
 ### Redis Database - Connection
 - redis_ping: Test connectivity
@@ -370,6 +374,10 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - Write Operations (require --read-only=false)
         .tool(tools::enterprise::backup_enterprise_database(state.clone()))
         .tool(tools::enterprise::import_enterprise_database(state.clone()))
+        .tool(tools::enterprise::create_enterprise_database(state.clone()))
+        .tool(tools::enterprise::update_enterprise_database(state.clone()))
+        .tool(tools::enterprise::delete_enterprise_database(state.clone()))
+        .tool(tools::enterprise::flush_enterprise_database(state.clone()))
         // Redis - Connection
         .tool(tools::redis::ping(state.clone()))
         .tool(tools::redis::info(state.clone()))
