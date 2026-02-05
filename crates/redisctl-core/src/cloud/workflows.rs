@@ -302,6 +302,45 @@ pub async fn import_database_and_wait(
     Ok(())
 }
 
+/// Flush all data from a database and wait for completion
+///
+/// WARNING: This permanently deletes ALL data in the database!
+///
+/// # Arguments
+///
+/// * `client` - The Cloud API client
+/// * `subscription_id` - The subscription containing the database
+/// * `database_id` - The database to flush
+/// * `timeout` - Maximum time to wait for completion
+/// * `on_progress` - Optional callback for progress updates
+pub async fn flush_database_and_wait(
+    client: &CloudClient,
+    subscription_id: i32,
+    database_id: i32,
+    timeout: Duration,
+    on_progress: Option<ProgressCallback>,
+) -> Result<()> {
+    let handler = DatabaseHandler::new(client.clone());
+
+    // Step 1: Flush (returns task)
+    let task = handler.flush_database(subscription_id, database_id).await?;
+    let task_id = task
+        .task_id
+        .ok_or_else(|| CoreError::TaskFailed("No task ID returned".to_string()))?;
+
+    // Step 2: Poll until complete
+    poll_task(
+        client,
+        &task_id,
+        timeout,
+        Duration::from_secs(5),
+        on_progress,
+    )
+    .await?;
+
+    Ok(())
+}
+
 // =============================================================================
 // Subscription Workflows
 // =============================================================================
