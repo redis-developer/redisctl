@@ -435,6 +435,35 @@ async def main():
 - [redis-cloud on PyPI](https://pypi.org/project/redis-cloud/)
 - [redis-enterprise on PyPI](https://pypi.org/project/redis-enterprise/)
 
+### MCP Server (AI Integration)
+
+redisctl includes an MCP server (`redisctl-mcp`) that enables AI assistants to manage Redis deployments:
+
+```bash
+# Start the MCP server
+redisctl-mcp --profile my-profile
+
+# Enable write operations
+redisctl-mcp --profile my-profile --read-only=false
+```
+
+Configure your AI assistant (Claude Desktop, Cursor, etc.) to use it:
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-profile", "--read-only=false"]
+    }
+  }
+}
+```
+
+**For development:** Copy `.mcp.json.example` to `.mcp.json`, update the profile name, and restart your IDE.
+
+See the [MCP Documentation](https://redis-field-engineering.github.io/redisctl-docs/mcp/) for full setup instructions.
+
 ---
 
 ## Documentation

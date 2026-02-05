@@ -1,0 +1,17 @@
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "cargo",
+      "args": [
+        "run",
+        "--release",
+        "-p",
+        "redisctl-mcp",
+        "--",
+        "--profile",
+        "YOUR_PROFILE_NAME",
+        "--read-only=false"
+      ]
+    }
+  }
+}
