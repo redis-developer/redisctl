@@ -441,36 +441,36 @@ Case: https://files.redis.com/f/abc123</code></pre>
                     <h2>MCP: AI-Powered Redis Management</h2>
                     <p>
                         redisctl includes an MCP server with
-                        <strong>237 tools</strong> for AI assistants
+                        <strong>~100 tools</strong> for AI assistants
                     </p>
                     <div class="columns">
                         <div class="column">
-                            <h3 class="cloud-blue small">Cloud & Enterprise</h3>
+                            <h3 class="cloud-blue small">Cloud Operations</h3>
                             <ul class="small">
                                 <li>Subscriptions & databases</li>
-                                <li>Cluster management</li>
-                                <li>User & ACL management</li>
-                                <li>Monitoring & alerts</li>
+                                <li>Create, update, delete databases</li>
+                                <li>Backup & import operations</li>
+                                <li>ACL & user management</li>
                             </ul>
                         </div>
                         <div class="column">
-                            <h3 class="green small">Direct Database Access</h3>
+                            <h3 class="orange small">Enterprise Operations</h3>
                             <ul class="small">
-                                <li>All Redis data types</li>
-                                <li>RediSearch queries</li>
-                                <li>JSON, TimeSeries, Bloom</li>
-                                <li>Streams & Pub/Sub</li>
+                                <li>License management & validation</li>
+                                <li>Cluster & policy configuration</li>
+                                <li>Maintenance mode control</li>
+                                <li>Certificate management</li>
                             </ul>
                         </div>
                     </div>
-                    <pre><code class="language-bash"># Start the MCP server
-redisctl mcp serve --database-url redis://localhost:6379</code></pre>
+                    <pre><code class="language-bash"># Start the MCP server for Enterprise
+redisctl mcp serve --profile my-cluster</code></pre>
                 </section>
 
                 <!-- MCP: Demo Conversation -->
                 <section>
-                    <h2>MCP in Action</h2>
-                    <p class="small">Natural language Redis management</p>
+                    <h2>MCP in Action: Enterprise</h2>
+                    <p class="small">Natural language cluster management</p>
                     <div
                         style="
                             background: #1e1e1e;
@@ -480,37 +480,77 @@ redisctl mcp serve --database-url redis://localhost:6379</code></pre>
                         "
                     >
                         <p>
-                            <strong style="color: #61afef">You:</strong> Show me
-                            all databases over 2GB in my production subscription
+                            <strong style="color: #61afef">You:</strong> Check our
+                            license status and when it expires
                         </p>
                         <p style="margin-top: 0.5em">
                             <strong style="color: #98c379">Claude:</strong> I'll
-                            query your Cloud subscription...
+                            check your Enterprise license...
                         </p>
                         <p style="color: #888; font-style: italic">
-                            → Uses cloud_databases_list tool
+                            → Uses get_license, get_license_usage tools
                         </p>
                         <p style="margin-top: 0.5em">
-                            Found 3 databases over 2GB: user-sessions (4GB),
-                            analytics-cache (8GB), search-index (3GB)
+                            License expires Oct 15, 2025 (253 days). Using 847/1000
+                            shards (84.7%). RAM: 2.1TB of 4TB limit.
                         </p>
                         <hr style="border-color: #444; margin: 0.8em 0" />
                         <p>
-                            <strong style="color: #61afef">You:</strong> Check
-                            memory usage on the search-index database
+                            <strong style="color: #61afef">You:</strong> Enable
+                            maintenance mode, we're doing an upgrade tonight
                         </p>
                         <p style="margin-top: 0.5em">
-                            <strong style="color: #98c379">Claude:</strong> Let
-                            me check the database info...
+                            <strong style="color: #98c379">Claude:</strong>
+                            Enabling maintenance mode on the cluster...
                         </p>
                         <p style="color: #888; font-style: italic">
-                            → Uses database_info tool
+                            → Uses enable_enterprise_maintenance_mode tool
                         </p>
                         <p style="margin-top: 0.5em">
-                            Memory: 2.8GB used / 3GB limit (93%). 1.2M keys.
-                            Consider increasing memory or enabling eviction.
+                            Maintenance mode enabled. Cluster changes are now blocked.
+                            Remember to disable after your upgrade is complete.
                         </p>
                     </div>
+                </section>
+
+                <!-- MCP: Enterprise Automation -->
+                <section>
+                    <h2>Enterprise Automation via MCP</h2>
+                    <p class="small">Full control plane access for AI-driven operations</p>
+                    <div class="columns">
+                        <div class="column">
+                            <h3 class="orange small">License Management</h3>
+                            <ul class="tiny">
+                                <li>get_license - Current license info</li>
+                                <li>get_license_usage - Shard/RAM utilization</li>
+                                <li>update_enterprise_license - Apply new keys</li>
+                                <li>validate_enterprise_license - Pre-validation</li>
+                            </ul>
+                            <h3 class="green small">Cluster Configuration</h3>
+                            <ul class="tiny">
+                                <li>update_enterprise_cluster - Settings</li>
+                                <li>get/update_cluster_policy - Defaults</li>
+                                <li>enable/disable_maintenance_mode</li>
+                            </ul>
+                        </div>
+                        <div class="column">
+                            <h3 class="cloud-blue small">Database Operations</h3>
+                            <ul class="tiny">
+                                <li>create/update/delete databases</li>
+                                <li>backup & import with async wait</li>
+                                <li>Stats, alerts, endpoints</li>
+                            </ul>
+                            <h3 class="redis-red small">Security</h3>
+                            <ul class="tiny">
+                                <li>get/rotate/update certificates</li>
+                                <li>Roles & Redis ACLs</li>
+                                <li>User management</li>
+                            </ul>
+                        </div>
+                    </div>
+                    <p class="small" style="margin-top: 0.5em">
+                        All write operations protected by <code>--read-only</code> flag (default: enabled)
+                    </p>
                 </section>
 
                 <!-- MCP: IDE Integration -->

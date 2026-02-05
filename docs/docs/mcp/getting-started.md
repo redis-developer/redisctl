@@ -83,7 +83,7 @@ redisctl mcp tools
 
 ### Database Connection Options
 
-The MCP server provides 125+ database tools for direct Redis operations including all data types, Redis Stack modules (Search, JSON, TimeSeries, Bloom), Streams, and Pub/Sub. You can connect in two ways:
+The MCP server provides database tools for direct Redis operations including core data types. You can connect in two ways:
 
 #### Option 1: Direct URL (Recommended for Ad-Hoc Connections)
 

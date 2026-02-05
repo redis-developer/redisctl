@@ -1,8 +1,11 @@
 # Tools Reference
 
-The redisctl MCP server exposes **237 tools** for managing Redis Cloud, Redis Enterprise, and direct database operations.
+The redisctl MCP server exposes **~100 tools** for managing Redis Cloud, Redis Enterprise, and direct database operations.
 
-Tools marked with *(write)* require `--allow-writes` flag. Database tools require a `--database-url` connection.
+Tools marked with *(write)* require `--read-only=false` flag. Database tools require a `--database-url` connection.
+
+!!! warning "Documentation Update in Progress"
+    The detailed tool listing below is being updated. For the most accurate list, run `redisctl mcp serve` and check the tools your AI assistant discovers, or inspect the source code.
 
 ## Redis Cloud Tools (29 tools)
 
@@ -163,13 +166,41 @@ Tools marked with *(write)* require `--allow-writes` flag. Database tools requir
 | `enterprise_ldap_mapping_create` | Create LDAP mapping *(write)* |
 | `enterprise_ldap_mapping_delete` | Delete LDAP mapping *(write)* |
 
-### License & Modules
+### License Management
 
 | Tool | Description |
 |------|-------------|
-| `enterprise_license_get` | Get license information |
-| `enterprise_modules_list` | List available modules |
-| `enterprise_module_get` | Get module details |
+| `get_license` | Get license information |
+| `get_license_usage` | Get license utilization stats |
+| `update_enterprise_license` | Update cluster license *(write)* |
+| `validate_enterprise_license` | Validate license before applying |
+
+### Cluster Configuration
+
+| Tool | Description |
+|------|-------------|
+| `get_cluster` | Get cluster information |
+| `get_cluster_stats` | Get cluster statistics |
+| `update_enterprise_cluster` | Update cluster settings *(write)* |
+| `get_enterprise_cluster_policy` | Get cluster policy settings |
+| `update_enterprise_cluster_policy` | Update cluster policy *(write)* |
+| `enable_enterprise_maintenance_mode` | Enable maintenance mode *(write)* |
+| `disable_enterprise_maintenance_mode` | Disable maintenance mode *(write)* |
+
+### Certificate Management
+
+| Tool | Description |
+|------|-------------|
+| `get_enterprise_cluster_certificates` | Get all certificates |
+| `rotate_enterprise_cluster_certificates` | Rotate certificates *(write)* |
+| `update_enterprise_cluster_certificates` | Update certificate *(write)* |
+
+### Modules
+
+| Tool | Description |
+|------|-------------|
+| `list_modules` | List available modules |
+| `get_module` | Get module details |
 
 ### Active-Active (CRDB)
 

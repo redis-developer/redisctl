@@ -11,11 +11,12 @@ The Model Context Protocol is an open standard that allows AI systems to securel
 With the MCP server, you can:
 
 - **Query infrastructure** - "List all my Redis databases" or "Show cluster health"
+- **Manage licenses** - "Check license expiration" or "Update the cluster license"
+- **Configure clusters** - "Enable maintenance mode" or "Update cluster policy"
 - **Create resources** - "Create a new 256MB database called cache-db"
-- **Monitor status** - "What's the license expiration date?" or "Any active alerts?"
+- **Monitor status** - "Any active alerts?" or "Show me cluster stats"
+- **Manage certificates** - "Show certificates" or "Rotate cluster certificates"
 - **Work with data directly** - "Add this user to my hash" or "Show me the top 10 leaderboard scores"
-- **Use Redis Stack modules** - Full-text search, JSON documents, time series, Bloom filters, Streams, and Pub/Sub
-- **Analyze data** - Combine with JMESPath for advanced querying and reporting
 
 ## Key Features
 
@@ -31,7 +32,7 @@ With the MCP server, you can:
 
     ---
 
-    237 tools covering Redis Cloud, Redis Enterprise, and direct database operations including Redis Stack modules.
+    ~100 tools covering Redis Cloud, Redis Enterprise, and direct database operations.
 
 -   :material-cog:{ .lg .middle } **IDE Integration**
 
