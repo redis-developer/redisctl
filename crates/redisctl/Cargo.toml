@@ -34,9 +34,9 @@ tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
-chrono = { version = "0.4", features = ["serde"] }
+chrono = { workspace = true }
 rpassword = { workspace = true }
-urlencoding = "2.1"
+urlencoding = { workspace = true }
 dialoguer = "0.11"
 colored = "2.1"
 tabled = { version = "0.17", features = ["ansi"] }
@@ -55,10 +55,10 @@ jmespath_extensions = { version = "0.8", features = ["full"] }
 config = { workspace = true }
 
 # Keyring for Files.com API key storage (separate from profile credentials)
-keyring = { version = "3.6", optional = true, features = ["apple-native", "windows-native", "linux-native"] }
+keyring = { workspace = true, optional = true }
 
 # Tower and resilience patterns
-tower = { version = "0.5", features = ["util", "timeout", "buffer", "ready-cache"] }
+tower = { workspace = true }
 tower-resilience = { version = "0.1", features = ["circuitbreaker", "retry", "ratelimiter"] }
 regex = "1.12.2"
 zip = "6.0.0"
@@ -81,9 +81,9 @@ secure-storage = ["redisctl-core/secure-storage", "dep:keyring"]
 [dev-dependencies]
 assert_cmd = "2.0"
 predicates = "3.0"
-tempfile = "3.8"
+tempfile = { workspace = true }
 criterion = "0.5"
-serial_test = "3.1"
+serial_test = { workspace = true }
 wiremock = { workspace = true }
 tokio = { workspace = true }
 serde_json = { workspace = true }
