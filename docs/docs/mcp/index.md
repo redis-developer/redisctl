@@ -69,6 +69,10 @@ Once configured, interact naturally with your Redis infrastructure:
 
 ## Getting Started
 
-Ready to set up MCP? Head to the [Getting Started](getting-started.md) guide.
+Ready to set up MCP? Choose your path:
+
+- **[Getting Started](getting-started.md)** - Full installation and configuration guide
+- **[Cloud Quickstart](cloud-quickstart.md)** - Redis Cloud users: get running in 5 minutes
+- **[Enterprise Quickstart](enterprise-quickstart.md)** - Redis Enterprise users: includes multi-cluster setup
 
 Want to see what's possible? Check out [Advanced Usage](advanced-usage.md) for JMESPath integration and complex analytics pipelines.

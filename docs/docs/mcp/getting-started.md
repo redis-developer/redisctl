@@ -354,6 +354,13 @@ The MCP server uses:
 
 For MCP protocol details, see the [MCP Specification](https://spec.modelcontextprotocol.io/).
 
+## Quick Walkthroughs
+
+Want a faster path to try things out? Check out our quickstart guides:
+
+- **[Cloud Quickstart](cloud-quickstart.md)** - Redis Cloud setup with example prompts
+- **[Enterprise Quickstart](enterprise-quickstart.md)** - Redis Enterprise setup with multi-cluster examples
+
 ## Next Steps
 
 - [Tools Reference](tools-reference.md) - Complete list of available tools
