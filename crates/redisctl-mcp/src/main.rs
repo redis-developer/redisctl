@@ -184,6 +184,14 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 - list_tasks: List async operations
 - get_task: Get task status
 
+### Redis Cloud - Write Operations (require --read-only=false)
+- create_database: Create a new database and wait for it to be ready
+- update_database: Update a database configuration
+- delete_database: Delete a database
+- backup_database: Trigger a manual backup
+- import_database: Import data into a database
+- delete_subscription: Delete a subscription (all databases must be deleted first)
+
 ### Redis Enterprise - Cluster
 - get_cluster: Get cluster information
 - get_cluster_stats: Get cluster statistics
@@ -229,6 +237,10 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 ### Redis Enterprise - Modules
 - list_modules: List installed Redis modules (RedisJSON, RediSearch, etc.)
 - get_module: Get details about a specific module
+
+### Redis Enterprise - Write Operations (require --read-only=false)
+- backup_enterprise_database: Trigger a database backup and wait for completion
+- import_enterprise_database: Import data into a database and wait for completion
 
 ### Redis Database - Connection
 - redis_ping: Test connectivity
@@ -313,6 +325,13 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Cloud - Tasks
         .tool(tools::cloud::list_tasks(state.clone()))
         .tool(tools::cloud::get_task(state.clone()))
+        // Cloud - Write Operations (require --read-only=false)
+        .tool(tools::cloud::create_database(state.clone()))
+        .tool(tools::cloud::update_database(state.clone()))
+        .tool(tools::cloud::delete_database(state.clone()))
+        .tool(tools::cloud::backup_database(state.clone()))
+        .tool(tools::cloud::import_database(state.clone()))
+        .tool(tools::cloud::delete_subscription(state.clone()))
         // Enterprise - Cluster
         .tool(tools::enterprise::get_cluster(state.clone()))
         .tool(tools::enterprise::get_cluster_stats(state.clone()))
@@ -348,6 +367,9 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - Modules
         .tool(tools::enterprise::list_modules(state.clone()))
         .tool(tools::enterprise::get_module(state.clone()))
+        // Enterprise - Write Operations (require --read-only=false)
+        .tool(tools::enterprise::backup_enterprise_database(state.clone()))
+        .tool(tools::enterprise::import_enterprise_database(state.clone()))
         // Redis - Connection
         .tool(tools::redis::ping(state.clone()))
         .tool(tools::redis::info(state.clone()))

@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::{generate, shells};
-use redisctl_config::Config;
+use redisctl_core::Config;
 use tracing::{debug, error, info, trace};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -829,7 +829,7 @@ async fn execute_files_key_command(
 async fn execute_api_command(
     cli: &Cli,
     conn_mgr: &ConnectionManager,
-    deployment: &redisctl_config::DeploymentType,
+    deployment: &redisctl_core::DeploymentType,
     method: &cli::HttpMethod,
     path: &str,
     data: Option<&str>,

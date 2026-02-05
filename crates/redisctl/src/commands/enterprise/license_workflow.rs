@@ -1,6 +1,6 @@
 use anyhow::Result as AnyhowResult;
 use clap::Subcommand;
-use redisctl_config::Config;
+use redisctl_core::Config;
 use serde_json::Value;
 
 use crate::cli::OutputFormat;
@@ -95,7 +95,7 @@ async fn handle_license_audit(
 
     // Get all enterprise profiles
     for (profile_name, profile) in config.profiles.iter() {
-        if profile.deployment_type != redisctl_config::DeploymentType::Enterprise {
+        if profile.deployment_type != redisctl_core::DeploymentType::Enterprise {
             continue;
         }
 
@@ -192,7 +192,7 @@ async fn handle_bulk_update(
         config
             .profiles
             .iter()
-            .filter(|(_, p)| p.deployment_type == redisctl_config::DeploymentType::Enterprise)
+            .filter(|(_, p)| p.deployment_type == redisctl_core::DeploymentType::Enterprise)
             .map(|(name, _)| name.clone())
             .collect()
     } else {
@@ -269,7 +269,7 @@ async fn handle_license_report(
     let mut report_data = Vec::new();
 
     for (profile_name, profile) in config.profiles.iter() {
-        if profile.deployment_type != redisctl_config::DeploymentType::Enterprise {
+        if profile.deployment_type != redisctl_core::DeploymentType::Enterprise {
             continue;
         }
 
@@ -387,7 +387,7 @@ async fn handle_license_monitor(
     let mut errors = Vec::new();
 
     for (profile_name, profile) in config.profiles.iter() {
-        if profile.deployment_type != redisctl_config::DeploymentType::Enterprise {
+        if profile.deployment_type != redisctl_core::DeploymentType::Enterprise {
             continue;
         }
 
@@ -444,7 +444,7 @@ async fn handle_license_monitor(
 
     let response = serde_json::json!({
         "summary": {
-            "total_profiles_checked": config.profiles.iter().filter(|(_, p)| p.deployment_type == redisctl_config::DeploymentType::Enterprise).count(),
+            "total_profiles_checked": config.profiles.iter().filter(|(_, p)| p.deployment_type == redisctl_core::DeploymentType::Enterprise).count(),
             "warnings_count": warnings.len(),
             "errors_count": errors.len(),
             "status": if !errors.is_empty() {

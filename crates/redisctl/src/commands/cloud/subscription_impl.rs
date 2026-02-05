@@ -7,7 +7,10 @@ use crate::connection::ConnectionManager;
 use crate::error::{RedisCtlError, Result as CliResult};
 use crate::output::print_output;
 use anyhow::Context;
-use serde_json::Value;
+use redisctl_core::cloud::delete_subscription_and_wait;
+use redisctl_core::progress::ProgressEvent;
+use serde_json::{Value, json};
+use std::time::Duration;
 use tabled::{Table, Tabled, settings::Style};
 
 /// Helper to print non-table output
@@ -234,6 +237,73 @@ pub async fn delete_subscription(
         }
     }
 
+    // Use Layer 2 workflow when --wait is specified
+    if async_ops.wait {
+        delete_subscription_with_workflow(conn_mgr, profile_name, id, async_ops, output_format)
+            .await
+    } else {
+        delete_subscription_legacy(conn_mgr, profile_name, id, async_ops, output_format, query)
+            .await
+    }
+}
+
+/// Delete subscription using Layer 2 workflow (with --wait)
+async fn delete_subscription_with_workflow(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    id: u32,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+) -> CliResult<()> {
+    let client = conn_mgr.create_cloud_client(profile_name).await?;
+
+    // Build progress callback for spinner updates
+    let progress_callback: Option<Box<dyn Fn(ProgressEvent) + Send + Sync>> =
+        Some(Box::new(|event| {
+            if let ProgressEvent::Polling {
+                status, elapsed, ..
+            } = event
+            {
+                eprintln!("Status: {} ({:.0}s elapsed)", status, elapsed.as_secs());
+            }
+        }));
+
+    // Use Layer 2 workflow
+    delete_subscription_and_wait(
+        &client,
+        id as i32,
+        Duration::from_secs(async_ops.wait_timeout),
+        progress_callback,
+    )
+    .await
+    .context("Failed to delete subscription")?;
+
+    // Output result
+    match output_format {
+        OutputFormat::Auto | OutputFormat::Table => {
+            println!("Subscription {} deleted successfully", id);
+        }
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let result = json!({
+                "subscription_id": id,
+                "status": "deleted"
+            });
+            print_json_or_yaml(result, output_format)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Delete subscription using legacy approach (without --wait)
+async fn delete_subscription_legacy(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    id: u32,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
     let client = conn_mgr.create_cloud_client(profile_name).await?;
 
     let response = client

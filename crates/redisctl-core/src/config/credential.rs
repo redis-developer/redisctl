@@ -6,7 +6,7 @@
 //! - Plaintext storage (fallback)
 //! - Environment variable override
 
-use crate::error::{ConfigError, Result};
+use super::error::{ConfigError, Result};
 use std::env;
 
 /// Prefix that indicates a value should be retrieved from the keyring

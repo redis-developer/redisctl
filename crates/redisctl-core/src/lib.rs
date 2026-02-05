@@ -1,71 +1,88 @@
-//! # redisctl-core - SPIKE/EXPERIMENTAL
+//! # redisctl-core
 //!
-//! This crate explores different patterns for a shared "engine" layer that both
-//! CLI and MCP can consume. The goal is to find the right abstraction level that:
+//! Layer 2: Higher-level interface on top of redis-cloud and redis-enterprise clients.
 //!
-//! 1. Reduces duplication between CLI and MCP
-//! 2. Provides a clean, testable core
-//! 3. Doesn't over-abstract what the client libraries already provide
+//! This crate provides:
+//! - **Unified error handling** - CoreError wrapping both platform errors
+//! - **Progress callbacks** - For Cloud's async task polling
+//! - **Module resolution** - Validate Enterprise modules before creation
+//! - **Workflows** - Multi-step operations (create + wait, etc.)
 //!
-//! ## The Problem
+//! ## Philosophy
 //!
-//! Currently both CLI and MCP:
-//! - Call redis-cloud/redis-enterprise clients directly
-//! - Duplicate async task polling logic
-//! - Duplicate input validation
-//! - Handle progress/status differently (CLI: spinners, MCP: nothing)
+//! **Don't rebuild Layer 1. Use it and add value.**
 //!
-//! ## What Would Live Here
+//! - Simple operations: Use Layer 1 directly (`redis_cloud::DatabaseHandler`, etc.)
+//! - Operations with progress: Use Layer 2 workflows
+//! - Operations with validation: Use Layer 2 helpers
 //!
-//! - **Config** - could absorb redisctl-config
-//! - **Operations** - higher-level ops like "create and wait"
-//! - **Workflows** - multi-step operations (subscription setup, cluster init)
-//! - **Shared types** - common result types, error types
-//! - **Tracing/metrics** - unified observability
-//!
-//! ## Patterns Explored
-//!
-//! ### [Approach A](approach_a): Direct Struct Wrapper
-//! Simple structs that wrap clients and provide higher-level operations.
-//! - Pros: Simple, familiar, low ceremony
-//! - Cons: Doesn't solve progress callback cleanly
-//!
-//! ### [Approach B](approach_b): Operation-Centric
-//! Each operation is a struct you configure and execute.
-//! - Pros: Very flexible, optional callbacks, self-documenting
-//! - Cons: More boilerplate
-//!
-//! ### [Approach C](approach_c): Trait-Based with Hooks
-//! Core engine is generic over a "hooks" trait for presentation concerns.
-//! - Pros: Clean separation, type-safe, composable
-//! - Cons: Complex type signatures, maybe overengineered
-//!
-//! ## Recommendation
-//!
-//! Start with **Approach A** for simplicity, with elements of **B** for operations
-//! that need progress callbacks. We can evolve toward **C** if we find ourselves
-//! duplicating hook patterns across many operations.
-//!
-//! ## Crate Structure (Proposed)
+//! # Architecture
 //!
 //! ```text
-//! redisctl-core/
-//! ├── src/
-//! │   ├── lib.rs
-//! │   ├── config.rs       # absorb redisctl-config
-//! │   ├── cloud/
-//! │   │   ├── mod.rs
-//! │   │   ├── engine.rs   # CloudEngine
-//! │   │   ├── types.rs    # DatabaseInfo, SubscriptionInfo, etc.
-//! │   │   └── operations/ # complex ops if using Approach B
-//! │   ├── enterprise/
-//! │   │   ├── mod.rs
-//! │   │   ├── engine.rs   # EnterpriseEngine
-//! │   │   └── types.rs
-//! │   ├── error.rs        # unified error types
-//! │   └── tracing.rs      # shared tracing setup
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │                    Layer 3: Consumers                           │
+//! │           CLI (redisctl)        MCP (redisctl-mcp)             │
+//! └──────────────────────────┬──────────────────────────────────────┘
+//!                            │
+//!                            ▼
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │                 Layer 2: redisctl-core                          │
+//! │  - Unified errors (CoreError)                                   │
+//! │  - Progress callbacks (poll_task)                               │
+//! │  - Module resolution (resolve_modules)                          │
+//! │  - Workflows (create_and_wait, etc.)                            │
+//! └──────────────────────────┬──────────────────────────────────────┘
+//!                            │
+//!                            ▼
+//! ┌─────────────────────────────────────────────────────────────────┐
+//! │               Layer 1: Raw API Clients                          │
+//! │         redis-cloud              redis-enterprise               │
+//! └─────────────────────────────────────────────────────────────────┘
+//! ```
+//!
+//! # Example Usage
+//!
+//! ```rust,ignore
+//! use redis_cloud::{CloudClient, DatabaseHandler};
+//! use redisctl_core::{poll_task, ProgressEvent};
+//! use std::time::Duration;
+//!
+//! // Simple operation: use Layer 1 directly
+//! let handler = DatabaseHandler::new(client.clone());
+//! let databases = handler.list(subscription_id).await?;
+//!
+//! // Operation with progress: use Layer 2
+//! let task = handler.create(subscription_id, &request).await?;
+//! let completed = poll_task(
+//!     &client,
+//!     &task.task_id.unwrap(),
+//!     Duration::from_secs(600),
+//!     Duration::from_secs(10),
+//!     Some(Box::new(|event| {
+//!         if let ProgressEvent::Polling { status, elapsed, .. } = event {
+//!             println!("Status: {} ({:.0}s)", status, elapsed.as_secs());
+//!         }
+//!     })),
+//! ).await?;
 //! ```
 
-pub mod approach_a;
-pub mod approach_b;
-pub mod approach_c;
+pub mod config;
+pub mod error;
+pub mod progress;
+
+pub mod cloud;
+pub mod enterprise;
+
+// Re-export commonly used items
+pub use error::{CoreError, Result};
+pub use progress::{ProgressCallback, ProgressEvent, poll_task};
+
+// Re-export config types for convenience
+pub use config::{
+    Config, ConfigError, CredentialStorage, CredentialStore, DeploymentType, Profile,
+    ProfileCredentials, ResilienceConfig,
+};
+
+// Re-export Layer 1 for convenience (but consumers can also import directly)
+pub use redis_cloud;
+pub use redis_enterprise;

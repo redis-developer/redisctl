@@ -132,6 +132,7 @@ pub async fn handle_database_command(
             aws_secret_key,
             flush,
             data,
+            async_ops,
         } => {
             database_impl::import_database(
                 conn_mgr,
@@ -142,13 +143,22 @@ pub async fn handle_database_command(
                 aws_secret_key.as_deref(),
                 *flush,
                 data.as_deref(),
+                async_ops,
                 output_format,
                 query,
             )
             .await
         }
-        EnterpriseDatabaseCommands::Backup { id } => {
-            database_impl::backup_database(conn_mgr, profile_name, *id, output_format, query).await
+        EnterpriseDatabaseCommands::Backup { id, async_ops } => {
+            database_impl::backup_database(
+                conn_mgr,
+                profile_name,
+                *id,
+                async_ops,
+                output_format,
+                query,
+            )
+            .await
         }
         EnterpriseDatabaseCommands::Restore {
             id,

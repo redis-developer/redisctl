@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-use crate::credential::CredentialStore;
-use crate::error::{ConfigError, Result};
+use super::credential::CredentialStore;
+use super::error::{ConfigError, Result};
 
 /// Main configuration structure
 #[derive(Debug, Serialize, Deserialize, Default, Clone)]
@@ -49,7 +49,7 @@ pub struct Profile {
     pub files_api_key: Option<String>,
     /// Resilience configuration for this profile
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub resilience: Option<crate::ResilienceConfig>,
+    pub resilience: Option<super::ResilienceConfig>,
 }
 
 /// Supported deployment types

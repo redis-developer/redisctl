@@ -1,6 +1,7 @@
 //! Redis Enterprise API tools
 
 use std::sync::Arc;
+use std::time::Duration;
 
 use redis_enterprise::alerts::AlertHandler;
 use redis_enterprise::bdb::DatabaseHandler;
@@ -13,10 +14,11 @@ use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
 use redis_enterprise::users::UserHandler;
+use redisctl_core::enterprise::{backup_database_and_wait, import_database_and_wait};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -1113,6 +1115,127 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
                     .map_err(|e| ToolError::new(format!("Failed to get module: {}", e)))?;
 
                 CallToolResult::from_serialize(&module)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Database Write Operations
+// ============================================================================
+
+fn default_enterprise_timeout() -> u64 {
+    600
+}
+
+/// Input for backing up an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BackupDatabaseInput {
+    /// Database UID to backup
+    pub bdb_uid: u32,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_enterprise_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the backup_enterprise_database tool
+pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("backup_enterprise_database")
+        .description(
+            "Trigger a backup of a Redis Enterprise database and wait for completion. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<BackupDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                // Use Layer 2 workflow
+                backup_database_and_wait(
+                    &client,
+                    input.bdb_uid,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to backup database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Backup completed successfully",
+                    "bdb_uid": input.bdb_uid
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for importing data into an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ImportDatabaseInput {
+    /// Database UID to import into
+    pub bdb_uid: u32,
+    /// Import location (file path or URL)
+    pub import_location: String,
+    /// Whether to flush the database before import (default: false)
+    #[serde(default)]
+    pub flush: bool,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_enterprise_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the import_enterprise_database tool
+pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("import_enterprise_database")
+        .description(
+            "Import data into a Redis Enterprise database from an external source and wait for completion. \
+             WARNING: If flush is true, existing data will be deleted before import. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ImportDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                // Use Layer 2 workflow
+                import_database_and_wait(
+                    &client,
+                    input.bdb_uid,
+                    &input.import_location,
+                    input.flush,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to import database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Import completed successfully",
+                    "bdb_uid": input.bdb_uid,
+                    "import_location": input.import_location
+                }))
             },
         )
         .build()

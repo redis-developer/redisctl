@@ -1,7 +1,7 @@
 use crate::error::RedisCtlError;
 use anyhow::Result as AnyhowResult;
 use clap::Subcommand;
-use redisctl_config::Config;
+use redisctl_core::Config;
 use serde_json::Value;
 
 use crate::cli::OutputFormat;

@@ -2,7 +2,7 @@
 //!
 //! Resources expose read-only data that can be fetched by URI.
 
-use redisctl_config::Config;
+use redisctl_core::Config;
 use tower_mcp::protocol::{ReadResourceResult, ResourceContent};
 use tower_mcp::resource::{Resource, ResourceBuilder};
 

@@ -7,7 +7,7 @@ use crate::connection::ConnectionManager;
 use crate::error::RedisCtlError;
 use crate::output;
 use anyhow::Context;
-use redisctl_config::{self, Config};
+use redisctl_core::Config;
 use tracing::{debug, info, trace};
 
 /// Handle profile management commands
@@ -104,12 +104,12 @@ async fn handle_list(
                     });
 
                     match profile.deployment_type {
-                        redisctl_config::DeploymentType::Cloud => {
+                        redisctl_core::DeploymentType::Cloud => {
                             if let Some((_, _, url)) = profile.cloud_credentials() {
                                 obj["api_url"] = serde_json::json!(url);
                             }
                         }
-                        redisctl_config::DeploymentType::Enterprise => {
+                        redisctl_core::DeploymentType::Enterprise => {
                             if let Some((url, username, _, insecure, ca_cert)) =
                                 profile.enterprise_credentials()
                             {
@@ -121,7 +121,7 @@ async fn handle_list(
                                 }
                             }
                         }
-                        redisctl_config::DeploymentType::Database => {
+                        redisctl_core::DeploymentType::Database => {
                             if let Some((host, port, _, tls, username, database)) =
                                 profile.database_credentials()
                             {
@@ -175,12 +175,12 @@ async fn handle_list(
             for (name, profile) in profiles {
                 let mut details = String::new();
                 match profile.deployment_type {
-                    redisctl_config::DeploymentType::Cloud => {
+                    redisctl_core::DeploymentType::Cloud => {
                         if let Some((_, _, url)) = profile.cloud_credentials() {
                             details = format!("URL: {}", url);
                         }
                     }
-                    redisctl_config::DeploymentType::Enterprise => {
+                    redisctl_core::DeploymentType::Enterprise => {
                         if let Some((url, username, _, insecure, _ca_cert)) =
                             profile.enterprise_credentials()
                         {
@@ -192,7 +192,7 @@ async fn handle_list(
                             );
                         }
                     }
-                    redisctl_config::DeploymentType::Database => {
+                    redisctl_core::DeploymentType::Database => {
                         if let Some((host, port, _, tls, _, _)) = profile.database_credentials() {
                             details = format!(
                                 "{}:{} {}",
@@ -270,7 +270,7 @@ async fn handle_show(
                     });
 
                     match profile.deployment_type {
-                        redisctl_config::DeploymentType::Cloud => {
+                        redisctl_core::DeploymentType::Cloud => {
                             if let Some((api_key, _, api_url)) = profile.cloud_credentials() {
                                 output_data["api_key_preview"] = serde_json::json!(format!(
                                     "{}...",
@@ -279,7 +279,7 @@ async fn handle_show(
                                 output_data["api_url"] = serde_json::json!(api_url);
                             }
                         }
-                        redisctl_config::DeploymentType::Enterprise => {
+                        redisctl_core::DeploymentType::Enterprise => {
                             if let Some((url, username, has_password, insecure, ca_cert)) =
                                 profile.enterprise_credentials()
                             {
@@ -293,7 +293,7 @@ async fn handle_show(
                                 }
                             }
                         }
-                        redisctl_config::DeploymentType::Database => {
+                        redisctl_core::DeploymentType::Database => {
                             if let Some((host, port, has_password, tls, username, database)) =
                                 profile.database_credentials()
                             {
@@ -321,7 +321,7 @@ async fn handle_show(
                     println!("Type: {}", profile.deployment_type);
 
                     match profile.deployment_type {
-                        redisctl_config::DeploymentType::Cloud => {
+                        redisctl_core::DeploymentType::Cloud => {
                             if let Some((api_key, _, api_url)) = profile.cloud_credentials() {
                                 println!(
                                     "API Key: {}...",
@@ -330,7 +330,7 @@ async fn handle_show(
                                 println!("API URL: {}", api_url);
                             }
                         }
-                        redisctl_config::DeploymentType::Enterprise => {
+                        redisctl_core::DeploymentType::Enterprise => {
                             if let Some((url, username, has_password, insecure, ca_cert)) =
                                 profile.enterprise_credentials()
                             {
@@ -350,7 +350,7 @@ async fn handle_show(
                                 }
                             }
                         }
-                        redisctl_config::DeploymentType::Database => {
+                        redisctl_core::DeploymentType::Database => {
                             if let Some((host, port, has_password, tls, username, database)) =
                                 profile.database_credentials()
                             {
@@ -393,7 +393,7 @@ async fn handle_show(
 async fn handle_set(
     conn_mgr: &ConnectionManager,
     name: &str,
-    deployment: &redisctl_config::DeploymentType,
+    deployment: &redisctl_core::DeploymentType,
     api_key: &Option<String>,
     api_secret: &Option<String>,
     api_url: &str,
@@ -430,7 +430,7 @@ async fn handle_set(
 
     // Create the profile based on deployment type
     let profile = match deployment {
-        redisctl_config::DeploymentType::Cloud => {
+        redisctl_core::DeploymentType::Cloud => {
             let api_key = api_key
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("API key is required for Cloud profiles"))?;
@@ -441,7 +441,7 @@ async fn handle_set(
             // Handle keyring storage if requested
             #[cfg(feature = "secure-storage")]
             let (stored_key, stored_secret) = if *use_keyring {
-                use redisctl_config::CredentialStore;
+                use redisctl_core::CredentialStore;
                 let store = CredentialStore::new();
 
                 // Store credentials in keyring and get references
@@ -461,9 +461,9 @@ async fn handle_set(
             #[cfg(not(feature = "secure-storage"))]
             let (stored_key, stored_secret) = (api_key.clone(), api_secret.clone());
 
-            redisctl_config::Profile {
-                deployment_type: redisctl_config::DeploymentType::Cloud,
-                credentials: redisctl_config::ProfileCredentials::Cloud {
+            redisctl_core::Profile {
+                deployment_type: redisctl_core::DeploymentType::Cloud,
+                credentials: redisctl_core::ProfileCredentials::Cloud {
                     api_key: stored_key,
                     api_secret: stored_secret,
                     api_url: api_url.to_string(),
@@ -472,7 +472,7 @@ async fn handle_set(
                 resilience: None,
             }
         }
-        redisctl_config::DeploymentType::Enterprise => {
+        redisctl_core::DeploymentType::Enterprise => {
             let url = url
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("URL is required for Enterprise profiles"))?;
@@ -493,7 +493,7 @@ async fn handle_set(
             // Handle keyring storage if requested
             #[cfg(feature = "secure-storage")]
             let (stored_username, stored_password) = if *use_keyring {
-                use redisctl_config::CredentialStore;
+                use redisctl_core::CredentialStore;
                 let store = CredentialStore::new();
 
                 // Store credentials in keyring and get references
@@ -520,9 +520,9 @@ async fn handle_set(
             #[cfg(not(feature = "secure-storage"))]
             let (stored_username, stored_password) = (username.clone(), password.clone());
 
-            redisctl_config::Profile {
-                deployment_type: redisctl_config::DeploymentType::Enterprise,
-                credentials: redisctl_config::ProfileCredentials::Enterprise {
+            redisctl_core::Profile {
+                deployment_type: redisctl_core::DeploymentType::Enterprise,
+                credentials: redisctl_core::ProfileCredentials::Enterprise {
                     url: url.clone(),
                     username: stored_username,
                     password: stored_password,
@@ -533,7 +533,7 @@ async fn handle_set(
                 resilience: None,
             }
         }
-        redisctl_config::DeploymentType::Database => {
+        redisctl_core::DeploymentType::Database => {
             let host = host
                 .clone()
                 .ok_or_else(|| anyhow::anyhow!("Host is required for Database profiles"))?;
@@ -559,7 +559,7 @@ async fn handle_set(
             #[cfg(feature = "secure-storage")]
             let stored_password = if *use_keyring {
                 if let Some(ref p) = password {
-                    use redisctl_config::CredentialStore;
+                    use redisctl_core::CredentialStore;
                     let store = CredentialStore::new();
                     let pass_ref = store
                         .store_credential(&format!("{}-password", name), p)
@@ -576,9 +576,9 @@ async fn handle_set(
             #[cfg(not(feature = "secure-storage"))]
             let stored_password = password.clone();
 
-            redisctl_config::Profile {
-                deployment_type: redisctl_config::DeploymentType::Database,
-                credentials: redisctl_config::ProfileCredentials::Database {
+            redisctl_core::Profile {
+                deployment_type: redisctl_core::DeploymentType::Database,
+                credentials: redisctl_core::ProfileCredentials::Database {
                     host,
                     port,
                     password: stored_password,
@@ -618,15 +618,15 @@ async fn handle_set(
     if profiles_of_type.len() == 1 {
         println!();
         match deployment {
-            redisctl_config::DeploymentType::Enterprise => {
+            redisctl_core::DeploymentType::Enterprise => {
                 println!("Tip: Set as default for enterprise commands with:");
                 println!("  redisctl profile default-enterprise {}", name);
             }
-            redisctl_config::DeploymentType::Cloud => {
+            redisctl_core::DeploymentType::Cloud => {
                 println!("Tip: Set as default for cloud commands with:");
                 println!("  redisctl profile default-cloud {}", name);
             }
-            redisctl_config::DeploymentType::Database => {
+            redisctl_core::DeploymentType::Database => {
                 println!("Tip: Set as default for database commands with:");
                 println!("  redisctl profile default-database {}", name);
             }
@@ -713,7 +713,7 @@ async fn handle_default_enterprise(
     // Check if profile exists and is an enterprise profile
     match conn_mgr.config.profiles.get(name) {
         Some(profile) => {
-            if profile.deployment_type != redisctl_config::DeploymentType::Enterprise {
+            if profile.deployment_type != redisctl_core::DeploymentType::Enterprise {
                 return Err(anyhow::anyhow!(
                     "Profile '{}' is a cloud profile, not an enterprise profile",
                     name
@@ -750,7 +750,7 @@ async fn handle_default_cloud(
     // Check if profile exists and is a cloud profile
     match conn_mgr.config.profiles.get(name) {
         Some(profile) => {
-            if profile.deployment_type != redisctl_config::DeploymentType::Cloud {
+            if profile.deployment_type != redisctl_core::DeploymentType::Cloud {
                 return Err(anyhow::anyhow!(
                     "Profile '{}' is an enterprise profile, not a cloud profile",
                     name
@@ -787,7 +787,7 @@ async fn handle_default_database(
     // Check if profile exists and is a database profile
     match conn_mgr.config.profiles.get(name) {
         Some(profile) => {
-            if profile.deployment_type != redisctl_config::DeploymentType::Database {
+            if profile.deployment_type != redisctl_core::DeploymentType::Database {
                 return Err(anyhow::anyhow!("Profile '{}' is not a database profile", name).into());
             }
         }
@@ -852,7 +852,7 @@ async fn handle_validate(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlErr
         print!("Profile '{}' ({}): ", name, profile.deployment_type);
 
         match profile.deployment_type {
-            redisctl_config::DeploymentType::Cloud => match profile.cloud_credentials() {
+            redisctl_core::DeploymentType::Cloud => match profile.cloud_credentials() {
                 Some((api_key, api_secret, api_url)) => {
                     if api_key.is_empty() || api_secret.is_empty() {
                         println!("✗ Missing credentials");
@@ -872,7 +872,7 @@ async fn handle_validate(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlErr
                     has_errors = true;
                 }
             },
-            redisctl_config::DeploymentType::Enterprise => match profile.enterprise_credentials() {
+            redisctl_core::DeploymentType::Enterprise => match profile.enterprise_credentials() {
                 Some((url, username, password, _insecure, _ca_cert)) => {
                     if username.is_empty() {
                         println!("✗ Missing username");
@@ -897,7 +897,7 @@ async fn handle_validate(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlErr
                     has_errors = true;
                 }
             },
-            redisctl_config::DeploymentType::Database => match profile.database_credentials() {
+            redisctl_core::DeploymentType::Database => match profile.database_credentials() {
                 Some((host, port, password, _tls, _username, _database)) => {
                     if host.is_empty() {
                         println!("✗ Missing host");

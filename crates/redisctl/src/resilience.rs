@@ -5,7 +5,7 @@
 //!
 //! TODO: Complete implementation after tower-resilience API stabilizes
 
-use redisctl_config::resilience::ResilienceConfig;
+use redisctl_core::config::resilience::ResilienceConfig;
 
 /// Wrap a Redis Cloud client with resilience patterns
 ///

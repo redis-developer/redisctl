@@ -212,8 +212,29 @@ impl From<anyhow::Error> for RedisCtlError {
     }
 }
 
-impl From<redisctl_config::ConfigError> for RedisCtlError {
-    fn from(err: redisctl_config::ConfigError) -> Self {
+impl From<redisctl_core::ConfigError> for RedisCtlError {
+    fn from(err: redisctl_core::ConfigError) -> Self {
         RedisCtlError::Configuration(err.to_string())
+    }
+}
+
+impl From<redisctl_core::error::CoreError> for RedisCtlError {
+    fn from(err: redisctl_core::error::CoreError) -> Self {
+        match err {
+            redisctl_core::error::CoreError::TaskTimeout(duration) => RedisCtlError::Timeout {
+                message: format!("Operation timed out after {} seconds", duration.as_secs()),
+            },
+            redisctl_core::error::CoreError::TaskFailed(msg) => RedisCtlError::ApiError {
+                message: format!("Task failed: {}", msg),
+            },
+            redisctl_core::error::CoreError::Validation(msg) => {
+                RedisCtlError::InvalidInput { message: msg }
+            }
+            redisctl_core::error::CoreError::Config(msg) => RedisCtlError::Configuration(msg),
+            redisctl_core::error::CoreError::Cloud(cloud_err) => RedisCtlError::from(cloud_err),
+            redisctl_core::error::CoreError::Enterprise(enterprise_err) => {
+                RedisCtlError::from(enterprise_err)
+            }
+        }
     }
 }

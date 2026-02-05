@@ -5,7 +5,7 @@
 use crate::cli::{DbCommands, OutputFormat};
 use crate::connection::ConnectionManager;
 use crate::error::RedisCtlError;
-use redisctl_config::DeploymentType;
+use redisctl_core::DeploymentType;
 use std::process::Command;
 use tracing::debug;
 

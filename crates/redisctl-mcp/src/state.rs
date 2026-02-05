@@ -3,7 +3,7 @@
 use anyhow::{Context, Result};
 use redis_cloud::CloudClient;
 use redis_enterprise::EnterpriseClient;
-use redisctl_config::Config;
+use redisctl_core::Config;
 use tokio::sync::RwLock;
 
 /// How credentials are resolved

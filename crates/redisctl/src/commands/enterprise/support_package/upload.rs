@@ -7,7 +7,7 @@ use anyhow::{Context, Result};
 #[cfg(feature = "upload")]
 use files_sdk::{FileHandler, FilesClient};
 #[cfg(feature = "upload")]
-use redisctl_config::Config;
+use redisctl_core::Config;
 
 /// Upload a support package to Files.com
 ///

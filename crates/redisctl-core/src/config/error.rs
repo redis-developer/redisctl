@@ -1,4 +1,4 @@
-//! Error types for redisctl-config
+//! Error types for configuration operations
 
 use thiserror::Error;
 
