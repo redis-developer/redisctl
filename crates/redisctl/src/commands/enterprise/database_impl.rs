@@ -2,10 +2,15 @@
 
 #![allow(dead_code)]
 
+use std::time::Duration;
+
+use indicatif::{ProgressBar, ProgressStyle};
+use serde_json::Value;
+
 use crate::cli::OutputFormat;
+use crate::commands::cloud::async_utils::AsyncOperationArgs;
 use crate::connection::ConnectionManager;
 use crate::error::{RedisCtlError, Result as CliResult};
-use serde_json::Value;
 
 use super::utils::*;
 
@@ -539,52 +544,168 @@ pub async fn import_database(
     aws_secret_key: Option<&str>,
     flush: bool,
     data: Option<&str>,
+    async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
     let client = conn_mgr.create_enterprise_client(profile_name).await?;
 
-    // Start with JSON from --data if provided, otherwise empty object
-    let mut request = if let Some(data_str) = data {
-        read_json_data(data_str)?
+    // Determine the import location - from --location or --data
+    let import_location = if let Some(loc) = location {
+        loc.to_string()
+    } else if let Some(data_str) = data {
+        let json = read_json_data(data_str)?;
+        json.get("import_location")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string())
+            .ok_or_else(|| RedisCtlError::InvalidInput {
+                message: "--location is required (unless using --data with import_location)"
+                    .to_string(),
+            })?
     } else {
-        serde_json::json!({})
-    };
-
-    let request_obj = request.as_object_mut().unwrap();
-
-    // CLI parameters override JSON values
-    if let Some(loc) = location {
-        request_obj.insert("import_location".to_string(), serde_json::json!(loc));
-    }
-    if let Some(key) = aws_access_key {
-        request_obj.insert("aws_access_key_id".to_string(), serde_json::json!(key));
-    }
-    if let Some(secret) = aws_secret_key {
-        request_obj.insert(
-            "aws_secret_access_key".to_string(),
-            serde_json::json!(secret),
-        );
-    }
-    if flush {
-        request_obj.insert("flush".to_string(), serde_json::json!(true));
-    }
-
-    // Validate required fields
-    if !request_obj.contains_key("import_location") {
         return Err(RedisCtlError::InvalidInput {
             message: "--location is required (unless using --data with import_location)"
                 .to_string(),
         });
+    };
+
+    // Note: AWS credentials via --data are not currently supported by Layer 2 workflow
+    // If AWS credentials are provided, we need to warn or use legacy path
+    if aws_access_key.is_some() || aws_secret_key.is_some() {
+        // Use legacy path with full JSON support for AWS credentials
+        let mut request = if let Some(data_str) = data {
+            read_json_data(data_str)?
+        } else {
+            serde_json::json!({})
+        };
+
+        let request_obj = request.as_object_mut().unwrap();
+        request_obj.insert(
+            "import_location".to_string(),
+            serde_json::json!(import_location),
+        );
+        if let Some(key) = aws_access_key {
+            request_obj.insert("aws_access_key_id".to_string(), serde_json::json!(key));
+        }
+        if let Some(secret) = aws_secret_key {
+            request_obj.insert(
+                "aws_secret_access_key".to_string(),
+                serde_json::json!(secret),
+            );
+        }
+        if flush {
+            request_obj.insert("flush".to_string(), serde_json::json!(true));
+        }
+
+        let response = client
+            .post_raw(&format!("/v1/bdbs/{}/import", id), request)
+            .await
+            .map_err(RedisCtlError::from)?;
+
+        let data = handle_output(response, output_format, query)?;
+        print_formatted_output(data, output_format)?;
+
+        if async_ops.wait {
+            eprintln!(
+                "Note: --wait with AWS credentials requires manual polling. Check action status."
+            );
+        }
+        return Ok(());
     }
 
-    let response = client
-        .post_raw(&format!("/v1/bdbs/{}/import", id), request)
+    if async_ops.wait {
+        // Use Layer 2 workflow with progress reporting
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg} [{elapsed_precise}]")
+                .unwrap(),
+        );
+        pb.set_message(format!("Importing data to database {}", id));
+
+        let timeout = Duration::from_secs(async_ops.wait_timeout);
+        let progress_callback = {
+            let pb = pb.clone();
+            Some(Box::new(
+                move |event: redisctl_core::enterprise::EnterpriseProgressEvent| match &event {
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Started { action_uid } => {
+                        pb.set_message(format!("Import started: {}", action_uid));
+                    }
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Polling {
+                        status,
+                        progress,
+                        ..
+                    } => {
+                        if let Some(pct) = progress {
+                            pb.set_message(format!("Import {}: {}%", status, pct));
+                        } else {
+                            pb.set_message(format!("Import status: {}", status));
+                        }
+                    }
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Completed { .. } => {
+                        pb.finish_with_message("Import completed");
+                    }
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Failed {
+                        error, ..
+                    } => {
+                        pb.finish_with_message(format!("Import failed: {}", error));
+                    }
+                },
+            )
+                as redisctl_core::enterprise::EnterpriseProgressCallback)
+        };
+
+        redisctl_core::enterprise::import_database_and_wait(
+            &client,
+            id,
+            &import_location,
+            flush,
+            timeout,
+            progress_callback,
+        )
         .await
         .map_err(RedisCtlError::from)?;
 
-    let data = handle_output(response, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+        match output_format {
+            OutputFormat::Auto | OutputFormat::Table => {
+                println!("Database {} import completed successfully", id);
+            }
+            OutputFormat::Json | OutputFormat::Yaml => {
+                let result = serde_json::json!({
+                    "status": "completed",
+                    "database_id": id,
+                    "import_location": import_location,
+                    "message": "Import completed successfully"
+                });
+                print_formatted_output(result, output_format)?;
+            }
+        }
+    } else {
+        // Original behavior: trigger import and return immediately
+        let mut request = if let Some(data_str) = data {
+            read_json_data(data_str)?
+        } else {
+            serde_json::json!({})
+        };
+
+        let request_obj = request.as_object_mut().unwrap();
+        request_obj.insert(
+            "import_location".to_string(),
+            serde_json::json!(import_location),
+        );
+        if flush {
+            request_obj.insert("flush".to_string(), serde_json::json!(true));
+        }
+
+        let response = client
+            .post_raw(&format!("/v1/bdbs/{}/import", id), request)
+            .await
+            .map_err(RedisCtlError::from)?;
+
+        let data = handle_output(response, output_format, query)?;
+        print_formatted_output(data, output_format)?;
+    }
+
     Ok(())
 }
 
@@ -593,17 +714,95 @@ pub async fn backup_database(
     conn_mgr: &ConnectionManager,
     profile_name: Option<&str>,
     id: u32,
+    async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
     let client = conn_mgr.create_enterprise_client(profile_name).await?;
-    let response = client
-        .post_raw(&format!("/v1/bdbs/{}/backup", id), Value::Null)
+
+    if async_ops.wait {
+        // Use Layer 2 workflow with progress reporting
+        let pb = ProgressBar::new_spinner();
+        pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("{spinner:.green} {msg} [{elapsed_precise}]")
+                .unwrap(),
+        );
+        pb.set_message(format!("Backing up database {}", id));
+
+        let timeout = Duration::from_secs(async_ops.wait_timeout);
+        let progress_callback = {
+            let pb = pb.clone();
+            Some(Box::new(
+                move |event: redisctl_core::enterprise::EnterpriseProgressEvent| match &event {
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Started { action_uid } => {
+                        pb.set_message(format!("Backup started: {}", action_uid));
+                    }
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Polling {
+                        status,
+                        progress,
+                        ..
+                    } => {
+                        if let Some(pct) = progress {
+                            pb.set_message(format!("Backup {}: {}%", status, pct));
+                        } else {
+                            pb.set_message(format!("Backup status: {}", status));
+                        }
+                    }
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Completed { .. } => {
+                        pb.finish_with_message("Backup completed");
+                    }
+                    redisctl_core::enterprise::EnterpriseProgressEvent::Failed {
+                        error, ..
+                    } => {
+                        pb.finish_with_message(format!("Backup failed: {}", error));
+                    }
+                },
+            )
+                as redisctl_core::enterprise::EnterpriseProgressCallback)
+        };
+
+        redisctl_core::enterprise::backup_database_and_wait(
+            &client,
+            id,
+            timeout,
+            progress_callback,
+        )
         .await
         .map_err(RedisCtlError::from)?;
 
-    let data = handle_output(response, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+        match output_format {
+            OutputFormat::Auto | OutputFormat::Table => {
+                println!("Database {} backup completed successfully", id);
+            }
+            OutputFormat::Json => {
+                let result = serde_json::json!({
+                    "status": "completed",
+                    "database_id": id,
+                    "message": "Backup completed successfully"
+                });
+                print_formatted_output(result, output_format)?;
+            }
+            OutputFormat::Yaml => {
+                let result = serde_json::json!({
+                    "status": "completed",
+                    "database_id": id,
+                    "message": "Backup completed successfully"
+                });
+                print_formatted_output(result, output_format)?;
+            }
+        }
+    } else {
+        // Original behavior: trigger backup and return immediately
+        let response = client
+            .post_raw(&format!("/v1/bdbs/{}/backup", id), Value::Null)
+            .await
+            .map_err(RedisCtlError::from)?;
+
+        let data = handle_output(response, output_format, query)?;
+        print_formatted_output(data, output_format)?;
+    }
+
     Ok(())
 }
 

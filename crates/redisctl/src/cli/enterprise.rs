@@ -721,6 +721,9 @@ NOTE: First-class parameters override values in --data when both are provided.")
     # Import from HTTP/HTTPS
     redisctl enterprise database import 1 --location https://example.com/backup.rdb
 
+    # Import and wait for completion
+    redisctl enterprise database import 1 --location https://example.com/backup.rdb --wait
+
     # Using JSON for advanced configuration
     redisctl enterprise database import 1 --data @import.json")]
     Import {
@@ -746,12 +749,19 @@ NOTE: First-class parameters override values in --data when both are provided.")
         /// Import configuration as JSON string or @file.json (overridden by other flags)
         #[arg(long)]
         data: Option<String>,
+
+        /// Async operation options
+        #[command(flatten)]
+        async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
     },
 
     /// Trigger database backup
     Backup {
         /// Database ID
         id: u32,
+        /// Async operation options
+        #[command(flatten)]
+        async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
     },
 
     /// Restore database from backup

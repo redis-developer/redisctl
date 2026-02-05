@@ -7,7 +7,16 @@ use crate::connection::ConnectionManager;
 use crate::error::{RedisCtlError, Result as CliResult};
 use crate::output::print_output;
 use anyhow::Context;
+use indicatif::{ProgressBar, ProgressStyle};
+use redis_cloud::databases::DatabaseCreateRequest;
+use redisctl_core::ProgressEvent;
+use redisctl_core::cloud::{
+    backup_database_and_wait, create_database_and_wait, delete_database_and_wait,
+    import_database_and_wait, update_database_and_wait,
+};
 use serde_json::{Value, json};
+use std::sync::Arc;
+use std::time::Duration;
 use tabled::{Table, Tabled, settings::Style};
 
 /// Helper to print non-table output
@@ -65,8 +74,201 @@ fn read_json_data(data: &str) -> CliResult<Value> {
 }
 
 /// Create a new database with first-class parameters
+///
+/// Uses Layer 2 (redisctl-core) workflows when possible for progress tracking.
+/// Falls back to legacy raw API for advanced options not yet in Layer 2.
 #[allow(clippy::too_many_arguments)]
 pub async fn create_database(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    name: Option<&str>,
+    memory: Option<f64>,
+    dataset_size: Option<f64>,
+    protocol: &str,
+    replication: bool,
+    data_persistence: Option<&str>,
+    eviction_policy: &str,
+    redis_version: Option<&str>,
+    oss_cluster: bool,
+    port: Option<i32>,
+    data: Option<&str>,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
+    // Use Layer 2 workflow for simple cases with --wait
+    // Fall back to legacy for: --data, --dataset-size, advanced options
+    let use_layer2 = async_ops.wait
+        && data.is_none()
+        && dataset_size.is_none()
+        && eviction_policy == "volatile-lru"
+        && redis_version.is_none()
+        && !oss_cluster
+        && port.is_none()
+        && name.is_some()
+        && memory.is_some();
+
+    if use_layer2 {
+        create_database_with_workflow(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            name.unwrap(),   // Safe: checked above
+            memory.unwrap(), // Safe: checked above
+            protocol,
+            replication,
+            data_persistence,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    } else {
+        create_database_legacy(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            name,
+            memory,
+            dataset_size,
+            protocol,
+            replication,
+            data_persistence,
+            eviction_policy,
+            redis_version,
+            oss_cluster,
+            port,
+            data,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    }
+}
+
+/// Create database using Layer 2 workflow with progress tracking
+#[allow(clippy::too_many_arguments)]
+async fn create_database_with_workflow(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    name: &str,
+    memory_gb: f64,
+    protocol: &str,
+    replication: bool,
+    data_persistence: Option<&str>,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
+    let client = conn_mgr.create_cloud_client(profile_name).await?;
+
+    // Build request using TypedBuilder from Layer 1
+    // Note: Optional fields with defaults don't need to be set
+    let request = match (protocol != "redis", data_persistence) {
+        (true, Some(persistence)) => DatabaseCreateRequest::builder()
+            .name(name)
+            .memory_limit_in_gb(memory_gb)
+            .replication(replication)
+            .protocol(protocol)
+            .data_persistence(persistence)
+            .build(),
+        (true, None) => DatabaseCreateRequest::builder()
+            .name(name)
+            .memory_limit_in_gb(memory_gb)
+            .replication(replication)
+            .protocol(protocol)
+            .build(),
+        (false, Some(persistence)) => DatabaseCreateRequest::builder()
+            .name(name)
+            .memory_limit_in_gb(memory_gb)
+            .replication(replication)
+            .data_persistence(persistence)
+            .build(),
+        (false, None) => DatabaseCreateRequest::builder()
+            .name(name)
+            .memory_limit_in_gb(memory_gb)
+            .replication(replication)
+            .build(),
+    };
+
+    // Set up progress spinner
+    let pb = Arc::new(ProgressBar::new_spinner());
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg} [{elapsed_precise}]")
+            .unwrap(),
+    );
+    pb.set_message("Creating database...");
+
+    // Create progress callback
+    let pb_clone = Arc::clone(&pb);
+    let progress_callback = Box::new(move |event: ProgressEvent| match event {
+        ProgressEvent::Started { task_id } => {
+            pb_clone.set_message(format!("Task {} started", task_id));
+        }
+        ProgressEvent::Polling {
+            status, elapsed, ..
+        } => {
+            pb_clone.set_message(format!("{} ({:.0}s)", status, elapsed.as_secs_f64()));
+        }
+        ProgressEvent::Completed { resource_id, .. } => {
+            pb_clone.finish_with_message(format!(
+                "Created database {}",
+                resource_id.map_or("".to_string(), |id| id.to_string())
+            ));
+        }
+        ProgressEvent::Failed { error, .. } => {
+            pb_clone.finish_with_message(format!("Failed: {}", error));
+        }
+    });
+
+    // Call Layer 2 workflow
+    #[allow(clippy::cast_possible_wrap)]
+    let database = create_database_and_wait(
+        &client,
+        subscription_id as i32,
+        &request,
+        Duration::from_secs(async_ops.wait_timeout),
+        Some(progress_callback),
+    )
+    .await
+    .map_err(|e| RedisCtlError::ApiError {
+        message: e.to_string(),
+    })?;
+
+    pb.finish_and_clear();
+
+    // Output result
+    match output_format {
+        OutputFormat::Auto | OutputFormat::Table => {
+            println!("Database created successfully");
+            println!("  ID: {}:{}", subscription_id, database.database_id);
+            println!("  Name: {}", database.name.as_deref().unwrap_or(""));
+            println!("  Status: {}", database.status.as_deref().unwrap_or(""));
+            if let Some(endpoint) = &database.public_endpoint {
+                println!("  Endpoint: {}", endpoint);
+            }
+        }
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let json_value = serde_json::to_value(&database)?;
+            let data = if let Some(q) = query {
+                apply_jmespath(&json_value, q)?
+            } else {
+                json_value
+            };
+            print_json_or_yaml(data, output_format)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Legacy create_database implementation for --data mode and advanced options
+#[allow(clippy::too_many_arguments)]
+async fn create_database_legacy(
     conn_mgr: &ConnectionManager,
     profile_name: Option<&str>,
     subscription_id: u32,
@@ -196,6 +398,191 @@ pub async fn update_database(
     query: Option<&str>,
 ) -> CliResult<()> {
     let (subscription_id, database_id) = parse_database_id(id)?;
+
+    // Use Layer 2 workflow for simple cases with --wait (no --data, no regex_rules)
+    let use_layer2 = async_ops.wait && data.is_none() && regex_rules.is_none();
+
+    if use_layer2 {
+        update_database_with_workflow(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            name,
+            memory,
+            replication,
+            data_persistence,
+            eviction_policy,
+            oss_cluster,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    } else {
+        update_database_legacy(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            name,
+            memory,
+            replication,
+            data_persistence,
+            eviction_policy,
+            oss_cluster,
+            regex_rules,
+            data,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    }
+}
+
+/// Update database using Layer 2 workflow with progress tracking
+#[allow(clippy::too_many_arguments)]
+async fn update_database_with_workflow(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    name: Option<&str>,
+    memory: Option<f64>,
+    replication: Option<bool>,
+    data_persistence: Option<&str>,
+    eviction_policy: Option<&str>,
+    oss_cluster: Option<bool>,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
+    use redis_cloud::databases::DatabaseUpdateRequest;
+
+    let client = conn_mgr.create_cloud_client(profile_name).await?;
+
+    // Build request using TypedBuilder - start with defaults then override
+    let mut request = DatabaseUpdateRequest::builder().build();
+
+    if let Some(n) = name {
+        request.name = Some(n.to_string());
+    }
+    if let Some(m) = memory {
+        request.memory_limit_in_gb = Some(m);
+    }
+    if let Some(r) = replication {
+        request.replication = Some(r);
+    }
+    if let Some(p) = data_persistence {
+        request.data_persistence = Some(p.to_string());
+    }
+    if let Some(e) = eviction_policy {
+        request.data_eviction_policy = Some(e.to_string());
+    }
+    if let Some(o) = oss_cluster {
+        request.support_oss_cluster_api = Some(o);
+    }
+
+    // Validate at least one field is set
+    if request.name.is_none()
+        && request.memory_limit_in_gb.is_none()
+        && request.replication.is_none()
+        && request.data_persistence.is_none()
+        && request.data_eviction_policy.is_none()
+        && request.support_oss_cluster_api.is_none()
+    {
+        return Err(RedisCtlError::InvalidInput {
+            message: "At least one update field is required".to_string(),
+        });
+    }
+
+    // Set up progress spinner
+    let pb = Arc::new(ProgressBar::new_spinner());
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg} [{elapsed_precise}]")
+            .unwrap(),
+    );
+    pb.set_message("Updating database...");
+
+    // Create progress callback
+    let pb_clone = Arc::clone(&pb);
+    let progress_callback = Box::new(move |event: ProgressEvent| match event {
+        ProgressEvent::Started { task_id } => {
+            pb_clone.set_message(format!("Task {} started", task_id));
+        }
+        ProgressEvent::Polling {
+            status, elapsed, ..
+        } => {
+            pb_clone.set_message(format!("{} ({:.0}s)", status, elapsed.as_secs_f64()));
+        }
+        ProgressEvent::Completed { .. } => {
+            pb_clone.finish_with_message("Database updated");
+        }
+        ProgressEvent::Failed { error, .. } => {
+            pb_clone.finish_with_message(format!("Failed: {}", error));
+        }
+    });
+
+    // Call Layer 2 workflow
+    #[allow(clippy::cast_possible_wrap)]
+    let database = update_database_and_wait(
+        &client,
+        subscription_id as i32,
+        database_id as i32,
+        &request,
+        Duration::from_secs(async_ops.wait_timeout),
+        Some(progress_callback),
+    )
+    .await
+    .map_err(|e| RedisCtlError::ApiError {
+        message: e.to_string(),
+    })?;
+
+    pb.finish_and_clear();
+
+    // Output result
+    match output_format {
+        OutputFormat::Auto | OutputFormat::Table => {
+            println!("Database updated successfully");
+            println!("  ID: {}:{}", subscription_id, database.database_id);
+            println!("  Name: {}", database.name.as_deref().unwrap_or(""));
+            println!("  Status: {}", database.status.as_deref().unwrap_or(""));
+        }
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let json_value = serde_json::to_value(&database)?;
+            let data = if let Some(q) = query {
+                apply_jmespath(&json_value, q)?
+            } else {
+                json_value
+            };
+            print_json_or_yaml(data, output_format)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Legacy update_database implementation for --data mode and regex_rules
+#[allow(clippy::too_many_arguments)]
+async fn update_database_legacy(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    name: Option<&str>,
+    memory: Option<f64>,
+    replication: Option<bool>,
+    data_persistence: Option<&str>,
+    eviction_policy: Option<&str>,
+    oss_cluster: Option<bool>,
+    regex_rules: Option<&str>,
+    data: Option<&str>,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
     let client = conn_mgr.create_cloud_client(profile_name).await?;
 
     // Start with JSON from --data if provided, otherwise empty object
@@ -295,6 +682,117 @@ pub async fn delete_database(
         }
     }
 
+    // Use Layer 2 workflow when --wait is specified
+    if async_ops.wait {
+        delete_database_with_workflow(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            async_ops,
+            output_format,
+        )
+        .await
+    } else {
+        delete_database_legacy(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    }
+}
+
+/// Delete database using Layer 2 workflow with progress tracking
+async fn delete_database_with_workflow(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+) -> CliResult<()> {
+    let client = conn_mgr.create_cloud_client(profile_name).await?;
+
+    // Set up progress spinner
+    let pb = Arc::new(ProgressBar::new_spinner());
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg} [{elapsed_precise}]")
+            .unwrap(),
+    );
+    pb.set_message("Deleting database...");
+
+    // Create progress callback
+    let pb_clone = Arc::clone(&pb);
+    let progress_callback = Box::new(move |event: ProgressEvent| match event {
+        ProgressEvent::Started { task_id } => {
+            pb_clone.set_message(format!("Task {} started", task_id));
+        }
+        ProgressEvent::Polling {
+            status, elapsed, ..
+        } => {
+            pb_clone.set_message(format!("{} ({:.0}s)", status, elapsed.as_secs_f64()));
+        }
+        ProgressEvent::Completed { .. } => {
+            pb_clone.finish_with_message("Database deleted");
+        }
+        ProgressEvent::Failed { error, .. } => {
+            pb_clone.finish_with_message(format!("Failed: {}", error));
+        }
+    });
+
+    // Call Layer 2 workflow
+    #[allow(clippy::cast_possible_wrap)]
+    delete_database_and_wait(
+        &client,
+        subscription_id as i32,
+        database_id as i32,
+        Duration::from_secs(async_ops.wait_timeout),
+        Some(progress_callback),
+    )
+    .await
+    .map_err(|e| RedisCtlError::ApiError {
+        message: e.to_string(),
+    })?;
+
+    pb.finish_and_clear();
+
+    // Output result
+    match output_format {
+        OutputFormat::Auto | OutputFormat::Table => {
+            println!(
+                "Database {}:{} deleted successfully",
+                subscription_id, database_id
+            );
+        }
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let result = json!({
+                "message": "Database deleted successfully",
+                "subscription_id": subscription_id,
+                "database_id": database_id
+            });
+            print_json_or_yaml(result, output_format)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Legacy delete_database implementation (no --wait)
+async fn delete_database_legacy(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
     let client = conn_mgr.create_cloud_client(profile_name).await?;
 
     let response = client
@@ -373,6 +871,119 @@ pub async fn backup_database(
     query: Option<&str>,
 ) -> CliResult<()> {
     let (subscription_id, database_id) = parse_database_id(id)?;
+
+    // Use Layer 2 workflow when --wait is specified
+    if async_ops.wait {
+        backup_database_with_workflow(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            async_ops,
+            output_format,
+        )
+        .await
+    } else {
+        backup_database_legacy(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    }
+}
+
+/// Backup database using Layer 2 workflow with progress tracking
+async fn backup_database_with_workflow(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+) -> CliResult<()> {
+    let client = conn_mgr.create_cloud_client(profile_name).await?;
+
+    // Set up progress spinner
+    let pb = Arc::new(ProgressBar::new_spinner());
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg} [{elapsed_precise}]")
+            .unwrap(),
+    );
+    pb.set_message("Backing up database...");
+
+    // Create progress callback
+    let pb_clone = Arc::clone(&pb);
+    let progress_callback = Box::new(move |event: ProgressEvent| match event {
+        ProgressEvent::Started { task_id } => {
+            pb_clone.set_message(format!("Task {} started", task_id));
+        }
+        ProgressEvent::Polling {
+            status, elapsed, ..
+        } => {
+            pb_clone.set_message(format!("{} ({:.0}s)", status, elapsed.as_secs_f64()));
+        }
+        ProgressEvent::Completed { .. } => {
+            pb_clone.finish_with_message("Backup completed");
+        }
+        ProgressEvent::Failed { error, .. } => {
+            pb_clone.finish_with_message(format!("Failed: {}", error));
+        }
+    });
+
+    // Call Layer 2 workflow
+    #[allow(clippy::cast_possible_wrap)]
+    backup_database_and_wait(
+        &client,
+        subscription_id as i32,
+        database_id as i32,
+        None, // region_name - only needed for Active-Active
+        Duration::from_secs(async_ops.wait_timeout),
+        Some(progress_callback),
+    )
+    .await
+    .map_err(|e| RedisCtlError::ApiError {
+        message: e.to_string(),
+    })?;
+
+    pb.finish_and_clear();
+
+    // Output result
+    match output_format {
+        OutputFormat::Auto | OutputFormat::Table => {
+            println!(
+                "Database {}:{} backup completed successfully",
+                subscription_id, database_id
+            );
+        }
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let result = json!({
+                "message": "Backup completed successfully",
+                "subscription_id": subscription_id,
+                "database_id": database_id
+            });
+            print_json_or_yaml(result, output_format)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Legacy backup_database implementation (no --wait)
+async fn backup_database_legacy(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
     let client = conn_mgr.create_cloud_client(profile_name).await?;
 
     let response = client
@@ -461,6 +1072,164 @@ pub async fn import_database(
     query: Option<&str>,
 ) -> CliResult<()> {
     let (subscription_id, database_id) = parse_database_id(id)?;
+
+    // Check if we can use Layer 2 (simple case: no credentials, no --data)
+    let has_credentials = aws_access_key.is_some()
+        || aws_secret_key.is_some()
+        || gcs_client_email.is_some()
+        || gcs_private_key.is_some()
+        || azure_account_name.is_some()
+        || azure_account_key.is_some();
+
+    let use_layer2 = async_ops.wait
+        && data.is_none()
+        && !has_credentials
+        && source_type.is_some()
+        && import_from_uri.is_some();
+
+    if use_layer2 {
+        import_database_with_workflow(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            source_type.unwrap(),     // safe: checked above
+            import_from_uri.unwrap(), // safe: checked above
+            async_ops,
+            output_format,
+        )
+        .await
+    } else {
+        import_database_legacy(
+            conn_mgr,
+            profile_name,
+            subscription_id,
+            database_id,
+            source_type,
+            import_from_uri,
+            aws_access_key,
+            aws_secret_key,
+            gcs_client_email,
+            gcs_private_key,
+            azure_account_name,
+            azure_account_key,
+            data,
+            async_ops,
+            output_format,
+            query,
+        )
+        .await
+    }
+}
+
+/// Import database using Layer 2 workflow with progress tracking
+#[allow(clippy::too_many_arguments)]
+async fn import_database_with_workflow(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    source_type: &str,
+    import_from_uri: &str,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+) -> CliResult<()> {
+    use redis_cloud::databases::DatabaseImportRequest;
+
+    let client = conn_mgr.create_cloud_client(profile_name).await?;
+
+    // Build request
+    let request = DatabaseImportRequest::builder()
+        .source_type(source_type)
+        .import_from_uri(vec![import_from_uri.to_string()])
+        .build();
+
+    // Set up progress spinner
+    let pb = Arc::new(ProgressBar::new_spinner());
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg} [{elapsed_precise}]")
+            .unwrap(),
+    );
+    pb.set_message("Importing data into database...");
+
+    // Create progress callback
+    let pb_clone = Arc::clone(&pb);
+    let progress_callback = Box::new(move |event: ProgressEvent| match event {
+        ProgressEvent::Started { task_id } => {
+            pb_clone.set_message(format!("Task {} started", task_id));
+        }
+        ProgressEvent::Polling {
+            status, elapsed, ..
+        } => {
+            pb_clone.set_message(format!("{} ({:.0}s)", status, elapsed.as_secs_f64()));
+        }
+        ProgressEvent::Completed { .. } => {
+            pb_clone.finish_with_message("Import completed");
+        }
+        ProgressEvent::Failed { error, .. } => {
+            pb_clone.finish_with_message(format!("Failed: {}", error));
+        }
+    });
+
+    // Call Layer 2 workflow
+    #[allow(clippy::cast_possible_wrap)]
+    import_database_and_wait(
+        &client,
+        subscription_id as i32,
+        database_id as i32,
+        &request,
+        Duration::from_secs(async_ops.wait_timeout),
+        Some(progress_callback),
+    )
+    .await
+    .map_err(|e| RedisCtlError::ApiError {
+        message: e.to_string(),
+    })?;
+
+    pb.finish_and_clear();
+
+    // Output result
+    match output_format {
+        OutputFormat::Auto | OutputFormat::Table => {
+            println!(
+                "Import into database {}:{} completed successfully",
+                subscription_id, database_id
+            );
+        }
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let result = json!({
+                "message": "Import completed successfully",
+                "subscription_id": subscription_id,
+                "database_id": database_id
+            });
+            print_json_or_yaml(result, output_format)?;
+        }
+    }
+
+    Ok(())
+}
+
+/// Legacy import_database implementation (for credentials and --data)
+#[allow(clippy::too_many_arguments)]
+async fn import_database_legacy(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    subscription_id: u32,
+    database_id: u32,
+    source_type: Option<&str>,
+    import_from_uri: Option<&str>,
+    aws_access_key: Option<&str>,
+    aws_secret_key: Option<&str>,
+    gcs_client_email: Option<&str>,
+    gcs_private_key: Option<&str>,
+    azure_account_name: Option<&str>,
+    azure_account_key: Option<&str>,
+    data: Option<&str>,
+    async_ops: &AsyncOperationArgs,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
     let client = conn_mgr.create_cloud_client(profile_name).await?;
 
     // Start with JSON from --data if provided, otherwise empty object

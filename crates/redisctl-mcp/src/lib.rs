@@ -193,6 +193,13 @@ mod tests {
         // Tasks
         let _ = tools::cloud::list_tasks(state.clone());
         let _ = tools::cloud::get_task(state.clone());
+        // Write operations
+        let _ = tools::cloud::create_database(state.clone());
+        let _ = tools::cloud::update_database(state.clone());
+        let _ = tools::cloud::delete_database(state.clone());
+        let _ = tools::cloud::backup_database(state.clone());
+        let _ = tools::cloud::import_database(state.clone());
+        let _ = tools::cloud::delete_subscription(state.clone());
     }
 
     #[test]
@@ -236,6 +243,9 @@ mod tests {
         // Modules
         let _ = tools::enterprise::list_modules(state.clone());
         let _ = tools::enterprise::get_module(state.clone());
+        // Write operations
+        let _ = tools::enterprise::backup_enterprise_database(state.clone());
+        let _ = tools::enterprise::import_enterprise_database(state.clone());
     }
 
     #[test]
@@ -325,6 +335,35 @@ mod tests {
             serde_json::from_str(r#"{"subscription_id": 789, "database_id": 101}"#).unwrap();
         assert_eq!(input.subscription_id, 789);
         assert_eq!(input.database_id, 101);
+
+        // CreateDatabaseInput with all fields
+        let input: tools::cloud::CreateDatabaseInput = serde_json::from_str(
+            r#"{"subscription_id": 123, "name": "test-db", "memory_limit_in_gb": 2.5, "replication": false, "protocol": "stack", "data_persistence": "aof-every-1-second", "timeout_seconds": 300}"#,
+        )
+        .unwrap();
+        assert_eq!(input.subscription_id, 123);
+        assert_eq!(input.name, "test-db");
+        assert_eq!(input.memory_limit_in_gb, 2.5);
+        assert!(!input.replication);
+        assert_eq!(input.protocol, "stack");
+        assert_eq!(
+            input.data_persistence,
+            Some("aof-every-1-second".to_string())
+        );
+        assert_eq!(input.timeout_seconds, 300);
+
+        // CreateDatabaseInput with defaults
+        let input: tools::cloud::CreateDatabaseInput = serde_json::from_str(
+            r#"{"subscription_id": 456, "name": "minimal-db", "memory_limit_in_gb": 1.0}"#,
+        )
+        .unwrap();
+        assert_eq!(input.subscription_id, 456);
+        assert_eq!(input.name, "minimal-db");
+        assert_eq!(input.memory_limit_in_gb, 1.0);
+        assert!(input.replication); // default true
+        assert_eq!(input.protocol, "redis"); // default
+        assert_eq!(input.data_persistence, None);
+        assert_eq!(input.timeout_seconds, 600); // default
     }
 
     #[test]

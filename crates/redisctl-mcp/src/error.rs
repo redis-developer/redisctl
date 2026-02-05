@@ -45,8 +45,8 @@ impl From<anyhow::Error> for McpError {
     }
 }
 
-impl From<redisctl_config::ConfigError> for McpError {
-    fn from(err: redisctl_config::ConfigError) -> Self {
+impl From<redisctl_core::ConfigError> for McpError {
+    fn from(err: redisctl_core::ConfigError) -> Self {
         McpError::Configuration(err.to_string())
     }
 }

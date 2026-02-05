@@ -2,7 +2,7 @@
 
 use std::sync::Arc;
 
-use redisctl_config::{Config, DeploymentType, ProfileCredentials};
+use redisctl_core::{Config, DeploymentType, ProfileCredentials};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_mcp::extract::{Json, State};

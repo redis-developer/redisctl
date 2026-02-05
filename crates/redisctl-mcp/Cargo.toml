@@ -21,7 +21,7 @@ tower-mcp = { version = "0.3.4", features = ["http", "oauth"] }
 schemars = "1.2"
 
 # Internal crates
-redisctl-config = { version = "0.2.2", path = "../redisctl-config" }
+redisctl-core = { version = "0.1.0", path = "../redisctl-core" }
 
 # External API clients
 redis-cloud = { workspace = true }
@@ -53,7 +53,7 @@ test-support = []
 
 [dev-dependencies]
 tokio = { workspace = true }
-redis-cloud = { version = "0.9.2", features = ["test-support"] }
-redis-enterprise = { version = "0.8.2", features = ["test-support"] }
+redis-cloud = { workspace = true, features = ["test-support"] }
+redis-enterprise = { workspace = true, features = ["test-support"] }
 wiremock = { workspace = true }
 serde_json = { workspace = true }

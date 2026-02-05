@@ -1,7 +1,7 @@
 use crate::error::RedisCtlError;
 use anyhow::{Context, Result as AnyhowResult};
 use clap::Subcommand;
-use redisctl_config::Config;
+use redisctl_core::Config;
 use serde_json::Value;
 use std::path::Path;
 

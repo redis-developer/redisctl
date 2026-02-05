@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 
 [dependencies]
-redisctl-config = { version = "0.2.2", path = "../redisctl-config" }
+redisctl-core = { version = "0.1.0", path = "../redisctl-core" }
 redis-cloud = { workspace = true, features = ["tower-integration"] }
 redis-enterprise = { workspace = true, features = ["tower-integration"] }
 files-sdk = { workspace = true, optional = true }
@@ -76,7 +76,7 @@ enterprise = []
 upload = ["dep:files-sdk"]
 # Note: secure-storage may not work on musl targets due to keyring native dependencies
 # Build with --no-default-features --features full for musl
-secure-storage = ["redisctl-config/secure-storage", "dep:keyring"]
+secure-storage = ["redisctl-core/secure-storage", "dep:keyring"]
 
 [dev-dependencies]
 assert_cmd = "2.0"

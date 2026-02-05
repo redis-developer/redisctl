@@ -2,7 +2,7 @@
 
 use crate::error::Result as CliResult;
 use anyhow::Context;
-use redisctl_config::{Config, DeploymentType};
+use redisctl_core::{Config, DeploymentType};
 use tracing::{debug, info, trace};
 
 /// User agent string for redisctl HTTP requests

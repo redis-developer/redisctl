@@ -1,13 +1,19 @@
 //! Redis Cloud API tools
 
 use std::sync::Arc;
+use std::time::Duration;
 
+use redis_cloud::databases::DatabaseCreateRequest;
 use redis_cloud::flexible::{DatabaseHandler, SubscriptionHandler};
 use redis_cloud::{AccountHandler, AclHandler, TaskHandler, UserHandler};
+use redisctl_core::cloud::{
+    backup_database_and_wait, create_database_and_wait, delete_database_and_wait,
+    delete_subscription_and_wait, import_database_and_wait, update_database_and_wait,
+};
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -724,6 +730,476 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
                     .map_err(|e| ToolError::new(format!("Failed to get tags: {}", e)))?;
 
                 CallToolResult::from_serialize(&tags)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Write operations (require write permission)
+// ============================================================================
+
+/// Input for creating a database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateDatabaseInput {
+    /// Subscription ID to create the database in
+    pub subscription_id: i32,
+    /// Database name
+    pub name: String,
+    /// Memory limit in GB (e.g., 1.0, 2.5, 10.0)
+    pub memory_limit_in_gb: f64,
+    /// Enable replication for high availability (default: true)
+    #[serde(default = "default_replication")]
+    pub replication: bool,
+    /// Protocol: "redis" (RESP2), "stack" (RESP2 with modules), or "memcached"
+    #[serde(default = "default_protocol")]
+    pub protocol: String,
+    /// Data persistence: "none", "aof-every-1-second", "aof-every-write", "snapshot-every-1-hour", etc.
+    #[serde(default)]
+    pub data_persistence: Option<String>,
+    /// Timeout in seconds to wait for database creation (default: 600)
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_replication() -> bool {
+    true
+}
+
+fn default_protocol() -> String {
+    "redis".to_string()
+}
+
+fn default_timeout() -> u64 {
+    600
+}
+
+/// Build the create_database tool
+///
+/// This tool uses Layer 2 (redisctl-core) to create a database and wait for completion.
+/// It demonstrates the full 3-layer architecture:
+/// - Layer 1: DatabaseCreateRequest (redis-cloud)
+/// - Layer 2: create_database_and_wait (redisctl-core)
+/// - Layer 3: MCP tool (this crate)
+pub fn create_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_database")
+        .description(
+            "Create a new Redis Cloud database and wait for it to be ready. \
+             Returns the created database details. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Build the request using Layer 1's TypedBuilder
+                let request = match (input.protocol.as_str(), input.data_persistence.as_ref()) {
+                    ("redis", None) => DatabaseCreateRequest::builder()
+                        .name(&input.name)
+                        .memory_limit_in_gb(input.memory_limit_in_gb)
+                        .replication(input.replication)
+                        .build(),
+                    ("redis", Some(persistence)) => DatabaseCreateRequest::builder()
+                        .name(&input.name)
+                        .memory_limit_in_gb(input.memory_limit_in_gb)
+                        .replication(input.replication)
+                        .data_persistence(persistence)
+                        .build(),
+                    (protocol, None) => DatabaseCreateRequest::builder()
+                        .name(&input.name)
+                        .memory_limit_in_gb(input.memory_limit_in_gb)
+                        .replication(input.replication)
+                        .protocol(protocol)
+                        .build(),
+                    (protocol, Some(persistence)) => DatabaseCreateRequest::builder()
+                        .name(&input.name)
+                        .memory_limit_in_gb(input.memory_limit_in_gb)
+                        .replication(input.replication)
+                        .protocol(protocol)
+                        .data_persistence(persistence)
+                        .build(),
+                };
+
+                // Use Layer 2 workflow - no progress callback needed for MCP
+                let database = create_database_and_wait(
+                    &client,
+                    input.subscription_id,
+                    &request,
+                    Duration::from_secs(input.timeout_seconds),
+                    None, // MCP doesn't need progress callbacks
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to create database: {}", e)))?;
+
+                CallToolResult::from_serialize(&database)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Update database
+// ============================================================================
+
+/// Input for updating a database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateDatabaseInput {
+    /// Subscription ID containing the database
+    pub subscription_id: i32,
+    /// Database ID to update
+    pub database_id: i32,
+    /// New database name (optional)
+    #[serde(default)]
+    pub name: Option<String>,
+    /// New memory limit in GB (optional)
+    #[serde(default)]
+    pub memory_limit_in_gb: Option<f64>,
+    /// Change replication setting (optional)
+    #[serde(default)]
+    pub replication: Option<bool>,
+    /// Change data persistence (optional)
+    #[serde(default)]
+    pub data_persistence: Option<String>,
+    /// Change eviction policy (optional)
+    #[serde(default)]
+    pub data_eviction_policy: Option<String>,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the update_database tool
+pub fn update_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_database")
+        .description(
+            "Update an existing Redis Cloud database configuration. \
+             Returns the updated database details. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateDatabaseInput>| async move {
+                use redis_cloud::databases::DatabaseUpdateRequest;
+
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Build the update request
+                let mut request = DatabaseUpdateRequest::builder().build();
+                request.name = input.name;
+                request.memory_limit_in_gb = input.memory_limit_in_gb;
+                request.replication = input.replication;
+                request.data_persistence = input.data_persistence;
+                request.data_eviction_policy = input.data_eviction_policy;
+
+                // Validate at least one field is set
+                if request.name.is_none()
+                    && request.memory_limit_in_gb.is_none()
+                    && request.replication.is_none()
+                    && request.data_persistence.is_none()
+                    && request.data_eviction_policy.is_none()
+                {
+                    return Err(McpError::tool(
+                        "At least one update field is required",
+                    ));
+                }
+
+                // Use Layer 2 workflow
+                let database = update_database_and_wait(
+                    &client,
+                    input.subscription_id,
+                    input.database_id,
+                    &request,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to update database: {}", e)))?;
+
+                CallToolResult::from_serialize(&database)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Delete database
+// ============================================================================
+
+/// Input for deleting a database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteDatabaseInput {
+    /// Subscription ID containing the database
+    pub subscription_id: i32,
+    /// Database ID to delete
+    pub database_id: i32,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the delete_database tool
+pub fn delete_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_database")
+        .description(
+            "Delete a Redis Cloud database. This is a destructive operation. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Use Layer 2 workflow
+                delete_database_and_wait(
+                    &client,
+                    input.subscription_id,
+                    input.database_id,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to delete database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Database deleted successfully",
+                    "subscription_id": input.subscription_id,
+                    "database_id": input.database_id
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Backup database
+// ============================================================================
+
+/// Input for backing up a database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct BackupDatabaseInput {
+    /// Subscription ID containing the database
+    pub subscription_id: i32,
+    /// Database ID to backup
+    pub database_id: i32,
+    /// Region name (required for Active-Active databases)
+    #[serde(default)]
+    pub region_name: Option<String>,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the backup_database tool
+pub fn backup_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("backup_database")
+        .description(
+            "Trigger a manual backup of a Redis Cloud database. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<BackupDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Use Layer 2 workflow
+                backup_database_and_wait(
+                    &client,
+                    input.subscription_id,
+                    input.database_id,
+                    input.region_name.as_deref(),
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to backup database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Backup completed successfully",
+                    "subscription_id": input.subscription_id,
+                    "database_id": input.database_id
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Import database
+// ============================================================================
+
+/// Input for importing data into a database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ImportDatabaseInput {
+    /// Subscription ID containing the database
+    pub subscription_id: i32,
+    /// Database ID to import into
+    pub database_id: i32,
+    /// Source type: "http", "redis", "ftp", "aws-s3", "azure-blob-storage", "google-blob-storage"
+    pub source_type: String,
+    /// URI to import from
+    pub import_from_uri: String,
+    /// Timeout in seconds (default: 1800 for imports)
+    #[serde(default = "default_import_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_import_timeout() -> u64 {
+    1800 // Imports can take longer
+}
+
+/// Build the import_database tool
+pub fn import_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("import_database")
+        .description(
+            "Import data into a Redis Cloud database from an external source. \
+             WARNING: This will overwrite existing data. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ImportDatabaseInput>| async move {
+                use redis_cloud::databases::DatabaseImportRequest;
+
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Build the import request
+                let request = DatabaseImportRequest::builder()
+                    .source_type(&input.source_type)
+                    .import_from_uri(vec![input.import_from_uri.clone()])
+                    .build();
+
+                // Use Layer 2 workflow
+                import_database_and_wait(
+                    &client,
+                    input.subscription_id,
+                    input.database_id,
+                    &request,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to import database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Import completed successfully",
+                    "subscription_id": input.subscription_id,
+                    "database_id": input.database_id
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Delete subscription
+// ============================================================================
+
+/// Input for deleting a subscription
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteSubscriptionInput {
+    /// Subscription ID to delete
+    pub subscription_id: i32,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the delete_subscription tool
+pub fn delete_subscription(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_subscription")
+        .description(
+            "Delete a Redis Cloud subscription. WARNING: All databases in the subscription \
+             must be deleted first. This is a destructive operation. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteSubscriptionInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteSubscriptionInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Use Layer 2 workflow
+                delete_subscription_and_wait(
+                    &client,
+                    input.subscription_id,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to delete subscription: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Subscription deleted successfully",
+                    "subscription_id": input.subscription_id
+                }))
             },
         )
         .build()

@@ -1,12 +1,11 @@
 [workspace]
 resolver = "2"
 members = [
-    "crates/redisctl-config",
+    "crates/redisctl-core",
     "crates/redisctl",
     "crates/redisctl-mcp",
 ]
 default-members = [
-    "crates/redisctl-config",
     "crates/redisctl",
     "crates/redisctl-mcp",
 ]
@@ -93,12 +92,9 @@ pretty_assertions = "1.4"
 # Redis client
 redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "connection-manager"] }
 
-# Internal crates
-redisctl-config = { path = "crates/redisctl-config" }
-
-# External crates
-redis-cloud = "0.9.2"
-redis-enterprise = "0.8.2"
+# External crates (using git for CI, override with path locally if needed)
+redis-cloud = { git = "https://github.com/redis-developer/redis-cloud-rs", branch = "main" }
+redis-enterprise = { git = "https://github.com/redis-developer/redis-enterprise-rs", branch = "main" }
 
 # Windows CI workaround - ensure these are available in workspace
 shellexpand = "3.1"

@@ -6,7 +6,7 @@
 //! 3. Workflow orchestration (`workflow` commands - future)
 
 use clap::{Parser, Subcommand};
-use redisctl_config::DeploymentType;
+use redisctl_core::DeploymentType;
 
 pub mod cloud;
 pub mod enterprise;

@@ -5,7 +5,7 @@ use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use crate::output::print_output;
 use anyhow::Context;
-use redisctl_config::{Config, DeploymentType};
+use redisctl_core::{Config, DeploymentType};
 use serde_json::Value;
 
 /// Parameters for API command execution
