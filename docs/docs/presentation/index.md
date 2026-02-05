@@ -153,3 +153,91 @@ redisctl-mcp --profile demo --read-only=false
 - "Create a new 2GB database called test-cache"
 
 Total MCP demo time: ~5 minutes
+
+---
+
+## Multi-Cluster Management Demo
+
+For customers managing multiple Redis Enterprise clusters:
+
+### The Problem
+
+The Redis Enterprise UI manages ONE cluster at a time. Customers with multiple clusters need to:
+- Log into each UI separately
+- Manually aggregate information across clusters
+- No unified view of license usage, database inventory, or alerts
+
+### The Solution
+
+redisctl provides unified multi-cluster management through profiles:
+
+### 1. Configure Multiple Clusters
+
+```bash
+# Add each cluster as a profile
+redisctl profile create cluster-west --type enterprise \
+  --enterprise-url https://west.example.com:9443 \
+  --enterprise-user admin@redis.local \
+  --enterprise-password "$PASSWORD"
+
+redisctl profile create cluster-east --type enterprise \
+  --enterprise-url https://east.example.com:9443 \
+  --enterprise-user admin@redis.local \
+  --enterprise-password "$PASSWORD"
+
+redisctl profile create cluster-central --type enterprise \
+  --enterprise-url https://central.example.com:9443 \
+  --enterprise-user admin@redis.local \
+  --enterprise-password "$PASSWORD"
+```
+
+### 2. Cross-Cluster CLI Queries
+
+```bash
+# Check all clusters at once
+for p in cluster-west cluster-east cluster-central; do
+  echo "=== $p ==="
+  redisctl -p $p enterprise cluster get -o json -q '{name: name, nodes: nodes_count}'
+done
+
+# Total memory across all clusters
+total=0
+for p in cluster-west cluster-east cluster-central; do
+  mem=$(redisctl -p $p enterprise database list -o json -q '[].memory_size | sum(@)')
+  echo "$p: $((mem / 1024 / 1024)) MB"
+  total=$((total + mem))
+done
+echo "Total: $((total / 1024 / 1024)) MB"
+
+# License check across clusters
+for p in cluster-west cluster-east cluster-central; do
+  echo "=== $p ==="
+  redisctl -p $p enterprise license get -o json -q '{expired: expired, expiration: expiration_date}'
+done
+```
+
+### 3. MCP Multi-Cluster Prompts
+
+With MCP, the AI can query across clusters conversationally:
+
+- "List all my configured profiles"
+- "Show me the cluster info for each of my Enterprise profiles"
+- "What's my total memory allocation across all clusters?"
+- "Check license status on all clusters - are any expiring soon?"
+- "Which databases across all clusters don't have persistence enabled?"
+- "Total up all the databases across my fleet"
+
+The AI uses `profile_list` to discover clusters and `profile_set_default_enterprise` to switch between them, then aggregates the results.
+
+### Key Differentiators
+
+| Capability | RE UI | redisctl |
+|------------|-------|----------|
+| Single cluster view | ✅ | ✅ |
+| Multi-cluster view | ❌ | ✅ |
+| Cross-cluster queries | ❌ | ✅ |
+| License aggregation | ❌ | ✅ |
+| Scripted operations | ❌ | ✅ |
+| AI-driven management | ❌ | ✅ (MCP) |
+
+Total multi-cluster demo time: ~5 minutes

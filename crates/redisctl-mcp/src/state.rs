@@ -1,5 +1,7 @@
 //! Application state and credential resolution
 
+use std::collections::HashMap;
+
 use anyhow::{Context, Result};
 use redis_cloud::CloudClient;
 use redis_enterprise::EnterpriseClient;
@@ -10,8 +12,9 @@ use tokio::sync::RwLock;
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
 pub enum CredentialSource {
-    /// Resolve from redisctl profile (local mode)
-    Profile(Option<String>),
+    /// Resolve from redisctl profiles (local mode)
+    /// Empty vec means use default profiles from config
+    Profiles(Vec<String>),
     /// Resolve from OAuth token claims (HTTP mode)
     OAuth {
         issuer: Option<String>,
@@ -19,10 +22,10 @@ pub enum CredentialSource {
     },
 }
 
-/// Cached API clients
+/// Cached API clients (per-profile for multi-cluster support)
 pub struct CachedClients {
-    pub cloud: Option<CloudClient>,
-    pub enterprise: Option<EnterpriseClient>,
+    pub cloud: HashMap<String, CloudClient>,
+    pub enterprise: HashMap<String, EnterpriseClient>,
 }
 
 /// Shared application state
@@ -35,7 +38,9 @@ pub struct AppState {
     pub database_url: Option<String>,
     /// redisctl config (for profile-based auth)
     config: Option<Config>,
-    /// Cached API clients
+    /// Configured profiles (for multi-cluster support)
+    profiles: Vec<String>,
+    /// Cached API clients (keyed by profile name, "_default" for default)
     clients: RwLock<CachedClients>,
 }
 
@@ -46,17 +51,15 @@ impl AppState {
         read_only: bool,
         database_url: Option<String>,
     ) -> Result<Self> {
-        // Normalize credential source: treat "default" as None (use configured default)
-        let credential_source = match credential_source {
-            CredentialSource::Profile(Some(ref name)) if name.eq_ignore_ascii_case("default") => {
-                CredentialSource::Profile(None)
-            }
-            other => other,
+        // Extract profiles list
+        let profiles = match &credential_source {
+            CredentialSource::Profiles(p) => p.clone(),
+            CredentialSource::OAuth { .. } => vec![],
         };
 
         // Load config if using profile-based auth
         let config = match &credential_source {
-            CredentialSource::Profile(_) => Config::load().ok(),
+            CredentialSource::Profiles(_) => Config::load().ok(),
             CredentialSource::OAuth { .. } => None,
         };
 
@@ -65,69 +68,103 @@ impl AppState {
             read_only,
             database_url,
             config,
+            profiles,
             clients: RwLock::new(CachedClients {
-                cloud: None,
-                enterprise: None,
+                cloud: HashMap::new(),
+                enterprise: HashMap::new(),
             }),
         })
     }
 
-    /// Get or create Cloud API client
-    pub async fn cloud_client(&self) -> Result<CloudClient> {
+    /// Get the list of configured profiles
+    #[allow(dead_code)]
+    pub fn available_profiles(&self) -> &[String] {
+        &self.profiles
+    }
+
+    /// Get or create Cloud API client for a specific profile
+    ///
+    /// If profile is None, uses the first configured profile or default from config
+    pub async fn cloud_client_for_profile(&self, profile: Option<&str>) -> Result<CloudClient> {
+        let cache_key = profile.unwrap_or("_default").to_string();
+
         // Check cache first
         {
             let clients = self.clients.read().await;
-            if let Some(client) = &clients.cloud {
+            if let Some(client) = clients.cloud.get(&cache_key) {
                 return Ok(client.clone());
             }
         }
 
         // Create new client
-        let client = self.create_cloud_client().await?;
+        let client = self.create_cloud_client(profile).await?;
 
         // Cache it
         {
             let mut clients = self.clients.write().await;
-            clients.cloud = Some(client.clone());
+            clients.cloud.insert(cache_key, client.clone());
         }
 
         Ok(client)
     }
 
-    /// Get or create Enterprise API client
-    pub async fn enterprise_client(&self) -> Result<EnterpriseClient> {
+    /// Get or create Cloud API client (uses default profile)
+    pub async fn cloud_client(&self) -> Result<CloudClient> {
+        self.cloud_client_for_profile(None).await
+    }
+
+    /// Get or create Enterprise API client for a specific profile
+    ///
+    /// If profile is None, uses the first configured profile or default from config
+    pub async fn enterprise_client_for_profile(
+        &self,
+        profile: Option<&str>,
+    ) -> Result<EnterpriseClient> {
+        let cache_key = profile.unwrap_or("_default").to_string();
+
         // Check cache first
         {
             let clients = self.clients.read().await;
-            if let Some(client) = &clients.enterprise {
+            if let Some(client) = clients.enterprise.get(&cache_key) {
                 return Ok(client.clone());
             }
         }
 
         // Create new client
-        let client = self.create_enterprise_client().await?;
+        let client = self.create_enterprise_client(profile).await?;
 
         // Cache it
         {
             let mut clients = self.clients.write().await;
-            clients.enterprise = Some(client.clone());
+            clients.enterprise.insert(cache_key, client.clone());
         }
 
         Ok(client)
+    }
+
+    /// Get or create Enterprise API client (uses default profile)
+    #[allow(dead_code)]
+    pub async fn enterprise_client(&self) -> Result<EnterpriseClient> {
+        self.enterprise_client_for_profile(None).await
     }
 
     /// Create a new Cloud client from credentials
-    async fn create_cloud_client(&self) -> Result<CloudClient> {
+    async fn create_cloud_client(&self, profile: Option<&str>) -> Result<CloudClient> {
         match &self.credential_source {
-            CredentialSource::Profile(profile_name) => {
+            CredentialSource::Profiles(profiles) => {
                 let config = self
                     .config
                     .as_ref()
                     .context("No redisctl config available")?;
 
+                // Use specified profile, first configured profile, or let config resolve default
+                let profile_to_use = profile
+                    .map(|s| s.to_string())
+                    .or_else(|| profiles.first().cloned());
+
                 // Resolve the profile name
                 let resolved_profile_name = config
-                    .resolve_cloud_profile(profile_name.as_deref())
+                    .resolve_cloud_profile(profile_to_use.as_deref())
                     .context("Failed to resolve cloud profile")?;
 
                 // Get the profile
@@ -165,27 +202,32 @@ impl AppState {
     }
 
     /// Create a new Enterprise client from credentials
-    async fn create_enterprise_client(&self) -> Result<EnterpriseClient> {
+    async fn create_enterprise_client(&self, profile: Option<&str>) -> Result<EnterpriseClient> {
         match &self.credential_source {
-            CredentialSource::Profile(profile_name) => {
+            CredentialSource::Profiles(profiles) => {
                 let config = self
                     .config
                     .as_ref()
                     .context("No redisctl config available")?;
 
+                // Use specified profile, first configured profile, or let config resolve default
+                let profile_to_use = profile
+                    .map(|s| s.to_string())
+                    .or_else(|| profiles.first().cloned());
+
                 // Resolve the profile name
                 let resolved_profile_name = config
-                    .resolve_enterprise_profile(profile_name.as_deref())
+                    .resolve_enterprise_profile(profile_to_use.as_deref())
                     .context("Failed to resolve enterprise profile")?;
 
                 // Get the profile
-                let profile = config
+                let profile_config = config
                     .profiles
                     .get(&resolved_profile_name)
                     .with_context(|| format!("Profile '{}' not found", resolved_profile_name))?;
 
                 // Get credentials
-                let (url, username, password, insecure, ca_cert) = profile
+                let (url, username, password, insecure, ca_cert) = profile_config
                     .resolve_enterprise_credentials()
                     .context("Failed to resolve enterprise credentials")?
                     .context("No enterprise credentials in profile")?;
@@ -263,9 +305,10 @@ impl Clone for AppState {
             read_only: self.read_only,
             database_url: self.database_url.clone(),
             config: self.config.clone(),
+            profiles: self.profiles.clone(),
             clients: RwLock::new(CachedClients {
-                cloud: None,
-                enterprise: None,
+                cloud: HashMap::new(),
+                enterprise: HashMap::new(),
             }),
         }
     }
@@ -276,42 +319,53 @@ impl Clone for AppState {
 impl AppState {
     /// Create test state with a pre-configured Cloud client
     pub fn with_cloud_client(client: CloudClient) -> Self {
+        let mut cloud = HashMap::new();
+        cloud.insert("_default".to_string(), client);
         Self {
-            credential_source: CredentialSource::Profile(None),
+            credential_source: CredentialSource::Profiles(vec![]),
             read_only: true,
             database_url: None,
             config: None,
+            profiles: vec![],
             clients: RwLock::new(CachedClients {
-                cloud: Some(client),
-                enterprise: None,
+                cloud,
+                enterprise: HashMap::new(),
             }),
         }
     }
 
     /// Create test state with a pre-configured Enterprise client
     pub fn with_enterprise_client(client: EnterpriseClient) -> Self {
+        let mut enterprise = HashMap::new();
+        enterprise.insert("_default".to_string(), client);
         Self {
-            credential_source: CredentialSource::Profile(None),
+            credential_source: CredentialSource::Profiles(vec![]),
             read_only: true,
             database_url: None,
             config: None,
+            profiles: vec![],
             clients: RwLock::new(CachedClients {
-                cloud: None,
-                enterprise: Some(client),
+                cloud: HashMap::new(),
+                enterprise,
             }),
         }
     }
 
     /// Create test state with both Cloud and Enterprise clients
     pub fn with_clients(cloud: CloudClient, enterprise: EnterpriseClient) -> Self {
+        let mut cloud_map = HashMap::new();
+        cloud_map.insert("_default".to_string(), cloud);
+        let mut enterprise_map = HashMap::new();
+        enterprise_map.insert("_default".to_string(), enterprise);
         Self {
-            credential_source: CredentialSource::Profile(None),
+            credential_source: CredentialSource::Profiles(vec![]),
             read_only: true,
             database_url: None,
             config: None,
+            profiles: vec![],
             clients: RwLock::new(CachedClients {
-                cloud: Some(cloud),
-                enterprise: Some(enterprise),
+                cloud: cloud_map,
+                enterprise: enterprise_map,
             }),
         }
     }

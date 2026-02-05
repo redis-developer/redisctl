@@ -1,0 +1,225 @@
+# ==============================================================================
+# Multi-Cluster Redis Enterprise Demo
+# ==============================================================================
+# Spins up multiple Redis Enterprise clusters to demonstrate redisctl's
+# multi-cluster management capabilities - a key differentiator from the
+# native Redis Enterprise UI which only manages one cluster at a time.
+#
+# Usage:
+#   docker compose -f docker-compose.multi-cluster.yml up -d
+#   docker compose -f docker-compose.multi-cluster.yml logs -f
+#   docker compose -f docker-compose.multi-cluster.yml down -v
+#
+# After startup, configure profiles:
+#   redisctl profile create cluster-west \
+#     --type enterprise \
+#     --enterprise-url https://localhost:9443 \
+#     --enterprise-user admin@redis.local \
+#     --enterprise-password Redis123! \
+#     --enterprise-insecure
+#
+#   redisctl profile create cluster-east \
+#     --type enterprise \
+#     --enterprise-url https://localhost:9543 \
+#     --enterprise-user admin@redis.local \
+#     --enterprise-password Redis123! \
+#     --enterprise-insecure
+#
+#   redisctl profile create cluster-central \
+#     --type enterprise \
+#     --enterprise-url https://localhost:9643 \
+#     --enterprise-user admin@redis.local \
+#     --enterprise-password Redis123! \
+#     --enterprise-insecure
+# ==============================================================================
+
+x-redis-enterprise-base: &redis-enterprise-base
+  image: ${REDIS_ENTERPRISE_IMAGE:-redislabs/redis:latest}
+  platform: ${REDIS_ENTERPRISE_PLATFORM:-linux/amd64}
+  tty: true
+  cap_add:
+    - ALL
+  networks:
+    - multi-cluster-network
+
+x-redisctl-base: &redisctl-base
+  image: ghcr.io/redis-developer/redisctl:latest
+  networks:
+    - multi-cluster-network
+
+services:
+  # ==============================================================================
+  # Cluster 1: West Region
+  # ==============================================================================
+  cluster-west:
+    <<: *redis-enterprise-base
+    container_name: cluster-west
+    ports:
+      - "9443:9443"   # REST API
+      - "8443:8443"   # Admin UI
+      - "12000:12000" # Database port
+      - "12001:12001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:9443/v1/bootstrap"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  cluster-west-init:
+    <<: *redisctl-base
+    container_name: cluster-west-init
+    depends_on:
+      cluster-west:
+        condition: service_healthy
+    environment:
+      REDIS_ENTERPRISE_URL: "https://cluster-west:9443"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    command:
+      [
+        "enterprise", "workflow", "init-cluster",
+        "--name", "west-region",
+        "--username", "admin@redis.local",
+        "--password", "Redis123!",
+      ]
+
+  cluster-west-create-dbs:
+    <<: *redisctl-base
+    container_name: cluster-west-create-dbs
+    depends_on:
+      cluster-west-init:
+        condition: service_completed_successfully
+    environment:
+      REDIS_ENTERPRISE_URL: "https://cluster-west:9443"
+      REDIS_ENTERPRISE_USER: "admin@redis.local"
+      REDIS_ENTERPRISE_PASSWORD: "Redis123!"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 3
+        echo "Creating west-users database..."
+        redisctl enterprise database create \
+          --data '{"name": "west-users", "memory_size": 104857600, "port": 12001, "replication": false}'
+        echo "West region databases created"
+
+  # ==============================================================================
+  # Cluster 2: East Region
+  # ==============================================================================
+  cluster-east:
+    <<: *redis-enterprise-base
+    container_name: cluster-east
+    ports:
+      - "9543:9443"   # REST API (offset by 100)
+      - "8543:8443"   # Admin UI
+      - "12100:12000" # Database port
+      - "12101:12001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:9443/v1/bootstrap"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  cluster-east-init:
+    <<: *redisctl-base
+    container_name: cluster-east-init
+    depends_on:
+      cluster-east:
+        condition: service_healthy
+    environment:
+      REDIS_ENTERPRISE_URL: "https://cluster-east:9443"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    command:
+      [
+        "enterprise", "workflow", "init-cluster",
+        "--name", "east-region",
+        "--username", "admin@redis.local",
+        "--password", "Redis123!",
+      ]
+
+  cluster-east-create-dbs:
+    <<: *redisctl-base
+    container_name: cluster-east-create-dbs
+    depends_on:
+      cluster-east-init:
+        condition: service_completed_successfully
+    environment:
+      REDIS_ENTERPRISE_URL: "https://cluster-east:9443"
+      REDIS_ENTERPRISE_USER: "admin@redis.local"
+      REDIS_ENTERPRISE_PASSWORD: "Redis123!"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 3
+        echo "Creating east-sessions database..."
+        redisctl enterprise database create \
+          --data '{"name": "east-sessions", "memory_size": 209715200, "port": 12001, "replication": false}'
+        echo "Creating east-cache database..."
+        redisctl enterprise database create \
+          --data '{"name": "east-cache", "memory_size": 52428800, "port": 12002, "replication": false, "eviction_policy": "allkeys-lru"}'
+        echo "East region databases created"
+
+  # ==============================================================================
+  # Cluster 3: Central Region
+  # ==============================================================================
+  cluster-central:
+    <<: *redis-enterprise-base
+    container_name: cluster-central
+    ports:
+      - "9643:9443"   # REST API (offset by 200)
+      - "8643:8443"   # Admin UI
+      - "12200:12000" # Database port
+      - "12201:12001"
+      - "12202:12002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:9443/v1/bootstrap"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  cluster-central-init:
+    <<: *redisctl-base
+    container_name: cluster-central-init
+    depends_on:
+      cluster-central:
+        condition: service_healthy
+    environment:
+      REDIS_ENTERPRISE_URL: "https://cluster-central:9443"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    command:
+      [
+        "enterprise", "workflow", "init-cluster",
+        "--name", "central-region",
+        "--username", "admin@redis.local",
+        "--password", "Redis123!",
+      ]
+
+  cluster-central-create-dbs:
+    <<: *redisctl-base
+    container_name: cluster-central-create-dbs
+    depends_on:
+      cluster-central-init:
+        condition: service_completed_successfully
+    environment:
+      REDIS_ENTERPRISE_URL: "https://cluster-central:9443"
+      REDIS_ENTERPRISE_USER: "admin@redis.local"
+      REDIS_ENTERPRISE_PASSWORD: "Redis123!"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        sleep 3
+        echo "Creating central-orders database..."
+        redisctl enterprise database create \
+          --data '{"name": "central-orders", "memory_size": 314572800, "port": 12001, "replication": false, "data_persistence": "aof"}'
+        echo "Creating central-inventory database..."
+        redisctl enterprise database create \
+          --data '{"name": "central-inventory", "memory_size": 157286400, "port": 12002, "replication": false}'
+        echo "Central region databases created"
+
+networks:
+  multi-cluster-network:
+    driver: bridge

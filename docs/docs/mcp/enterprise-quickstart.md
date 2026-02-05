@@ -30,26 +30,28 @@ redisctl -p my-cluster enterprise cluster get
 A key advantage of redisctl is **multi-cluster management**. Add profiles for each cluster:
 
 ```bash
-# Production cluster
-redisctl profile set prod-cluster \
+# West region cluster
+redisctl profile set cluster-west \
   --type enterprise \
-  --url https://prod.example.com:9443 \
-  --username admin \
-  --password PROD_PASSWORD
+  --url https://west.example.com:9443 \
+  --username admin@redis.local \
+  --password YOUR_PASSWORD \
+  --insecure
 
-# Staging cluster
-redisctl profile set staging-cluster \
+# East region cluster
+redisctl profile set cluster-east \
   --type enterprise \
-  --url https://staging.example.com:9443 \
-  --username admin \
-  --password STAGING_PASSWORD
+  --url https://east.example.com:9443 \
+  --username admin@redis.local \
+  --password YOUR_PASSWORD \
+  --insecure
 
-# Development cluster
-redisctl profile set dev-cluster \
+# Central region cluster
+redisctl profile set cluster-central \
   --type enterprise \
-  --url https://dev.example.com:9443 \
-  --username admin \
-  --password DEV_PASSWORD \
+  --url https://central.example.com:9443 \
+  --username admin@redis.local \
+  --password YOUR_PASSWORD \
   --insecure
 ```
 
@@ -102,6 +104,27 @@ Add to your MCP configuration (read-only by default - explore safely without mod
     }
     ```
 
+### Multi-Profile Configuration
+
+For multi-cluster management, specify multiple profiles when starting the MCP server:
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": [
+        "--profile", "cluster-west",
+        "--profile", "cluster-east",
+        "--profile", "cluster-central"
+      ]
+    }
+  }
+}
+```
+
+With multiple profiles configured, the AI can target specific clusters directly using the `profile` parameter on any tool call - no need to switch defaults.
+
 Restart your AI assistant to load the new configuration.
 
 ## Step 3: Try These Prompts
@@ -146,8 +169,9 @@ Start a conversation with your AI assistant and try these examples:
 | Prompt | What it does |
 |--------|--------------|
 | "List my profiles" | Shows all configured clusters |
-| "Switch to prod-cluster" | Changes default Enterprise profile |
-| "Show cluster info for staging-cluster" | Query a specific cluster |
+| "Show cluster info for cluster-central" | Query a specific cluster |
+| "Check the license on cluster-west" | Query with profile targeting |
+| "List databases across all my clusters" | Aggregate cross-cluster query |
 
 ## Optional: Enable Write Operations
 
@@ -180,45 +204,66 @@ Write prompts to try:
 >
 > | Name | URL | Default |
 > |------|-----|---------|
-> | prod-cluster | https://prod:9443 | Yes |
-> | staging-cluster | https://staging:9443 | No |
-> | dev-cluster | https://dev:9443 | No |
+> | cluster-west | https://west:9443 | Yes |
+> | cluster-east | https://east:9443 | No |
+> | cluster-central | https://central:9443 | No |
 
 > **You**: Check the license on all my clusters
 >
 > **AI**: I'll check each cluster:
 >
-> **prod-cluster**: Enterprise license, expires March 15, 2027 (407 days remaining)
-> - Shards: 24/100 used
+> **cluster-west**: Trial license, expires March 15, 2026 (38 days remaining)
+> - Shards: 2/4 used
 > - Status: OK
 >
-> **staging-cluster**: Trial license, expires February 28, 2026 (23 days remaining)
-> - Shards: 4/4 used
-> - Status: WARNING - Expiring soon, at shard limit
+> **cluster-east**: Trial license, expires February 28, 2026 (23 days remaining)
+> - Shards: 3/4 used
+> - Status: WARNING - Expiring soon
 >
-> **dev-cluster**: Trial license, expires February 20, 2026 (15 days remaining)
-> - Shards: 2/4 used
+> **cluster-central**: Trial license, expires February 20, 2026 (15 days remaining)
+> - Shards: 3/4 used
 > - Status: WARNING - Expiring soon
 
 > **You**: What's my total memory allocation across all clusters?
 >
-> **AI**: Total memory across 3 clusters: **52 GB**
+> **AI**: Total memory across 3 clusters: **1.1 GB**
 >
 > | Cluster | Databases | Memory |
 > |---------|-----------|--------|
-> | prod-cluster | 8 | 40 GB |
-> | staging-cluster | 3 | 8 GB |
-> | dev-cluster | 2 | 4 GB |
+> | cluster-west | 2 | 200 MB |
+> | cluster-east | 3 | 350 MB |
+> | cluster-central | 3 | 550 MB |
 
 ## Multi-Cluster Workflow
 
-The MCP server can query across multiple clusters by switching profiles:
+When configured with multiple profiles, the AI can query across clusters in two ways:
+
+### Direct Profile Targeting (Recommended)
+
+Every Enterprise tool accepts an optional `profile` parameter. The AI can target any cluster directly without changing defaults:
+
+```
+"Get the license status from cluster-west"
+→ AI calls get_license with profile="cluster-west"
+
+"List databases on cluster-east"
+→ AI calls list_enterprise_databases with profile="cluster-east"
+
+"Check alerts across all my clusters"
+→ AI calls list_alerts for each profile, aggregates results
+```
+
+### Profile Switching (Legacy)
+
+Alternatively, the AI can switch the default profile:
 
 1. **List profiles** - AI discovers your configured clusters
 2. **Set default** - AI switches to a cluster using `profile_set_default_enterprise`
 3. **Query** - AI runs tools against the current default
 4. **Repeat** - AI switches and queries other clusters
 5. **Aggregate** - AI combines results into a unified view
+
+Direct profile targeting is more efficient for cross-cluster queries since it doesn't require switching defaults between each call.
 
 This enables powerful cross-cluster operations that aren't possible with the native Redis Enterprise UI.
 

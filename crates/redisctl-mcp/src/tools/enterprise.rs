@@ -29,7 +29,11 @@ use crate::state::AppState;
 
 /// Input for getting cluster info (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetClusterInput {}
+pub struct GetClusterInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_cluster tool
 pub fn get_cluster(state: Arc<AppState>) -> Tool {
@@ -41,10 +45,13 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetClusterInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetClusterInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetClusterInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ClusterHandler::new(client);
                 let cluster = handler
@@ -65,7 +72,11 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
 
 /// Input for getting license info
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetLicenseInput {}
+pub struct GetLicenseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_license tool
 pub fn get_license(state: Arc<AppState>) -> Tool {
@@ -78,10 +89,13 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetLicenseInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetLicenseInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetLicenseInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = LicenseHandler::new(client);
                 let license = handler
@@ -98,7 +112,11 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
 
 /// Input for getting license usage
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetLicenseUsageInput {}
+pub struct GetLicenseUsageInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_license_usage tool
 pub fn get_license_usage(state: Arc<AppState>) -> Tool {
@@ -111,9 +129,9 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetLicenseUsageInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetLicenseUsageInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetLicenseUsageInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -137,6 +155,9 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
 /// Input for listing cluster logs
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListLogsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Start time - only return events after this time (ISO 8601 format, e.g., "2024-01-15T10:00:00Z")
     #[serde(default)]
     pub start_time: Option<String>,
@@ -167,9 +188,12 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ListLogsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListLogsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let query = if input.start_time.is_some()
                     || input.end_time.is_some()
@@ -208,6 +232,9 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
 /// Input for listing databases
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListDatabasesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Optional filter by database name (case-insensitive substring match)
     #[serde(default)]
     pub name_filter: Option<String>,
@@ -228,9 +255,12 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = DatabaseHandler::new(client);
                 let databases = handler
@@ -270,6 +300,9 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID
     pub uid: u32,
 }
@@ -283,9 +316,12 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = DatabaseHandler::new(client);
                 let database = handler
@@ -302,7 +338,11 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
 
 /// Input for listing nodes
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListNodesInput {}
+pub struct ListNodesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_nodes tool
 pub fn list_nodes(state: Arc<AppState>) -> Tool {
@@ -312,10 +352,13 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListNodesInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListNodesInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListNodesInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = NodeHandler::new(client);
                 let nodes = handler
@@ -351,6 +394,9 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific node
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetNodeInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Node UID
     pub uid: u32,
 }
@@ -366,9 +412,12 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetNodeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = NodeHandler::new(client);
                 let node = handler
@@ -389,7 +438,11 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
 
 /// Input for listing users
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListUsersInput {}
+pub struct ListUsersInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_users tool
 pub fn list_users(state: Arc<AppState>) -> Tool {
@@ -399,10 +452,13 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListUsersInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListUsersInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListUsersInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = UserHandler::new(client);
                 let users = handler
@@ -434,6 +490,9 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific user
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetUserInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// User UID
     pub uid: u32,
 }
@@ -449,9 +508,12 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetUserInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = UserHandler::new(client);
                 let user = handler
@@ -472,7 +534,11 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
 
 /// Input for listing alerts
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListAlertsInput {}
+pub struct ListAlertsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_alerts tool
 pub fn list_alerts(state: Arc<AppState>) -> Tool {
@@ -482,10 +548,13 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListAlertsInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAlertsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListAlertsInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = AlertHandler::new(client);
                 let alerts = handler
@@ -503,6 +572,9 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
 /// Input for listing database alerts
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListDatabaseAlertsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID
     pub uid: u32,
 }
@@ -517,7 +589,7 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabaseAlertsInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -541,6 +613,9 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
 /// Input for getting cluster stats
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetClusterStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Time interval for aggregation: "1sec", "10sec", "5min", "15min", "1hour", "12hour", "1week"
     #[serde(default)]
     pub interval: Option<String>,
@@ -565,7 +640,7 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetClusterStatsInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -600,6 +675,9 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
 /// Input for getting database stats
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetDatabaseStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID
     pub uid: u32,
     /// Time interval for aggregation: "1sec", "10sec", "5min", "15min", "1hour", "12hour", "1week"
@@ -626,7 +704,7 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseStatsInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -660,6 +738,9 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
 /// Input for getting node stats
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetNodeStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Node UID
     pub uid: u32,
     /// Time interval for aggregation: "1sec", "10sec", "5min", "15min", "1hour", "12hour", "1week"
@@ -685,9 +766,12 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetNodeStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeStatsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = StatsHandler::new(client);
 
@@ -721,7 +805,11 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
 
 /// Input for getting all nodes stats
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetAllNodesStatsInput {}
+pub struct GetAllNodesStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_all_nodes_stats tool
 pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
@@ -734,9 +822,9 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetAllNodesStatsInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAllNodesStatsInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetAllNodesStatsInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -755,7 +843,11 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
 
 /// Input for getting all databases stats
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetAllDatabasesStatsInput {}
+pub struct GetAllDatabasesStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_all_databases_stats tool
 pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
@@ -769,10 +861,11 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetAllDatabasesStatsInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAllDatabasesStatsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetAllDatabasesStatsInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = StatsHandler::new(client);
                 let stats = handler.databases_last().await.map_err(|e| {
@@ -789,6 +882,9 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
 /// Input for getting shard stats
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetShardStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Shard UID
     pub uid: u32,
 }
@@ -802,9 +898,12 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetShardStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardStatsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = StatsHandler::new(client);
                 let stats = handler
@@ -821,7 +920,11 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
 
 /// Input for getting all shards stats
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetAllShardsStatsInput {}
+pub struct GetAllShardsStatsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_all_shards_stats tool
 pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
@@ -834,9 +937,9 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetAllShardsStatsInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAllShardsStatsInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetAllShardsStatsInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -860,6 +963,9 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
 /// Input for listing shards
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListShardsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Optional database UID to filter by
     #[serde(default)]
     pub database_uid: Option<u32>,
@@ -876,9 +982,12 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ListShardsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListShardsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ShardHandler::new(client);
                 let shards = if let Some(db_uid) = input.database_uid {
@@ -903,6 +1012,9 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific shard
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetShardInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Shard UID (e.g., "1" or "2")
     pub uid: String,
 }
@@ -919,9 +1031,12 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetShardInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ShardHandler::new(client);
                 let shard = handler
@@ -943,6 +1058,9 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
 /// Input for getting database endpoints
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetDatabaseEndpointsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID
     pub uid: u32,
 }
@@ -958,9 +1076,10 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetDatabaseEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseEndpointsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = DatabaseHandler::new(client);
                 let endpoints = handler
@@ -981,7 +1100,11 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
 
 /// Input for listing debug info tasks
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListDebugInfoTasksInput {}
+pub struct ListDebugInfoTasksInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_debug_info_tasks tool
 pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
@@ -995,9 +1118,9 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListDebugInfoTasksInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListDebugInfoTasksInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListDebugInfoTasksInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -1017,6 +1140,9 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
 /// Input for getting debug info task status
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetDebugInfoStatusInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// The task ID returned when debug info collection was started
     pub task_id: String,
 }
@@ -1035,7 +1161,7 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDebugInfoStatusInput>| async move {
                 let client = state
-                    .enterprise_client()
+                    .enterprise_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
@@ -1058,7 +1184,11 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
 
 /// Input for listing modules
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListModulesInput {}
+pub struct ListModulesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_modules tool
 pub fn list_modules(state: Arc<AppState>) -> Tool {
@@ -1072,10 +1202,13 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListModulesInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListModulesInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListModulesInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ModuleHandler::new(client);
                 let modules = handler
@@ -1093,6 +1226,9 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific module
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetModuleInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Module UID
     pub uid: String,
 }
@@ -1109,9 +1245,12 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetModuleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModuleInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ModuleHandler::new(client);
                 let module = handler
@@ -1137,6 +1276,9 @@ fn default_enterprise_timeout() -> u64 {
 /// Input for backing up an Enterprise database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct BackupDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID to backup
     pub bdb_uid: u32,
     /// Timeout in seconds (default: 600)
@@ -1162,9 +1304,10 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 // Use Layer 2 workflow
                 backup_database_and_wait(
@@ -1189,6 +1332,9 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
 /// Input for importing data into an Enterprise database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ImportDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID to import into
     pub bdb_uid: u32,
     /// Import location (file path or URL)
@@ -1220,9 +1366,10 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 // Use Layer 2 workflow
                 import_database_and_wait(
@@ -1250,6 +1397,9 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
 /// Input for creating an Enterprise database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct CreateEnterpriseDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database name
     pub name: String,
     /// Memory size in bytes (e.g., 1073741824 for 1GB)
@@ -1288,9 +1438,12 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 // Build the request using struct construction (all Option fields have defaults)
                 let request = CreateDatabaseRequest {
@@ -1326,6 +1479,9 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
 /// Input for updating an Enterprise database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateEnterpriseDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID to update
     pub uid: u32,
     /// JSON object with fields to update (e.g., {"memory_size": 2147483648, "replication": true})
@@ -1350,9 +1506,12 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = DatabaseHandler::new(client);
                 let database = handler
@@ -1370,6 +1529,9 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
 /// Input for deleting an Enterprise database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct DeleteEnterpriseDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID to delete
     pub uid: u32,
 }
@@ -1393,9 +1555,12 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = DatabaseHandler::new(client);
                 handler
@@ -1416,6 +1581,9 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
 /// Input for flushing an Enterprise database
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct FlushEnterpriseDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Database UID to flush
     pub bdb_uid: u32,
     /// Timeout in seconds (default: 600)
@@ -1442,9 +1610,12 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 // Use Layer 2 workflow
                 flush_database_and_wait(
@@ -1472,7 +1643,11 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
 
 /// Input for listing roles (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListRolesInput {}
+pub struct ListRolesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_roles tool
 pub fn list_roles(state: Arc<AppState>) -> Tool {
@@ -1485,10 +1660,13 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListRolesInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListRolesInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListRolesInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = RolesHandler::new(client);
                 let roles = handler
@@ -1506,6 +1684,9 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific role
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetRoleInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Role UID
     pub uid: u32,
 }
@@ -1522,9 +1703,12 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRoleInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = RolesHandler::new(client);
                 let role = handler
@@ -1545,7 +1729,11 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
 
 /// Input for listing Redis ACLs (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListRedisAclsInput {}
+pub struct ListRedisAclsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_redis_acls tool
 pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
@@ -1558,10 +1746,13 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListRedisAclsInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListRedisAclsInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListRedisAclsInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = RedisAclHandler::new(client);
                 let acls = handler
@@ -1579,6 +1770,9 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
 /// Input for getting a specific Redis ACL
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetRedisAclInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// ACL UID
     pub uid: u32,
 }
@@ -1595,9 +1789,12 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetRedisAclInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRedisAclInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = RedisAclHandler::new(client);
                 let acl = handler
@@ -1619,6 +1816,9 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
 /// Input for updating license
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateLicenseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// The license key string to install
     pub license_key: String,
 }
@@ -1640,9 +1840,12 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = LicenseHandler::new(client);
                 let request = LicenseUpdateRequest {
@@ -1663,6 +1866,9 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
 /// Input for validating license
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ValidateLicenseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// The license key string to validate
     pub license_key: String,
 }
@@ -1681,9 +1887,10 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ValidateLicenseInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = LicenseHandler::new(client);
                 let license = handler
@@ -1705,6 +1912,9 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
 /// Input for updating cluster configuration
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateClusterInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// JSON object with cluster settings to update (e.g., {"name": "my-cluster", "email_alerts": true})
     pub updates: Value,
 }
@@ -1727,9 +1937,12 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ClusterHandler::new(client);
                 let result = handler
@@ -1746,7 +1959,11 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
 
 /// Input for getting cluster policy (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetClusterPolicyInput {}
+pub struct GetClusterPolicyInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_cluster_policy tool
 pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
@@ -1760,10 +1977,11 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetClusterPolicyInput>(
             state,
             |State(state): State<Arc<AppState>>,
-             Json(_input): Json<GetClusterPolicyInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+             Json(input): Json<GetClusterPolicyInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = ClusterHandler::new(client);
                 let policy = handler
@@ -1781,6 +1999,9 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
 /// Input for updating cluster policy
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateClusterPolicyInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// JSON object with policy settings to update
     /// (e.g., {"default_shards_placement": "sparse", "rack_aware": true, "default_provisioned_redis_version": "7.2"})
     pub policy: Value,
@@ -1806,9 +2027,10 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = ClusterHandler::new(client);
                 let result = handler
@@ -1829,7 +2051,11 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
 
 /// Input for enabling maintenance mode (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct EnableMaintenanceModeInput {}
+pub struct EnableMaintenanceModeInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the enable_maintenance_mode tool
 pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
@@ -1842,7 +2068,7 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, EnableMaintenanceModeInput>(
             state,
             |State(state): State<Arc<AppState>>,
-             Json(_input): Json<EnableMaintenanceModeInput>| async move {
+             Json(input): Json<EnableMaintenanceModeInput>| async move {
                 // Check write permission
                 if !state.is_write_allowed() {
                     return Err(McpError::tool(
@@ -1850,9 +2076,10 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = ClusterHandler::new(client);
                 // Enable maintenance mode by setting block_cluster_changes to true
@@ -1875,7 +2102,11 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
 
 /// Input for disabling maintenance mode (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct DisableMaintenanceModeInput {}
+pub struct DisableMaintenanceModeInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the disable_maintenance_mode tool
 pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
@@ -1888,7 +2119,7 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, DisableMaintenanceModeInput>(
             state,
             |State(state): State<Arc<AppState>>,
-             Json(_input): Json<DisableMaintenanceModeInput>| async move {
+             Json(input): Json<DisableMaintenanceModeInput>| async move {
                 // Check write permission
                 if !state.is_write_allowed() {
                     return Err(McpError::tool(
@@ -1896,9 +2127,10 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = ClusterHandler::new(client);
                 // Disable maintenance mode by setting block_cluster_changes to false
@@ -1925,7 +2157,11 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
 
 /// Input for getting cluster certificates (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetClusterCertificatesInput {}
+pub struct GetClusterCertificatesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_cluster_certificates tool
 pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
@@ -1939,10 +2175,11 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetClusterCertificatesInput>(
             state,
             |State(state): State<Arc<AppState>>,
-             Json(_input): Json<GetClusterCertificatesInput>| async move {
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+             Json(input): Json<GetClusterCertificatesInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
 
                 let handler = ClusterHandler::new(client);
                 let certificates = handler
@@ -1959,7 +2196,11 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
 
 /// Input for rotating cluster certificates (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct RotateClusterCertificatesInput {}
+pub struct RotateClusterCertificatesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the rotate_cluster_certificates tool
 pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
@@ -1972,7 +2213,7 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, RotateClusterCertificatesInput>(
             state,
             |State(state): State<Arc<AppState>>,
-             Json(_input): Json<RotateClusterCertificatesInput>| async move {
+             Json(input): Json<RotateClusterCertificatesInput>| async move {
                 // Check write permission
                 if !state.is_write_allowed() {
                     return Err(McpError::tool(
@@ -1980,9 +2221,12 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ClusterHandler::new(client);
                 let result = handler
@@ -2003,6 +2247,9 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
 /// Input for updating cluster certificates
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateClusterCertificatesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Certificate name (e.g., "proxy", "syncer", "api")
     pub name: String,
     /// PEM-encoded certificate content
@@ -2030,9 +2277,12 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let client = state.enterprise_client().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                })?;
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                    })?;
 
                 let handler = ClusterHandler::new(client);
                 let body = serde_json::json!({
