@@ -181,3 +181,35 @@ pub async fn import_database_and_wait(
 
     Ok(())
 }
+
+/// Flush all data from an Enterprise database and wait for completion
+///
+/// WARNING: This permanently deletes all data in the database!
+///
+/// # Arguments
+///
+/// * `client` - The Enterprise API client
+/// * `bdb_uid` - The database UID to flush
+/// * `timeout` - Maximum time to wait for completion
+/// * `on_progress` - Optional callback for progress updates
+pub async fn flush_database_and_wait(
+    client: &EnterpriseClient,
+    bdb_uid: u32,
+    timeout: Duration,
+    on_progress: Option<EnterpriseProgressCallback>,
+) -> Result<()> {
+    // Trigger flush
+    let response = client.databases().flush(bdb_uid).await?;
+
+    // Poll until completion
+    poll_action(
+        client,
+        &response.action_uid,
+        timeout,
+        DEFAULT_INTERVAL,
+        on_progress,
+    )
+    .await?;
+
+    Ok(())
+}

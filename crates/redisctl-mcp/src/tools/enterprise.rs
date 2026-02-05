@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use redis_enterprise::alerts::AlertHandler;
-use redis_enterprise::bdb::DatabaseHandler;
+use redis_enterprise::bdb::{CreateDatabaseRequest, DatabaseHandler};
 use redis_enterprise::cluster::ClusterHandler;
 use redis_enterprise::debuginfo::DebugInfoHandler;
 use redis_enterprise::license::LicenseHandler;
@@ -14,9 +14,12 @@ use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
 use redis_enterprise::users::UserHandler;
-use redisctl_core::enterprise::{backup_database_and_wait, import_database_and_wait};
+use redisctl_core::enterprise::{
+    backup_database_and_wait, flush_database_and_wait, import_database_and_wait,
+};
 use schemars::JsonSchema;
 use serde::Deserialize;
+use serde_json::Value;
 use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
 
@@ -1235,6 +1238,225 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
                     "message": "Import completed successfully",
                     "bdb_uid": input.bdb_uid,
                     "import_location": input.import_location
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for creating an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateEnterpriseDatabaseInput {
+    /// Database name
+    pub name: String,
+    /// Memory size in bytes (e.g., 1073741824 for 1GB)
+    pub memory_size: Option<u64>,
+    /// Port number (optional, cluster will assign if not specified)
+    pub port: Option<u16>,
+    /// Enable replication for high availability
+    #[serde(default)]
+    pub replication: Option<bool>,
+    /// Persistence mode: "disabled", "aof", "snapshot", "aof_and_snapshot"
+    pub persistence: Option<String>,
+    /// Eviction policy: "noeviction", "allkeys-lru", "volatile-lru", etc.
+    pub eviction_policy: Option<String>,
+    /// Enable sharding (clustering)
+    #[serde(default)]
+    pub sharding: Option<bool>,
+    /// Number of shards (if sharding is enabled)
+    pub shards_count: Option<u32>,
+}
+
+/// Build the create_enterprise_database tool
+pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_enterprise_database")
+        .description(
+            "Create a new database in the Redis Enterprise cluster. \
+             Returns the created database details. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateEnterpriseDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateEnterpriseDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                // Build the request using struct construction (all Option fields have defaults)
+                let request = CreateDatabaseRequest {
+                    name: input.name.clone(),
+                    memory_size: input.memory_size,
+                    port: input.port,
+                    replication: input.replication,
+                    persistence: input.persistence.clone(),
+                    eviction_policy: input.eviction_policy.clone(),
+                    sharding: input.sharding,
+                    shards_count: input.shards_count,
+                    shard_count: None,
+                    proxy_policy: None,
+                    rack_aware: None,
+                    module_list: None,
+                    crdt: None,
+                    authentication_redis_pass: None,
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let database = handler
+                    .create(request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to create database: {}", e)))?;
+
+                CallToolResult::from_serialize(&database)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for updating an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateEnterpriseDatabaseInput {
+    /// Database UID to update
+    pub uid: u32,
+    /// JSON object with fields to update (e.g., {"memory_size": 2147483648, "replication": true})
+    pub updates: Value,
+}
+
+/// Build the update_enterprise_database tool
+pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_database")
+        .description(
+            "Update configuration of an existing Redis Enterprise database. \
+             Pass a JSON object with the fields to update. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateEnterpriseDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateEnterpriseDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = DatabaseHandler::new(client);
+                let database = handler
+                    .update(input.uid, input.updates)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update database: {}", e)))?;
+
+                CallToolResult::from_serialize(&database)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for deleting an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteEnterpriseDatabaseInput {
+    /// Database UID to delete
+    pub uid: u32,
+}
+
+/// Build the delete_enterprise_database tool
+pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_enterprise_database")
+        .description(
+            "Delete a database from the Redis Enterprise cluster. \
+             WARNING: This permanently deletes the database and all its data! \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteEnterpriseDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteEnterpriseDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = DatabaseHandler::new(client);
+                handler
+                    .delete(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to delete database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Database deleted successfully",
+                    "uid": input.uid
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for flushing an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct FlushEnterpriseDatabaseInput {
+    /// Database UID to flush
+    pub bdb_uid: u32,
+    /// Timeout in seconds (default: 600)
+    #[serde(default = "default_enterprise_timeout")]
+    pub timeout_seconds: u64,
+}
+
+/// Build the flush_enterprise_database tool
+pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("flush_enterprise_database")
+        .description(
+            "Flush all data from a Redis Enterprise database and wait for completion. \
+             WARNING: This permanently deletes ALL data in the database! \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, FlushEnterpriseDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<FlushEnterpriseDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                // Use Layer 2 workflow
+                flush_database_and_wait(
+                    &client,
+                    input.bdb_uid,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to flush database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Database flushed successfully",
+                    "bdb_uid": input.bdb_uid
                 }))
             },
         )

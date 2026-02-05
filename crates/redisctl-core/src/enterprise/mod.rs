@@ -36,6 +36,6 @@ pub mod workflows;
 // Re-export key types for convenience
 pub use progress::{EnterpriseProgressCallback, EnterpriseProgressEvent, poll_action};
 pub use workflows::{
-    DEFAULT_INTERVAL, DEFAULT_TIMEOUT, backup_database_and_wait, import_database_and_wait,
-    upgrade_database_and_wait, upgrade_module_and_wait,
+    DEFAULT_INTERVAL, DEFAULT_TIMEOUT, backup_database_and_wait, flush_database_and_wait,
+    import_database_and_wait, upgrade_database_and_wait, upgrade_module_and_wait,
 };

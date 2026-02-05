@@ -246,6 +246,10 @@ mod tests {
         // Write operations
         let _ = tools::enterprise::backup_enterprise_database(state.clone());
         let _ = tools::enterprise::import_enterprise_database(state.clone());
+        let _ = tools::enterprise::create_enterprise_database(state.clone());
+        let _ = tools::enterprise::update_enterprise_database(state.clone());
+        let _ = tools::enterprise::delete_enterprise_database(state.clone());
+        let _ = tools::enterprise::flush_enterprise_database(state.clone());
     }
 
     #[test]
