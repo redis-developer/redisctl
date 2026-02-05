@@ -358,6 +358,7 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         .tool(tools::cloud::import_database(state.clone()))
         .tool(tools::cloud::delete_subscription(state.clone()))
         .tool(tools::cloud::flush_database(state.clone()))
+        .tool(tools::cloud::create_subscription(state.clone()))
         // Enterprise - Cluster
         .tool(tools::enterprise::get_cluster(state.clone()))
         .tool(tools::enterprise::get_cluster_stats(state.clone()))
