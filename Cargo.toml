@@ -92,9 +92,9 @@ pretty_assertions = "1.4"
 # Redis client
 redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "connection-manager"] }
 
-# External crates (using local paths for development/testing)
-redis-cloud = { path = "../redis-cloud" }
-redis-enterprise = { path = "../redis-enterprise" }
+# External crates (using git for CI, override with path locally if needed)
+redis-cloud = { git = "https://github.com/redis-developer/redis-cloud-rs", branch = "main" }
+redis-enterprise = { git = "https://github.com/redis-developer/redis-enterprise-rs", branch = "main" }
 
 # Windows CI workaround - ensure these are available in workspace
 shellexpand = "3.1"

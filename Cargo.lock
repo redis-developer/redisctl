@@ -2776,7 +2776,8 @@ dependencies = [
 
 [[package]]
 name = "redis-cloud"
-version = "0.9.2"
+version = "0.9.3"
+source = "git+https://github.com/redis-developer/redis-cloud-rs?branch=main#e08b11e09aa7551390d48e6ddc7e0d9d2fdc0ae0"
 dependencies = [
  "anyhow",
  "async-stream",
@@ -2799,7 +2800,8 @@ dependencies = [
 
 [[package]]
 name = "redis-enterprise"
-version = "0.8.2"
+version = "0.8.3"
+source = "git+https://github.com/redis-developer/redis-enterprise-rs?branch=main#59cbe18041d55cb77863079e5c6aa41c7eded062"
 dependencies = [
  "anyhow",
  "async-stream",
