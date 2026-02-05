@@ -5,7 +5,7 @@ The redisctl MCP server exposes **~100 tools** for managing Redis Cloud, Redis E
 Tools marked with *(write)* require `--read-only=false` flag. Database tools require a `--database-url` connection.
 
 !!! warning "Documentation Update in Progress"
-    The detailed tool listing below is being updated. For the most accurate list, run `redisctl mcp serve` and check the tools your AI assistant discovers, or inspect the source code.
+    The detailed tool listing below is being updated. For the most accurate list, start `redisctl-mcp` and check the tools your AI assistant discovers, or inspect the source code.
 
 ## Redis Cloud Tools (29 tools)
 

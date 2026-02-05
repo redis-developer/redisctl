@@ -64,21 +64,20 @@ redisctl -p my-enterprise-profile enterprise cluster get
 
 ## Starting the MCP Server
 
+The MCP server is a separate binary called `redisctl-mcp`:
+
 ```bash
-# Start in read-only mode (safe for exploration)
-redisctl -p my-profile mcp serve
+# Start in read-only mode (default, safe for exploration)
+redisctl-mcp --profile my-profile
 
 # Enable write operations (create, update, delete)
-redisctl -p my-profile mcp serve --allow-writes
+redisctl-mcp --profile my-profile --read-only=false
 
 # Connect to a Redis database for direct data operations
-redisctl -p my-profile mcp serve --database-url redis://localhost:6379
+redisctl-mcp --profile my-profile --database-url redis://localhost:6379
 
 # Full access: Cloud/Enterprise management + database operations + writes
-redisctl -p my-profile mcp serve --allow-writes --database-url redis://localhost:6379
-
-# List available tools
-redisctl mcp tools
+redisctl-mcp --profile my-profile --read-only=false --database-url redis://localhost:6379
 ```
 
 ### Database Connection Options
@@ -106,7 +105,7 @@ Use `--database-url` for quick connections to any Redis database:
 --database-url rediss://default:password@redis-12345.cloud.redislabs.com:12345
 
 # Using environment variable
-REDIS_URL=redis://localhost:6379 redisctl mcp serve
+REDIS_URL=redis://localhost:6379 redisctl-mcp --profile my-profile
 ```
 
 #### Option 2: Database Profile (Recommended for Regular Use)
@@ -132,11 +131,11 @@ db = 0                   # optional, defaults to 0
 Then start the MCP server with that profile:
 
 ```bash
-# Uses the default database profile from config
-redisctl mcp serve
+# Uses the default profile from config
+redisctl-mcp
 
 # Or specify a profile explicitly
-redisctl -p local-redis mcp serve
+redisctl-mcp --profile local-redis
 ```
 
 **Note**: If both `--database-url` and a database profile are available, the `--database-url` takes precedence.
@@ -157,8 +156,8 @@ Choose your AI assistant below:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "/path/to/redisctl",
-          "args": ["-p", "my-profile", "mcp", "serve"]
+          "command": "redisctl-mcp",
+          "args": ["--profile", "my-profile"]
         }
       }
     }
@@ -170,10 +169,10 @@ Choose your AI assistant below:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "/path/to/redisctl",
+          "command": "redisctl-mcp",
           "args": [
-            "-p", "my-profile", "mcp", "serve",
-            "--allow-writes",
+            "--profile", "my-profile",
+            "--read-only=false",
             "--database-url", "redis://localhost:6379"
           ]
         }
@@ -189,10 +188,10 @@ Choose your AI assistant below:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "redisctl",
+          "command": "redisctl-mcp",
           "args": [
-            "-p", "my-profile", "mcp", "serve",
-            "--allow-writes",
+            "--profile", "my-profile",
+            "--read-only=false",
             "--database-url", "redis://localhost:6379"
           ]
         }
@@ -212,10 +211,10 @@ Choose your AI assistant below:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "/path/to/redisctl",
+          "command": "redisctl-mcp",
           "args": [
-            "-p", "my-profile", "mcp", "serve",
-            "--allow-writes",
+            "--profile", "my-profile",
+            "--read-only=false",
             "--database-url", "redis://localhost:6379"
           ]
         }
@@ -237,10 +236,10 @@ Choose your AI assistant below:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "/path/to/redisctl",
+          "command": "redisctl-mcp",
           "args": [
-            "-p", "my-profile", "mcp", "serve",
-            "--allow-writes",
+            "--profile", "my-profile",
+            "--read-only=false",
             "--database-url", "redis://localhost:6379"
           ]
         }
@@ -263,10 +262,10 @@ Choose your AI assistant below:
           {
             "transport": {
               "type": "stdio",
-              "command": "/path/to/redisctl",
+              "command": "redisctl-mcp",
               "args": [
-                "-p", "my-profile", "mcp", "serve",
-                "--allow-writes",
+                "--profile", "my-profile",
+                "--read-only=false",
                 "--database-url", "redis://localhost:6379"
               ]
             }
@@ -285,10 +284,10 @@ Choose your AI assistant below:
       "context_servers": {
         "redisctl": {
           "command": {
-            "path": "/path/to/redisctl",
+            "path": "redisctl-mcp",
             "args": [
-              "-p", "my-profile", "mcp", "serve",
-              "--allow-writes",
+              "--profile", "my-profile",
+              "--read-only=false",
               "--database-url", "redis://localhost:6379"
             ]
           }
@@ -329,10 +328,10 @@ The MCP server uses your existing redisctl profiles, which means:
 
 ```bash
 # Check your profile works
-redisctl -p my-profile enterprise cluster get
+redisctl --profile my-profile enterprise cluster get
 
-# Verify MCP feature is enabled
-redisctl mcp tools
+# Test the MCP server directly
+redisctl-mcp --profile my-profile
 ```
 
 ### AI can't find the server

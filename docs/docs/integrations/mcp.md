@@ -74,15 +74,14 @@ redisctl -p my-enterprise-profile enterprise cluster get
 
 ## Quick Start
 
+The MCP server is a separate binary called `redisctl-mcp`:
+
 ```bash
-# Start the MCP server (read-only mode, safe for exploration)
-redisctl -p my-profile mcp serve
+# Start the MCP server (read-only mode by default, safe for exploration)
+redisctl-mcp --profile my-profile
 
 # Enable write operations (create, update, delete)
-redisctl -p my-profile mcp serve --allow-writes
-
-# List available tools
-redisctl mcp tools
+redisctl-mcp --profile my-profile --read-only=false
 ```
 
 ## Configuring Claude Desktop
@@ -97,8 +96,8 @@ Add the following to your Claude Desktop configuration file:
 {
   "mcpServers": {
     "redisctl": {
-      "command": "/path/to/redisctl",
-      "args": ["-p", "my-profile", "mcp", "serve"]
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-profile"]
     }
   }
 }
@@ -110,8 +109,8 @@ For write operations:
 {
   "mcpServers": {
     "redisctl": {
-      "command": "/path/to/redisctl",
-      "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-profile", "--read-only=false"]
     }
   }
 }
@@ -125,8 +124,8 @@ Add to your project's `.mcp.json` or global MCP settings:
 {
   "mcpServers": {
     "redisctl": {
-      "command": "redisctl",
-      "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-profile", "--read-only=false"]
     }
   }
 }
@@ -144,8 +143,8 @@ Add to your Cursor MCP configuration file:
 {
   "mcpServers": {
     "redisctl": {
-      "command": "/path/to/redisctl",
-      "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-profile", "--read-only=false"]
     }
   }
 }
@@ -165,8 +164,8 @@ Add to your Windsurf MCP configuration:
 {
   "mcpServers": {
     "redisctl": {
-      "command": "/path/to/redisctl",
-      "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-profile", "--read-only=false"]
     }
   }
 }
@@ -187,8 +186,8 @@ If you're using [Continue](https://continue.dev/) in VS Code, add to your Contin
       {
         "transport": {
           "type": "stdio",
-          "command": "/path/to/redisctl",
-          "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+          "command": "redisctl-mcp",
+          "args": ["--profile", "my-profile", "--read-only=false"]
         }
       }
     ]
@@ -205,8 +204,8 @@ Add to your Zed settings (`~/.config/zed/settings.json` on Linux/macOS):
   "context_servers": {
     "redisctl": {
       "command": {
-        "path": "/path/to/redisctl",
-        "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+        "path": "redisctl-mcp",
+        "args": ["--profile", "my-profile", "--read-only=false"]
       }
     }
   }
@@ -385,7 +384,7 @@ By default, the MCP server runs in read-only mode. This prevents any destructive
 
 ### Write Mode
 
-Use `--allow-writes` only when you need to create or modify resources. Consider:
+Use `--read-only=false` when you need to create or modify resources. Consider:
 
 - Using separate profiles for read-only vs write access
 - Running write-enabled servers only in development environments
@@ -405,26 +404,21 @@ The MCP server uses your existing redisctl profiles, which means:
 
 ```bash
 # Check your profile works
-redisctl -p my-profile enterprise cluster get
+redisctl --profile my-profile enterprise cluster get
 
-# Verify MCP feature is enabled
-redisctl mcp tools
+# Test the MCP server directly
+redisctl-mcp --profile my-profile
 ```
 
 ### Claude can't find the server
 
-1. Ensure the path to redisctl is absolute in your config
-2. Restart Claude Desktop after config changes
-3. Check Claude's MCP logs for connection errors
+1. Ensure `redisctl-mcp` is in your PATH or use an absolute path
+2. Restart your IDE after config changes
+3. Check MCP logs for connection errors
 
 ### Operations timing out
 
-The MCP server inherits redisctl's timeout settings. For slow operations:
-
-```bash
-# Enterprise operations may need longer timeouts
-redisctl -p my-profile mcp serve --allow-writes
-```
+The MCP server inherits redisctl's timeout settings from the profile configuration.
 
 ## Protocol Details
 

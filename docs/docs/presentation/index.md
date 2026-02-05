@@ -118,11 +118,11 @@ For customers interested in AI-driven automation:
 ### 1. Start MCP Server
 
 ```bash
-# Start with Enterprise profile
-redisctl mcp serve --profile demo
+# Start with Enterprise profile (read-only by default)
+redisctl-mcp --profile demo
 
 # Or with write operations enabled
-redisctl mcp serve --profile demo --read-only=false
+redisctl-mcp --profile demo --read-only=false
 ```
 
 ### 2. Configure Claude Desktop / Cursor / etc.
@@ -131,8 +131,8 @@ redisctl mcp serve --profile demo --read-only=false
 {
   "mcpServers": {
     "redisctl": {
-      "command": "redisctl",
-      "args": ["mcp", "serve", "--profile", "demo"]
+      "command": "redisctl-mcp",
+      "args": ["--profile", "demo"]
     }
   }
 }
