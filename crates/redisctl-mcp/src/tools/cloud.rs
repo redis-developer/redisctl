@@ -737,6 +737,45 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
         .expect("valid tool")
 }
 
+/// Input for getting database certificate
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetCertificateInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+}
+
+/// Build the get_database_certificate tool
+pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_database_certificate")
+        .description(
+            "Get the TLS/SSL certificate for a Redis Cloud database. \
+             Returns the public certificate in PEM format for TLS connections.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetCertificateInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetCertificateInput>| async move {
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                let handler = DatabaseHandler::new(client);
+                let cert = handler
+                    .get_subscription_database_certificate(input.subscription_id, input.database_id)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get certificate: {}", e)))?;
+
+                CallToolResult::from_serialize(&cert)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
 // ============================================================================
 // Write operations (require write permission)
 // ============================================================================
