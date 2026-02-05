@@ -200,6 +200,7 @@ mod tests {
         let _ = tools::cloud::backup_database(state.clone());
         let _ = tools::cloud::import_database(state.clone());
         let _ = tools::cloud::delete_subscription(state.clone());
+        let _ = tools::cloud::flush_database(state.clone());
     }
 
     #[test]

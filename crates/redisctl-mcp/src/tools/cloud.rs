@@ -8,7 +8,8 @@ use redis_cloud::flexible::{DatabaseHandler, SubscriptionHandler};
 use redis_cloud::{AccountHandler, AclHandler, TaskHandler, UserHandler};
 use redisctl_core::cloud::{
     backup_database_and_wait, create_database_and_wait, delete_database_and_wait,
-    delete_subscription_and_wait, import_database_and_wait, update_database_and_wait,
+    delete_subscription_and_wait, flush_database_and_wait, import_database_and_wait,
+    update_database_and_wait,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -1199,6 +1200,71 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Subscription deleted successfully",
                     "subscription_id": input.subscription_id
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Flush database
+// ============================================================================
+
+/// Input for flushing a database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct FlushDatabaseInput {
+    /// Subscription ID containing the database
+    pub subscription_id: i32,
+    /// Database ID to flush
+    pub database_id: i32,
+    /// Timeout in seconds (default: 300)
+    #[serde(default = "default_flush_timeout")]
+    pub timeout_seconds: u64,
+}
+
+fn default_flush_timeout() -> u64 {
+    300
+}
+
+/// Build the flush_database tool
+pub fn flush_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("flush_database")
+        .description(
+            "Flush all data from a Redis Cloud database and wait for completion. \
+             WARNING: This permanently deletes ALL data in the database! \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, FlushDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<FlushDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+
+                // Use Layer 2 workflow
+                flush_database_and_wait(
+                    &client,
+                    input.subscription_id,
+                    input.database_id,
+                    Duration::from_secs(input.timeout_seconds),
+                    None,
+                )
+                .await
+                .map_err(|e| ToolError::new(format!("Failed to flush database: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Database flushed successfully",
+                    "subscription_id": input.subscription_id,
+                    "database_id": input.database_id
                 }))
             },
         )
