@@ -77,14 +77,27 @@ redisctl enterprise database list
 redisctl enterprise database list -o json -q '[].{name: name, memory: memory_size}'
 ```
 
-### 3. Support Package (30 seconds)
+### 3. License & Cluster Management (1 minute)
+
+```bash
+# Check license status
+redisctl enterprise license get
+
+# Check license usage against limits
+redisctl enterprise license usage
+
+# View cluster policy
+redisctl enterprise cluster get-policy
+```
+
+### 4. Support Package (30 seconds)
 
 ```bash
 # The killer feature
 redisctl enterprise support-package cluster --optimize --upload
 ```
 
-### 4. Raw API Access (30 seconds)
+### 5. Raw API Access (30 seconds)
 
 ```bash
 # Any endpoint
@@ -94,4 +107,49 @@ redisctl api enterprise get /v1/nodes
 curl -k -u "user:pass" https://cluster:9443/v1/nodes | jq
 ```
 
-Total demo time: ~3 minutes
+Total demo time: ~4 minutes
+
+---
+
+## MCP Demo Script (AI Integration)
+
+For customers interested in AI-driven automation:
+
+### 1. Start MCP Server
+
+```bash
+# Start with Enterprise profile (read-only by default)
+redisctl-mcp --profile demo
+
+# Or with write operations enabled
+redisctl-mcp --profile demo --read-only=false
+```
+
+### 2. Configure Claude Desktop / Cursor / etc.
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": ["--profile", "demo"]
+    }
+  }
+}
+```
+
+### 3. Example Prompts to Demo
+
+- "What's our license status and when does it expire?"
+- "Show me all databases and their memory usage"
+- "Which nodes have the most shards?"
+- "Are there any active alerts on the cluster?"
+- "Check the cluster policy settings"
+
+### 4. Write Operations (if enabled)
+
+- "Enable maintenance mode for tonight's upgrade"
+- "Update the cluster policy to use sparse shard placement"
+- "Create a new 2GB database called test-cache"
+
+Total MCP demo time: ~5 minutes

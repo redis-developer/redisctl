@@ -7,7 +7,7 @@ use redis_enterprise::alerts::AlertHandler;
 use redis_enterprise::bdb::{CreateDatabaseRequest, DatabaseHandler};
 use redis_enterprise::cluster::ClusterHandler;
 use redis_enterprise::debuginfo::DebugInfoHandler;
-use redis_enterprise::license::LicenseHandler;
+use redis_enterprise::license::{LicenseHandler, LicenseUpdateRequest};
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::modules::ModuleHandler;
 use redis_enterprise::nodes::NodeHandler;
@@ -1606,6 +1606,450 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
                     .map_err(|e| ToolError::new(format!("Failed to get ACL: {}", e)))?;
 
                 CallToolResult::from_serialize(&acl)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// License Write Operations
+// ============================================================================
+
+/// Input for updating license
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateLicenseInput {
+    /// The license key string to install
+    pub license_key: String,
+}
+
+/// Build the update_license tool
+pub fn update_license(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_license")
+        .description(
+            "Update the Redis Enterprise cluster license with a new license key. \
+             This applies a new license to the cluster. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateLicenseInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<UpdateLicenseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = LicenseHandler::new(client);
+                let request = LicenseUpdateRequest {
+                    license: input.license_key,
+                };
+                let license = handler
+                    .update(request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update license: {}", e)))?;
+
+                CallToolResult::from_serialize(&license)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for validating license
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ValidateLicenseInput {
+    /// The license key string to validate
+    pub license_key: String,
+}
+
+/// Build the validate_license tool
+pub fn validate_license(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("validate_enterprise_license")
+        .description(
+            "Validate a license key before applying it to the Redis Enterprise cluster. \
+             Returns license information if valid, or an error if invalid. \
+             This is a dry-run that does not modify the cluster.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ValidateLicenseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ValidateLicenseInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = LicenseHandler::new(client);
+                let license = handler
+                    .validate(&input.license_key)
+                    .await
+                    .map_err(|e| ToolError::new(format!("License validation failed: {}", e)))?;
+
+                CallToolResult::from_serialize(&license)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Cluster Configuration Operations
+// ============================================================================
+
+/// Input for updating cluster configuration
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateClusterInput {
+    /// JSON object with cluster settings to update (e.g., {"name": "my-cluster", "email_alerts": true})
+    pub updates: Value,
+}
+
+/// Build the update_cluster tool
+pub fn update_cluster(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_cluster")
+        .description(
+            "Update Redis Enterprise cluster configuration settings. \
+             Pass a JSON object with the fields to update (e.g., name, email_alerts, rack_aware). \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateClusterInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<UpdateClusterInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                let result = handler
+                    .update(input.updates)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update cluster: {}", e)))?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for getting cluster policy (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetClusterPolicyInput {}
+
+/// Build the get_cluster_policy tool
+pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_cluster_policy")
+        .description(
+            "Get Redis Enterprise cluster policy settings including default shards placement, \
+             rack awareness, default Redis version, and other cluster-wide defaults.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetClusterPolicyInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(_input): Json<GetClusterPolicyInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                let policy = handler
+                    .policy()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get cluster policy: {}", e)))?;
+
+                CallToolResult::from_serialize(&policy)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for updating cluster policy
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateClusterPolicyInput {
+    /// JSON object with policy settings to update
+    /// (e.g., {"default_shards_placement": "sparse", "rack_aware": true, "default_provisioned_redis_version": "7.2"})
+    pub policy: Value,
+}
+
+/// Build the update_cluster_policy tool
+pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_cluster_policy")
+        .description(
+            "Update Redis Enterprise cluster policy settings. \
+             Common settings: default_shards_placement (dense/sparse), rack_aware, \
+             default_provisioned_redis_version, persistent_node_removal. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateClusterPolicyInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateClusterPolicyInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                let result = handler
+                    .policy_update(input.policy)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update cluster policy: {}", e)))?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Maintenance Mode Operations
+// ============================================================================
+
+/// Input for enabling maintenance mode (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct EnableMaintenanceModeInput {}
+
+/// Build the enable_maintenance_mode tool
+pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("enable_enterprise_maintenance_mode")
+        .description(
+            "Enable maintenance mode on the Redis Enterprise cluster. \
+             When enabled, cluster configuration changes are blocked, allowing safe \
+             maintenance operations like upgrades. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, EnableMaintenanceModeInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(_input): Json<EnableMaintenanceModeInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                // Enable maintenance mode by setting block_cluster_changes to true
+                let result = handler
+                    .update(serde_json::json!({"block_cluster_changes": true}))
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to enable maintenance mode: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Maintenance mode enabled",
+                    "result": result
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for disabling maintenance mode (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DisableMaintenanceModeInput {}
+
+/// Build the disable_maintenance_mode tool
+pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("disable_enterprise_maintenance_mode")
+        .description(
+            "Disable maintenance mode on the Redis Enterprise cluster. \
+             This re-enables cluster configuration changes after maintenance is complete. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DisableMaintenanceModeInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(_input): Json<DisableMaintenanceModeInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                // Disable maintenance mode by setting block_cluster_changes to false
+                let result = handler
+                    .update(serde_json::json!({"block_cluster_changes": false}))
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to disable maintenance mode: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Maintenance mode disabled",
+                    "result": result
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+// ============================================================================
+// Certificate Operations
+// ============================================================================
+
+/// Input for getting cluster certificates (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetClusterCertificatesInput {}
+
+/// Build the get_cluster_certificates tool
+pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_cluster_certificates")
+        .description(
+            "Get all certificates configured on the Redis Enterprise cluster including \
+             proxy certificates, syncer certificates, and API certificates.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetClusterCertificatesInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(_input): Json<GetClusterCertificatesInput>| async move {
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                let certificates = handler
+                    .certificates()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get certificates: {}", e)))?;
+
+                CallToolResult::from_serialize(&certificates)
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for rotating cluster certificates (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RotateClusterCertificatesInput {}
+
+/// Build the rotate_cluster_certificates tool
+pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("rotate_enterprise_cluster_certificates")
+        .description(
+            "Rotate all certificates on the Redis Enterprise cluster. \
+             This generates new certificates and replaces the existing ones. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, RotateClusterCertificatesInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(_input): Json<RotateClusterCertificatesInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                let result = handler
+                    .certificates_rotate()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to rotate certificates: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Certificate rotation initiated",
+                    "result": result
+                }))
+            },
+        )
+        .build()
+        .expect("valid tool")
+}
+
+/// Input for updating cluster certificates
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateClusterCertificatesInput {
+    /// Certificate name (e.g., "proxy", "syncer", "api")
+    pub name: String,
+    /// PEM-encoded certificate content
+    pub certificate: String,
+    /// PEM-encoded private key content
+    pub key: String,
+}
+
+/// Build the update_cluster_certificates tool
+pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_cluster_certificates")
+        .description(
+            "Update a specific certificate on the Redis Enterprise cluster. \
+             Provide the certificate name (proxy, syncer, api), the PEM-encoded certificate, \
+             and the PEM-encoded private key. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateClusterCertificatesInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateClusterCertificatesInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state.enterprise_client().await.map_err(|e| {
+                    ToolError::new(format!("Failed to get Enterprise client: {}", e))
+                })?;
+
+                let handler = ClusterHandler::new(client);
+                let body = serde_json::json!({
+                    "name": input.name,
+                    "certificate": input.certificate,
+                    "key": input.key
+                });
+                let result = handler
+                    .update_cert(body)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update certificate: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Certificate updated successfully",
+                    "name": input.name,
+                    "result": result
+                }))
             },
         )
         .build()

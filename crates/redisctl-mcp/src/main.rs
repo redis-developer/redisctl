@@ -197,10 +197,20 @@ Redis Enterprise clusters and databases, and direct Redis database operations.
 ### Redis Enterprise - Cluster
 - get_cluster: Get cluster information
 - get_cluster_stats: Get cluster statistics
+- update_enterprise_cluster: Update cluster configuration (write)
+- get_enterprise_cluster_policy: Get cluster policy settings
+- update_enterprise_cluster_policy: Update cluster policy (write)
+- enable_enterprise_maintenance_mode: Enable maintenance mode (write)
+- disable_enterprise_maintenance_mode: Disable maintenance mode (write)
+- get_enterprise_cluster_certificates: Get cluster certificates
+- rotate_enterprise_cluster_certificates: Rotate all certificates (write)
+- update_enterprise_cluster_certificates: Update a specific certificate (write)
 
 ### Redis Enterprise - License
 - get_license: Get license information (type, expiration, features)
 - get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
+- update_enterprise_license: Update cluster license with a new key (write)
+- validate_enterprise_license: Validate a license key before applying
 
 ### Redis Enterprise - Logs
 - list_logs: List cluster event logs (with time range and pagination)
@@ -351,9 +361,23 @@ In HTTP mode with OAuth, credentials can be passed via JWT claims.
         // Enterprise - Cluster
         .tool(tools::enterprise::get_cluster(state.clone()))
         .tool(tools::enterprise::get_cluster_stats(state.clone()))
+        .tool(tools::enterprise::update_cluster(state.clone()))
+        .tool(tools::enterprise::get_cluster_policy(state.clone()))
+        .tool(tools::enterprise::update_cluster_policy(state.clone()))
+        .tool(tools::enterprise::enable_maintenance_mode(state.clone()))
+        .tool(tools::enterprise::disable_maintenance_mode(state.clone()))
+        .tool(tools::enterprise::get_cluster_certificates(state.clone()))
+        .tool(tools::enterprise::rotate_cluster_certificates(
+            state.clone(),
+        ))
+        .tool(tools::enterprise::update_cluster_certificates(
+            state.clone(),
+        ))
         // Enterprise - License
         .tool(tools::enterprise::get_license(state.clone()))
         .tool(tools::enterprise::get_license_usage(state.clone()))
+        .tool(tools::enterprise::update_license(state.clone()))
+        .tool(tools::enterprise::validate_license(state.clone()))
         // Enterprise - Logs
         .tool(tools::enterprise::list_logs(state.clone()))
         // Enterprise - Databases
