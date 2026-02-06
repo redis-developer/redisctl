@@ -6,9 +6,9 @@
 # native Redis Enterprise UI which only manages one cluster at a time.
 #
 # Usage:
-#   docker compose -f docker-compose.multi-cluster.yml up -d
-#   docker compose -f docker-compose.multi-cluster.yml logs -f
-#   docker compose -f docker-compose.multi-cluster.yml down -v
+#   docker compose -f docker/docker-compose.multi-cluster.yml up -d
+#   docker compose -f docker/docker-compose.multi-cluster.yml logs -f
+#   docker compose -f docker/docker-compose.multi-cluster.yml down -v
 #
 # After startup, configure profiles:
 #   redisctl profile create cluster-west \

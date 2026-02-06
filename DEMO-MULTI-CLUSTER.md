@@ -4,10 +4,10 @@
 
 ```bash
 # Start all three clusters (takes ~2-3 minutes)
-docker compose -f docker-compose.multi-cluster.yml up -d
+docker compose -f docker/docker-compose.multi-cluster.yml up -d
 
 # Watch initialization
-docker compose -f docker-compose.multi-cluster.yml logs -f
+docker compose -f docker/docker-compose.multi-cluster.yml logs -f
 
 # Verify all clusters are up
 docker ps | grep cluster
@@ -189,7 +189,7 @@ done
 ## Cleanup
 
 ```bash
-docker compose -f docker-compose.multi-cluster.yml down -v
+docker compose -f docker/docker-compose.multi-cluster.yml down -v
 redisctl profile delete cluster-west
 redisctl profile delete cluster-east
 redisctl profile delete cluster-central
