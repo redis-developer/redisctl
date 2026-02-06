@@ -5,7 +5,7 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -1168,4 +1168,59 @@ fn format_value(v: &redis::Value) -> String {
         ),
         _ => format!("{:?}", v),
     }
+}
+
+/// Instructions text describing all Redis database tools
+pub fn instructions() -> &'static str {
+    r#"
+### Redis Database - Connection
+- redis_ping: Test connectivity
+- redis_info: Get server information
+- redis_dbsize: Get key count
+- redis_client_list: Get connected clients
+- redis_cluster_info: Get cluster info (if clustered)
+- redis_slowlog: Get slow query log entries
+
+### Redis Database - Keys
+- redis_keys: List keys matching pattern (SCAN)
+- redis_scan: Scan keys with type filter (string, list, set, zset, hash, stream)
+- redis_get: Get string value
+- redis_type: Get key type
+- redis_ttl: Get key TTL
+- redis_exists: Check key existence
+- redis_memory_usage: Get key memory usage
+- redis_object_encoding: Get key internal encoding
+
+### Redis Database - Data Structures
+- redis_hgetall: Get all hash fields
+- redis_lrange: Get list range
+- redis_smembers: Get set members
+- redis_zrange: Get sorted set range
+"#
+}
+
+/// Build an MCP sub-router containing all Redis database tools
+pub fn router(state: Arc<AppState>) -> McpRouter {
+    McpRouter::new()
+        // Connection
+        .tool(ping(state.clone()))
+        .tool(info(state.clone()))
+        .tool(dbsize(state.clone()))
+        .tool(client_list(state.clone()))
+        .tool(cluster_info(state.clone()))
+        .tool(slowlog(state.clone()))
+        // Keys
+        .tool(keys(state.clone()))
+        .tool(scan(state.clone()))
+        .tool(get(state.clone()))
+        .tool(key_type(state.clone()))
+        .tool(ttl(state.clone()))
+        .tool(exists(state.clone()))
+        .tool(memory_usage(state.clone()))
+        .tool(object_encoding(state.clone()))
+        // Data Structures
+        .tool(hgetall(state.clone()))
+        .tool(lrange(state.clone()))
+        .tool(smembers(state.clone()))
+        .tool(zrange(state.clone()))
 }

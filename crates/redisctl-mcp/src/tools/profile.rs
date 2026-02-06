@@ -6,7 +6,7 @@ use redisctl_core::{Config, DeploymentType, ProfileCredentials};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -552,4 +552,58 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
         )
         .build()
         .expect("valid tool")
+}
+
+/// Instructions text describing all App-level tools, resources, and prompts
+pub fn instructions() -> &'static str {
+    r#"
+### Profile Management - Read
+- profile_list: List all configured profiles
+- profile_show: Show profile details (credentials masked)
+- profile_path: Show configuration file path
+- profile_validate: Validate configuration file
+
+### Profile Management - Write (requires --read-only=false)
+- profile_set_default_cloud: Set default Cloud profile
+- profile_set_default_enterprise: Set default Enterprise profile
+- profile_delete: Delete a profile
+
+## Resources
+
+Read-only data accessible via URI:
+- redis://config/path - Configuration file path
+- redis://profiles - List of configured profiles
+- redis://help - Usage instructions and help
+
+## Prompts
+
+Pre-built templates for common workflows:
+- troubleshoot_database - Diagnose database issues
+- analyze_performance - Analyze performance metrics
+- capacity_planning - Help with capacity planning
+- migration_planning - Plan Redis migrations
+"#
+}
+
+/// Build an MCP sub-router containing all App-level tools, resources, and prompts
+pub fn router(state: Arc<AppState>) -> McpRouter {
+    McpRouter::new()
+        // Profile Tools - Read
+        .tool(list_profiles(state.clone()))
+        .tool(show_profile(state.clone()))
+        .tool(config_path(state.clone()))
+        .tool(validate_config(state.clone()))
+        // Profile Tools - Write
+        .tool(set_default_cloud(state.clone()))
+        .tool(set_default_enterprise(state.clone()))
+        .tool(delete_profile(state.clone()))
+        // Resources
+        .resource(crate::resources::config_path_resource())
+        .resource(crate::resources::profiles_resource())
+        .resource(crate::resources::help_resource())
+        // Prompts
+        .prompt(crate::prompts::troubleshoot_database_prompt())
+        .prompt(crate::prompts::analyze_performance_prompt())
+        .prompt(crate::prompts::capacity_planning_prompt())
+        .prompt(crate::prompts::migration_planning_prompt())
 }

@@ -1,3 +1,4 @@
+#![cfg(feature = "enterprise")]
 //! Integration tests for Redis Enterprise MCP tools using mock server
 
 use std::sync::Arc;

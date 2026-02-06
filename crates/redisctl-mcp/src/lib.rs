@@ -16,11 +16,14 @@
 //!
 //! # HTTP transport with OAuth (for shared deployments)
 //! redisctl-mcp --transport http --port 8080 --oauth --oauth-issuer https://accounts.google.com
+//!
+//! # Enable only specific toolsets
+//! redisctl-mcp --tools cloud,app
 //! ```
 //!
 //! ## Library Usage
 //!
-//! You can also embed the tools in your own MCP server:
+//! You can also embed the tools in your own MCP server using sub-routers:
 //!
 //! ```no_run
 //! use std::sync::Arc;
@@ -34,9 +37,11 @@
 //!     None, // no database URL
 //! )?);
 //!
+//! // Use merge to compose sub-routers
 //! let router = McpRouter::new()
-//!     .tool(tools::cloud::list_subscriptions(state.clone()))
-//!     .tool(tools::enterprise::get_cluster(state.clone()));
+//!     .merge(tools::cloud::router(state.clone()))
+//!     .merge(tools::enterprise::router(state.clone()))
+//!     .merge(tools::profile::router(state.clone()));
 //! # Ok(())
 //! # }
 //! ```
@@ -152,6 +157,7 @@ mod tests {
         assert_eq!(profiles[1], "cluster-east");
     }
 
+    #[cfg(feature = "cloud")]
     #[test]
     fn test_cloud_tools_build() {
         let state =
@@ -193,6 +199,7 @@ mod tests {
         let _ = tools::cloud::create_subscription(state.clone());
     }
 
+    #[cfg(feature = "enterprise")]
     #[test]
     fn test_enterprise_tools_build() {
         let state =

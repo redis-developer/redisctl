@@ -1,3 +1,4 @@
+#![cfg(feature = "cloud")]
 //! Integration tests for Redis Cloud MCP tools using mock server
 
 use std::sync::Arc;
