@@ -17,6 +17,7 @@ use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
+use crate::tools::wrap_list;
 
 /// Input for listing subscriptions
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -370,7 +371,7 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list tasks: {}", e)))?;
 
-                CallToolResult::from_serialize(&tasks)
+                wrap_list("tasks", &tasks)
             },
         )
         .build()

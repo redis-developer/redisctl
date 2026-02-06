@@ -233,7 +233,8 @@ async fn test_list_tasks() {
 
     let result = call_tool_json(&tool, json!({})).await;
 
-    let tasks = result.as_array().unwrap();
+    assert_eq!(result["count"], 2);
+    let tasks = result["tasks"].as_array().unwrap();
     assert_eq!(tasks.len(), 2);
     assert_eq!(tasks[0]["taskId"], "task-001");
     assert_eq!(tasks[0]["status"], "processing-completed");
