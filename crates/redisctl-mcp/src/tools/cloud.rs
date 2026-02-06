@@ -14,7 +14,7 @@ use redisctl_core::cloud::{
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -1524,4 +1524,86 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
         )
         .build()
         .expect("valid tool")
+}
+
+/// Instructions text describing all Cloud tools
+pub fn instructions() -> &'static str {
+    r#"
+### Redis Cloud - Subscriptions & Databases
+- list_subscriptions: List all Cloud subscriptions
+- get_subscription: Get subscription details
+- list_databases: List databases in a subscription
+- get_database: Get database details
+- get_backup_status: Get database backup status
+- get_slow_log: Get slow query log
+- get_database_tags: Get tags for a database
+- get_database_certificate: Get TLS/SSL certificate for a database
+
+### Redis Cloud - Account & Configuration
+- get_account: Get current account information
+- get_regions: Get supported cloud regions
+- get_modules: Get supported Redis modules
+- list_account_users: List team members
+- get_account_user: Get team member details by ID
+- list_acl_users: List database ACL users
+- get_acl_user: Get ACL user details by ID
+- list_acl_roles: List ACL roles
+- list_redis_rules: List Redis ACL rules
+
+### Redis Cloud - Logs
+- get_system_logs: Get system audit logs (subscription/database changes)
+- get_session_logs: Get session activity logs (login/logout events)
+
+### Redis Cloud - Tasks
+- list_tasks: List async operations
+- get_task: Get task status
+
+### Redis Cloud - Write Operations (require --read-only=false)
+- create_database: Create a new database and wait for it to be ready
+- update_database: Update a database configuration
+- delete_database: Delete a database
+- backup_database: Trigger a manual backup
+- import_database: Import data into a database
+- delete_subscription: Delete a subscription (all databases must be deleted first)
+- flush_database: Flush all data from a database
+"#
+}
+
+/// Build an MCP sub-router containing all Cloud tools
+pub fn router(state: Arc<AppState>) -> McpRouter {
+    McpRouter::new()
+        // Subscriptions & Databases
+        .tool(list_subscriptions(state.clone()))
+        .tool(get_subscription(state.clone()))
+        .tool(list_databases(state.clone()))
+        .tool(get_database(state.clone()))
+        .tool(get_backup_status(state.clone()))
+        .tool(get_slow_log(state.clone()))
+        .tool(get_tags(state.clone()))
+        .tool(get_database_certificate(state.clone()))
+        // Account & Configuration
+        .tool(get_account(state.clone()))
+        .tool(get_regions(state.clone()))
+        .tool(get_modules(state.clone()))
+        .tool(list_account_users(state.clone()))
+        .tool(get_account_user(state.clone()))
+        .tool(list_acl_users(state.clone()))
+        .tool(get_acl_user(state.clone()))
+        .tool(list_acl_roles(state.clone()))
+        .tool(list_redis_rules(state.clone()))
+        // Logs
+        .tool(get_system_logs(state.clone()))
+        .tool(get_session_logs(state.clone()))
+        // Tasks
+        .tool(list_tasks(state.clone()))
+        .tool(get_task(state.clone()))
+        // Write Operations
+        .tool(create_database(state.clone()))
+        .tool(update_database(state.clone()))
+        .tool(delete_database(state.clone()))
+        .tool(backup_database(state.clone()))
+        .tool(import_database(state.clone()))
+        .tool(delete_subscription(state.clone()))
+        .tool(flush_database(state.clone()))
+        .tool(create_subscription(state.clone()))
 }

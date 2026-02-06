@@ -1,9 +1,14 @@
 //! Application state and credential resolution
 
+#[cfg(any(feature = "cloud", feature = "enterprise"))]
 use std::collections::HashMap;
 
-use anyhow::{Context, Result};
+#[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
+use anyhow::Context;
+use anyhow::Result;
+#[cfg(feature = "cloud")]
 use redis_cloud::CloudClient;
+#[cfg(feature = "enterprise")]
 use redis_enterprise::EnterpriseClient;
 use redisctl_core::Config;
 use tokio::sync::RwLock;
@@ -24,7 +29,9 @@ pub enum CredentialSource {
 
 /// Cached API clients (per-profile for multi-cluster support)
 pub struct CachedClients {
+    #[cfg(feature = "cloud")]
     pub cloud: HashMap<String, CloudClient>,
+    #[cfg(feature = "enterprise")]
     pub enterprise: HashMap<String, EnterpriseClient>,
 }
 
@@ -41,6 +48,7 @@ pub struct AppState {
     /// Configured profiles (for multi-cluster support)
     profiles: Vec<String>,
     /// Cached API clients (keyed by profile name, "_default" for default)
+    #[allow(dead_code)]
     clients: RwLock<CachedClients>,
 }
 
@@ -70,7 +78,9 @@ impl AppState {
             config,
             profiles,
             clients: RwLock::new(CachedClients {
+                #[cfg(feature = "cloud")]
                 cloud: HashMap::new(),
+                #[cfg(feature = "enterprise")]
                 enterprise: HashMap::new(),
             }),
         })
@@ -85,6 +95,7 @@ impl AppState {
     /// Get or create Cloud API client for a specific profile
     ///
     /// If profile is None, uses the first configured profile or default from config
+    #[cfg(feature = "cloud")]
     pub async fn cloud_client_for_profile(&self, profile: Option<&str>) -> Result<CloudClient> {
         let cache_key = profile.unwrap_or("_default").to_string();
 
@@ -109,6 +120,7 @@ impl AppState {
     }
 
     /// Get or create Cloud API client (uses default profile)
+    #[cfg(feature = "cloud")]
     #[allow(dead_code)]
     pub async fn cloud_client(&self) -> Result<CloudClient> {
         self.cloud_client_for_profile(None).await
@@ -117,6 +129,7 @@ impl AppState {
     /// Get or create Enterprise API client for a specific profile
     ///
     /// If profile is None, uses the first configured profile or default from config
+    #[cfg(feature = "enterprise")]
     pub async fn enterprise_client_for_profile(
         &self,
         profile: Option<&str>,
@@ -144,12 +157,14 @@ impl AppState {
     }
 
     /// Get or create Enterprise API client (uses default profile)
+    #[cfg(feature = "enterprise")]
     #[allow(dead_code)]
     pub async fn enterprise_client(&self) -> Result<EnterpriseClient> {
         self.enterprise_client_for_profile(None).await
     }
 
     /// Create a new Cloud client from credentials
+    #[cfg(feature = "cloud")]
     async fn create_cloud_client(&self, profile: Option<&str>) -> Result<CloudClient> {
         match &self.credential_source {
             CredentialSource::Profiles(profiles) => {
@@ -203,6 +218,7 @@ impl AppState {
     }
 
     /// Create a new Enterprise client from credentials
+    #[cfg(feature = "enterprise")]
     async fn create_enterprise_client(&self, profile: Option<&str>) -> Result<EnterpriseClient> {
         match &self.credential_source {
             CredentialSource::Profiles(profiles) => {
@@ -274,6 +290,7 @@ impl AppState {
     }
 
     /// Get Redis connection for direct database operations
+    #[cfg(feature = "database")]
     #[allow(dead_code)]
     pub async fn redis_connection(&self) -> Result<redis::aio::MultiplexedConnection> {
         let url = self
@@ -308,7 +325,9 @@ impl Clone for AppState {
             config: self.config.clone(),
             profiles: self.profiles.clone(),
             clients: RwLock::new(CachedClients {
+                #[cfg(feature = "cloud")]
                 cloud: HashMap::new(),
+                #[cfg(feature = "enterprise")]
                 enterprise: HashMap::new(),
             }),
         }
@@ -319,6 +338,7 @@ impl Clone for AppState {
 #[allow(dead_code)]
 impl AppState {
     /// Create test state with a pre-configured Cloud client
+    #[cfg(feature = "cloud")]
     pub fn with_cloud_client(client: CloudClient) -> Self {
         let mut cloud = HashMap::new();
         cloud.insert("_default".to_string(), client);
@@ -330,12 +350,14 @@ impl AppState {
             profiles: vec![],
             clients: RwLock::new(CachedClients {
                 cloud,
+                #[cfg(feature = "enterprise")]
                 enterprise: HashMap::new(),
             }),
         }
     }
 
     /// Create test state with a pre-configured Enterprise client
+    #[cfg(feature = "enterprise")]
     pub fn with_enterprise_client(client: EnterpriseClient) -> Self {
         let mut enterprise = HashMap::new();
         enterprise.insert("_default".to_string(), client);
@@ -346,6 +368,7 @@ impl AppState {
             config: None,
             profiles: vec![],
             clients: RwLock::new(CachedClients {
+                #[cfg(feature = "cloud")]
                 cloud: HashMap::new(),
                 enterprise,
             }),
@@ -353,6 +376,7 @@ impl AppState {
     }
 
     /// Create test state with both Cloud and Enterprise clients
+    #[cfg(all(feature = "cloud", feature = "enterprise"))]
     pub fn with_clients(cloud: CloudClient, enterprise: EnterpriseClient) -> Self {
         let mut cloud_map = HashMap::new();
         cloud_map.insert("_default".to_string(), cloud);

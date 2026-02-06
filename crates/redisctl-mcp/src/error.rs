@@ -51,6 +51,7 @@ impl From<redisctl_core::ConfigError> for McpError {
     }
 }
 
+#[cfg(feature = "database")]
 impl From<redis::RedisError> for McpError {
     fn from(err: redis::RedisError) -> Self {
         McpError::Redis(err.to_string())

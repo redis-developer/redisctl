@@ -17,18 +17,18 @@ path = "src/main.rs"
 
 [dependencies]
 # MCP framework
-tower-mcp = { version = "0.3.4", features = ["http", "oauth"] }
+tower-mcp = { version = "0.4.0", features = ["http", "oauth"] }
 schemars = "1.2"
 
 # Internal crates
 redisctl-core = { version = "0.1.0", path = "../redisctl-core" }
 
-# External API clients
-redis-cloud = { workspace = true }
-redis-enterprise = { workspace = true }
+# External API clients (optional, gated by features)
+redis-cloud = { workspace = true, optional = true }
+redis-enterprise = { workspace = true, optional = true }
 
-# Redis client for direct database connections
-redis = { workspace = true }
+# Redis client for direct database connections (optional, gated by features)
+redis = { workspace = true, optional = true }
 
 # Core dependencies
 anyhow = { workspace = true }
@@ -47,8 +47,11 @@ clap = { workspace = true }
 tower = { workspace = true }
 
 [features]
-default = ["http"]
+default = ["http", "cloud", "enterprise", "database"]
 http = []
+cloud = ["dep:redis-cloud"]
+enterprise = ["dep:redis-enterprise"]
+database = ["dep:redis"]
 test-support = []
 
 [dev-dependencies]

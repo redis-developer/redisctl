@@ -23,7 +23,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -2277,4 +2277,145 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
         )
         .build()
         .expect("valid tool")
+}
+
+/// Instructions text describing all Enterprise tools
+pub fn instructions() -> &'static str {
+    r#"
+### Redis Enterprise - Cluster
+- get_cluster: Get cluster information
+- get_cluster_stats: Get cluster statistics
+- update_enterprise_cluster: Update cluster configuration (write)
+- get_enterprise_cluster_policy: Get cluster policy settings
+- update_enterprise_cluster_policy: Update cluster policy (write)
+- enable_enterprise_maintenance_mode: Enable maintenance mode (write)
+- disable_enterprise_maintenance_mode: Disable maintenance mode (write)
+- get_enterprise_cluster_certificates: Get cluster certificates
+- rotate_enterprise_cluster_certificates: Rotate all certificates (write)
+- update_enterprise_cluster_certificates: Update a specific certificate (write)
+
+### Redis Enterprise - License
+- get_license: Get license information (type, expiration, features)
+- get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
+- update_enterprise_license: Update cluster license with a new key (write)
+- validate_enterprise_license: Validate a license key before applying
+
+### Redis Enterprise - Logs
+- list_logs: List cluster event logs (with time range and pagination)
+
+### Redis Enterprise - Databases
+- list_enterprise_databases: List all databases
+- get_enterprise_database: Get database details
+- get_database_stats: Get database statistics
+- get_database_endpoints: Get connection endpoints
+- list_database_alerts: Get alerts for a database
+
+### Redis Enterprise - Nodes
+- list_nodes: List cluster nodes
+- get_node: Get node details
+- get_node_stats: Get node statistics
+
+### Redis Enterprise - Users & Alerts
+- list_enterprise_users: List cluster users
+- get_enterprise_user: Get user details
+- list_alerts: List all active alerts
+
+### Redis Enterprise - Shards
+- list_shards: List database shards (with optional database filter)
+- get_shard: Get shard details by UID
+
+### Redis Enterprise - Aggregate Stats
+- get_all_nodes_stats: Get stats for all nodes in one call
+- get_all_databases_stats: Get stats for all databases in one call
+- get_shard_stats: Get stats for a specific shard
+- get_all_shards_stats: Get stats for all shards in one call
+
+### Redis Enterprise - Debug Info
+- list_debug_info_tasks: List debug info collection tasks
+- get_debug_info_status: Get status of a debug info collection task
+
+### Redis Enterprise - Modules
+- list_modules: List installed Redis modules (RedisJSON, RediSearch, etc.)
+- get_module: Get details about a specific module
+
+### Redis Enterprise - Roles
+- list_enterprise_roles: List all roles in the cluster
+- get_enterprise_role: Get role details and permissions
+
+### Redis Enterprise - ACLs
+- list_enterprise_acls: List all Redis ACLs
+- get_enterprise_acl: Get ACL details and rules
+
+### Redis Enterprise - Write Operations (require --read-only=false)
+- backup_enterprise_database: Trigger a database backup and wait for completion
+- import_enterprise_database: Import data into a database and wait for completion
+- create_enterprise_database: Create a new database
+- update_enterprise_database: Update database configuration
+- delete_enterprise_database: Delete a database
+- flush_enterprise_database: Flush all data from a database
+"#
+}
+
+/// Build an MCP sub-router containing all Enterprise tools
+pub fn router(state: Arc<AppState>) -> McpRouter {
+    McpRouter::new()
+        // Cluster
+        .tool(get_cluster(state.clone()))
+        .tool(get_cluster_stats(state.clone()))
+        .tool(update_cluster(state.clone()))
+        .tool(get_cluster_policy(state.clone()))
+        .tool(update_cluster_policy(state.clone()))
+        .tool(enable_maintenance_mode(state.clone()))
+        .tool(disable_maintenance_mode(state.clone()))
+        .tool(get_cluster_certificates(state.clone()))
+        .tool(rotate_cluster_certificates(state.clone()))
+        .tool(update_cluster_certificates(state.clone()))
+        // License
+        .tool(get_license(state.clone()))
+        .tool(get_license_usage(state.clone()))
+        .tool(update_license(state.clone()))
+        .tool(validate_license(state.clone()))
+        // Logs
+        .tool(list_logs(state.clone()))
+        // Databases
+        .tool(list_databases(state.clone()))
+        .tool(get_database(state.clone()))
+        .tool(get_database_stats(state.clone()))
+        .tool(get_database_endpoints(state.clone()))
+        .tool(list_database_alerts(state.clone()))
+        // Nodes
+        .tool(list_nodes(state.clone()))
+        .tool(get_node(state.clone()))
+        .tool(get_node_stats(state.clone()))
+        // Users & Alerts
+        .tool(list_users(state.clone()))
+        .tool(get_user(state.clone()))
+        .tool(list_alerts(state.clone()))
+        // Shards
+        .tool(list_shards(state.clone()))
+        .tool(get_shard(state.clone()))
+        // Aggregate Stats
+        .tool(get_all_nodes_stats(state.clone()))
+        .tool(get_all_databases_stats(state.clone()))
+        .tool(get_shard_stats(state.clone()))
+        .tool(get_all_shards_stats(state.clone()))
+        // Debug Info
+        .tool(list_debug_info_tasks(state.clone()))
+        .tool(get_debug_info_status(state.clone()))
+        // Modules
+        .tool(list_modules(state.clone()))
+        .tool(get_module(state.clone()))
+        // Roles
+        .tool(list_roles(state.clone()))
+        .tool(get_role(state.clone()))
+        // ACLs
+        .tool(list_redis_acls(state.clone()))
+        .tool(get_redis_acl(state.clone()))
+        // Write Operations
+        .tool(backup_enterprise_database(state.clone()))
+        .tool(import_enterprise_database(state.clone()))
+        .tool(create_enterprise_database(state.clone()))
+        .tool(update_enterprise_database(state.clone()))
+        .tool(delete_enterprise_database(state.clone()))
+        .tool(flush_enterprise_database(state.clone()))
 }

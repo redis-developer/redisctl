@@ -3,6 +3,7 @@
 //! A standalone MCP server that exposes Redis management operations
 //! as tools for AI systems.
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -29,6 +30,36 @@ enum Transport {
     Http,
 }
 
+/// Toolsets that can be enabled or disabled at runtime
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
+enum Toolset {
+    /// Redis Cloud management tools
+    #[cfg(feature = "cloud")]
+    Cloud,
+    /// Redis Enterprise management tools
+    #[cfg(feature = "enterprise")]
+    Enterprise,
+    /// Direct Redis database tools
+    #[cfg(feature = "database")]
+    Database,
+    /// App-level tools: profile management, resources, and prompts
+    App,
+}
+
+impl std::fmt::Display for Toolset {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            #[cfg(feature = "cloud")]
+            Toolset::Cloud => write!(f, "cloud"),
+            #[cfg(feature = "enterprise")]
+            Toolset::Enterprise => write!(f, "enterprise"),
+            #[cfg(feature = "database")]
+            Toolset::Database => write!(f, "database"),
+            Toolset::App => write!(f, "app"),
+        }
+    }
+}
+
 /// MCP server for Redis Cloud and Enterprise management
 #[derive(Parser, Debug)]
 #[command(name = "redisctl-mcp")]
@@ -49,6 +80,10 @@ struct Args {
     /// Redis database URL for direct connections
     #[arg(long, env = "REDIS_URL")]
     database_url: Option<String>,
+
+    /// Toolsets to enable (default: all compiled-in). Options: cloud, enterprise, database, app.
+    #[arg(long, value_delimiter = ',', value_enum)]
+    tools: Option<Vec<Toolset>>,
 
     // --- HTTP transport options ---
     /// Host to bind HTTP server
@@ -95,6 +130,23 @@ struct Args {
     log_level: String,
 }
 
+/// Resolve which toolsets are enabled based on CLI args and compiled features
+fn enabled_toolsets(args: &Args) -> HashSet<Toolset> {
+    if let Some(ref tools) = args.tools {
+        tools.iter().copied().collect()
+    } else {
+        let mut set = HashSet::new();
+        #[cfg(feature = "cloud")]
+        set.insert(Toolset::Cloud);
+        #[cfg(feature = "enterprise")]
+        set.insert(Toolset::Enterprise);
+        #[cfg(feature = "database")]
+        set.insert(Toolset::Database);
+        set.insert(Toolset::App);
+        set
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -105,10 +157,14 @@ async fn main() -> Result<()> {
         .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| args.log_level.clone().into()))
         .init();
 
+    let enabled = enabled_toolsets(&args);
+    let enabled_names: Vec<String> = enabled.iter().map(|t| t.to_string()).collect();
+
     info!(
         transport = ?args.transport,
         profiles = ?args.profile,
         read_only = args.read_only,
+        toolsets = ?enabled_names,
         "Starting redisctl-mcp server"
     );
 
@@ -130,7 +186,7 @@ async fn main() -> Result<()> {
     )?);
 
     // Build router with tools and optional read-only filter
-    let router = build_router(state.clone(), args.read_only)?;
+    let router = build_router(state.clone(), args.read_only, &enabled)?;
 
     match args.transport {
         Transport::Stdio => {
@@ -146,320 +202,59 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Build the MCP router with all tools
-fn build_router(state: Arc<AppState>, read_only: bool) -> Result<McpRouter> {
-    let instructions = r#"
-Redis Cloud and Enterprise MCP Server
-
-This server provides comprehensive tools for managing Redis Cloud subscriptions and databases,
-Redis Enterprise clusters and databases, and direct Redis database operations.
-
-## Available Tool Categories
-
-### Redis Cloud - Subscriptions & Databases
-- list_subscriptions: List all Cloud subscriptions
-- get_subscription: Get subscription details
-- list_databases: List databases in a subscription
-- get_database: Get database details
-- get_backup_status: Get database backup status
-- get_slow_log: Get slow query log
-- get_database_tags: Get tags for a database
-- get_database_certificate: Get TLS/SSL certificate for a database
-
-### Redis Cloud - Account & Configuration
-- get_account: Get current account information
-- get_regions: Get supported cloud regions
-- get_modules: Get supported Redis modules
-- list_account_users: List team members
-- get_account_user: Get team member details by ID
-- list_acl_users: List database ACL users
-- get_acl_user: Get ACL user details by ID
-- list_acl_roles: List ACL roles
-- list_redis_rules: List Redis ACL rules
-
-### Redis Cloud - Logs
-- get_system_logs: Get system audit logs (subscription/database changes)
-- get_session_logs: Get session activity logs (login/logout events)
-
-### Redis Cloud - Tasks
-- list_tasks: List async operations
-- get_task: Get task status
-
-### Redis Cloud - Write Operations (require --read-only=false)
-- create_database: Create a new database and wait for it to be ready
-- update_database: Update a database configuration
-- delete_database: Delete a database
-- backup_database: Trigger a manual backup
-- import_database: Import data into a database
-- delete_subscription: Delete a subscription (all databases must be deleted first)
-- flush_database: Flush all data from a database
-
-### Redis Enterprise - Cluster
-- get_cluster: Get cluster information
-- get_cluster_stats: Get cluster statistics
-- update_enterprise_cluster: Update cluster configuration (write)
-- get_enterprise_cluster_policy: Get cluster policy settings
-- update_enterprise_cluster_policy: Update cluster policy (write)
-- enable_enterprise_maintenance_mode: Enable maintenance mode (write)
-- disable_enterprise_maintenance_mode: Disable maintenance mode (write)
-- get_enterprise_cluster_certificates: Get cluster certificates
-- rotate_enterprise_cluster_certificates: Rotate all certificates (write)
-- update_enterprise_cluster_certificates: Update a specific certificate (write)
-
-### Redis Enterprise - License
-- get_license: Get license information (type, expiration, features)
-- get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
-- update_enterprise_license: Update cluster license with a new key (write)
-- validate_enterprise_license: Validate a license key before applying
-
-### Redis Enterprise - Logs
-- list_logs: List cluster event logs (with time range and pagination)
-
-### Redis Enterprise - Databases
-- list_enterprise_databases: List all databases
-- get_enterprise_database: Get database details
-- get_database_stats: Get database statistics
-- get_database_endpoints: Get connection endpoints
-- list_database_alerts: Get alerts for a database
-
-### Redis Enterprise - Nodes
-- list_nodes: List cluster nodes
-- get_node: Get node details
-- get_node_stats: Get node statistics
-
-### Redis Enterprise - Users & Alerts
-- list_enterprise_users: List cluster users
-- get_enterprise_user: Get user details
-- list_alerts: List all active alerts
-
-### Redis Enterprise - Shards
-- list_shards: List database shards (with optional database filter)
-- get_shard: Get shard details by UID
-
-### Redis Enterprise - Aggregate Stats
-- get_all_nodes_stats: Get stats for all nodes in one call
-- get_all_databases_stats: Get stats for all databases in one call
-- get_shard_stats: Get stats for a specific shard
-- get_all_shards_stats: Get stats for all shards in one call
-
-### Redis Enterprise - Debug Info
-- list_debug_info_tasks: List debug info collection tasks
-- get_debug_info_status: Get status of a debug info collection task
-
-### Redis Enterprise - Modules
-- list_modules: List installed Redis modules (RedisJSON, RediSearch, etc.)
-- get_module: Get details about a specific module
-
-### Redis Enterprise - Roles
-- list_enterprise_roles: List all roles in the cluster
-- get_enterprise_role: Get role details and permissions
-
-### Redis Enterprise - ACLs
-- list_enterprise_acls: List all Redis ACLs
-- get_enterprise_acl: Get ACL details and rules
-
-### Redis Enterprise - Write Operations (require --read-only=false)
-- backup_enterprise_database: Trigger a database backup and wait for completion
-- import_enterprise_database: Import data into a database and wait for completion
-- create_enterprise_database: Create a new database
-- update_enterprise_database: Update database configuration
-- delete_enterprise_database: Delete a database
-- flush_enterprise_database: Flush all data from a database
-
-### Redis Database - Connection
-- redis_ping: Test connectivity
-- redis_info: Get server information
-- redis_dbsize: Get key count
-- redis_client_list: Get connected clients
-- redis_cluster_info: Get cluster info (if clustered)
-- redis_slowlog: Get slow query log entries
-
-### Redis Database - Keys
-- redis_keys: List keys matching pattern (SCAN)
-- redis_scan: Scan keys with type filter (string, list, set, zset, hash, stream)
-- redis_get: Get string value
-- redis_type: Get key type
-- redis_ttl: Get key TTL
-- redis_exists: Check key existence
-- redis_memory_usage: Get key memory usage
-- redis_object_encoding: Get key internal encoding
-
-### Redis Database - Data Structures
-- redis_hgetall: Get all hash fields
-- redis_lrange: Get list range
-- redis_smembers: Get set members
-- redis_zrange: Get sorted set range
-
-### Profile Management - Read
-- profile_list: List all configured profiles
-- profile_show: Show profile details (credentials masked)
-- profile_path: Show configuration file path
-- profile_validate: Validate configuration file
-
-### Profile Management - Write (requires --read-only=false)
-- profile_set_default_cloud: Set default Cloud profile
-- profile_set_default_enterprise: Set default Enterprise profile
-- profile_delete: Delete a profile
-
-## Resources
-
-Read-only data accessible via URI:
-- redis://config/path - Configuration file path
-- redis://profiles - List of configured profiles
-- redis://help - Usage instructions and help
-
-## Prompts
-
-Pre-built templates for common workflows:
-- troubleshoot_database - Diagnose database issues
-- analyze_performance - Analyze performance metrics
-- capacity_planning - Help with capacity planning
-- migration_planning - Plan Redis migrations
-
+/// Footer instructions for authentication
+const AUTH_INSTRUCTIONS: &str = r#"
 ## Authentication
 
 In stdio mode, credentials are resolved from redisctl profiles.
 In HTTP mode with OAuth, credentials can be passed via JWT claims.
 "#;
 
-    let router = McpRouter::new()
-        .server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"))
-        .instructions(instructions)
-        // Cloud - Subscriptions & Databases
-        .tool(tools::cloud::list_subscriptions(state.clone()))
-        .tool(tools::cloud::get_subscription(state.clone()))
-        .tool(tools::cloud::list_databases(state.clone()))
-        .tool(tools::cloud::get_database(state.clone()))
-        .tool(tools::cloud::get_backup_status(state.clone()))
-        .tool(tools::cloud::get_slow_log(state.clone()))
-        .tool(tools::cloud::get_tags(state.clone()))
-        .tool(tools::cloud::get_database_certificate(state.clone()))
-        // Cloud - Account & Configuration
-        .tool(tools::cloud::get_account(state.clone()))
-        .tool(tools::cloud::get_regions(state.clone()))
-        .tool(tools::cloud::get_modules(state.clone()))
-        .tool(tools::cloud::list_account_users(state.clone()))
-        .tool(tools::cloud::get_account_user(state.clone()))
-        .tool(tools::cloud::list_acl_users(state.clone()))
-        .tool(tools::cloud::get_acl_user(state.clone()))
-        .tool(tools::cloud::list_acl_roles(state.clone()))
-        .tool(tools::cloud::list_redis_rules(state.clone()))
-        // Cloud - Logs
-        .tool(tools::cloud::get_system_logs(state.clone()))
-        .tool(tools::cloud::get_session_logs(state.clone()))
-        // Cloud - Tasks
-        .tool(tools::cloud::list_tasks(state.clone()))
-        .tool(tools::cloud::get_task(state.clone()))
-        // Cloud - Write Operations (require --read-only=false)
-        .tool(tools::cloud::create_database(state.clone()))
-        .tool(tools::cloud::update_database(state.clone()))
-        .tool(tools::cloud::delete_database(state.clone()))
-        .tool(tools::cloud::backup_database(state.clone()))
-        .tool(tools::cloud::import_database(state.clone()))
-        .tool(tools::cloud::delete_subscription(state.clone()))
-        .tool(tools::cloud::flush_database(state.clone()))
-        .tool(tools::cloud::create_subscription(state.clone()))
-        // Enterprise - Cluster
-        .tool(tools::enterprise::get_cluster(state.clone()))
-        .tool(tools::enterprise::get_cluster_stats(state.clone()))
-        .tool(tools::enterprise::update_cluster(state.clone()))
-        .tool(tools::enterprise::get_cluster_policy(state.clone()))
-        .tool(tools::enterprise::update_cluster_policy(state.clone()))
-        .tool(tools::enterprise::enable_maintenance_mode(state.clone()))
-        .tool(tools::enterprise::disable_maintenance_mode(state.clone()))
-        .tool(tools::enterprise::get_cluster_certificates(state.clone()))
-        .tool(tools::enterprise::rotate_cluster_certificates(
-            state.clone(),
-        ))
-        .tool(tools::enterprise::update_cluster_certificates(
-            state.clone(),
-        ))
-        // Enterprise - License
-        .tool(tools::enterprise::get_license(state.clone()))
-        .tool(tools::enterprise::get_license_usage(state.clone()))
-        .tool(tools::enterprise::update_license(state.clone()))
-        .tool(tools::enterprise::validate_license(state.clone()))
-        // Enterprise - Logs
-        .tool(tools::enterprise::list_logs(state.clone()))
-        // Enterprise - Databases
-        .tool(tools::enterprise::list_databases(state.clone()))
-        .tool(tools::enterprise::get_database(state.clone()))
-        .tool(tools::enterprise::get_database_stats(state.clone()))
-        .tool(tools::enterprise::get_database_endpoints(state.clone()))
-        .tool(tools::enterprise::list_database_alerts(state.clone()))
-        // Enterprise - Nodes
-        .tool(tools::enterprise::list_nodes(state.clone()))
-        .tool(tools::enterprise::get_node(state.clone()))
-        .tool(tools::enterprise::get_node_stats(state.clone()))
-        // Enterprise - Users & Alerts
-        .tool(tools::enterprise::list_users(state.clone()))
-        .tool(tools::enterprise::get_user(state.clone()))
-        .tool(tools::enterprise::list_alerts(state.clone()))
-        .tool(tools::enterprise::list_shards(state.clone()))
-        .tool(tools::enterprise::get_shard(state.clone()))
-        // Enterprise - Aggregate Stats
-        .tool(tools::enterprise::get_all_nodes_stats(state.clone()))
-        .tool(tools::enterprise::get_all_databases_stats(state.clone()))
-        .tool(tools::enterprise::get_shard_stats(state.clone()))
-        .tool(tools::enterprise::get_all_shards_stats(state.clone()))
-        // Enterprise - Debug Info
-        .tool(tools::enterprise::list_debug_info_tasks(state.clone()))
-        .tool(tools::enterprise::get_debug_info_status(state.clone()))
-        // Enterprise - Modules
-        .tool(tools::enterprise::list_modules(state.clone()))
-        .tool(tools::enterprise::get_module(state.clone()))
-        // Enterprise - Roles
-        .tool(tools::enterprise::list_roles(state.clone()))
-        .tool(tools::enterprise::get_role(state.clone()))
-        // Enterprise - ACLs
-        .tool(tools::enterprise::list_redis_acls(state.clone()))
-        .tool(tools::enterprise::get_redis_acl(state.clone()))
-        // Enterprise - Write Operations (require --read-only=false)
-        .tool(tools::enterprise::backup_enterprise_database(state.clone()))
-        .tool(tools::enterprise::import_enterprise_database(state.clone()))
-        .tool(tools::enterprise::create_enterprise_database(state.clone()))
-        .tool(tools::enterprise::update_enterprise_database(state.clone()))
-        .tool(tools::enterprise::delete_enterprise_database(state.clone()))
-        .tool(tools::enterprise::flush_enterprise_database(state.clone()))
-        // Redis - Connection
-        .tool(tools::redis::ping(state.clone()))
-        .tool(tools::redis::info(state.clone()))
-        .tool(tools::redis::dbsize(state.clone()))
-        .tool(tools::redis::client_list(state.clone()))
-        .tool(tools::redis::cluster_info(state.clone()))
-        .tool(tools::redis::slowlog(state.clone()))
-        // Redis - Keys
-        .tool(tools::redis::keys(state.clone()))
-        .tool(tools::redis::scan(state.clone()))
-        .tool(tools::redis::get(state.clone()))
-        .tool(tools::redis::key_type(state.clone()))
-        .tool(tools::redis::ttl(state.clone()))
-        .tool(tools::redis::exists(state.clone()))
-        .tool(tools::redis::memory_usage(state.clone()))
-        .tool(tools::redis::object_encoding(state.clone()))
-        // Redis - Data Structures
-        .tool(tools::redis::hgetall(state.clone()))
-        .tool(tools::redis::lrange(state.clone()))
-        .tool(tools::redis::smembers(state.clone()))
-        .tool(tools::redis::zrange(state.clone()))
-        // Profile Management - Read
-        .tool(tools::profile::list_profiles(state.clone()))
-        .tool(tools::profile::show_profile(state.clone()))
-        .tool(tools::profile::config_path(state.clone()))
-        .tool(tools::profile::validate_config(state.clone()))
-        // Profile Management - Write
-        .tool(tools::profile::set_default_cloud(state.clone()))
-        .tool(tools::profile::set_default_enterprise(state.clone()))
-        .tool(tools::profile::delete_profile(state.clone()))
-        // Resources
-        .resource(resources::config_path_resource())
-        .resource(resources::profiles_resource())
-        .resource(resources::help_resource())
-        // Prompts
-        .prompt(prompts::troubleshoot_database_prompt())
-        .prompt(prompts::analyze_performance_prompt())
-        .prompt(prompts::capacity_planning_prompt())
-        .prompt(prompts::migration_planning_prompt());
+/// Build the MCP router with modular sub-routers based on enabled toolsets
+fn build_router(
+    state: Arc<AppState>,
+    read_only: bool,
+    enabled: &HashSet<Toolset>,
+) -> Result<McpRouter> {
+    let mut instructions = String::from(
+        r#"Redis Cloud and Enterprise MCP Server
+
+This server provides comprehensive tools for managing Redis Cloud subscriptions and databases,
+Redis Enterprise clusters and databases, and direct Redis database operations.
+
+## Available Tool Categories
+"#,
+    );
+
+    let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
+
+    // Conditionally merge each toolset
+    #[cfg(feature = "cloud")]
+    if enabled.contains(&Toolset::Cloud) {
+        router = router.merge(tools::cloud::router(state.clone()));
+        instructions.push_str(tools::cloud::instructions());
+    }
+
+    #[cfg(feature = "enterprise")]
+    if enabled.contains(&Toolset::Enterprise) {
+        router = router.merge(tools::enterprise::router(state.clone()));
+        instructions.push_str(tools::enterprise::instructions());
+    }
+
+    #[cfg(feature = "database")]
+    if enabled.contains(&Toolset::Database) {
+        router = router.merge(tools::redis::router(state.clone()));
+        instructions.push_str(tools::redis::instructions());
+    }
+
+    // App toolset includes profile tools, resources, and prompts
+    if enabled.contains(&Toolset::App) {
+        router = router.merge(tools::profile::router(state.clone()));
+        instructions.push_str(tools::profile::instructions());
+    }
+
+    instructions.push_str(AUTH_INSTRUCTIONS);
+    router = router.instructions(&instructions);
 
     // Apply read-only filter if enabled
     // This hides write tools entirely from tools/list and returns "method not found"
