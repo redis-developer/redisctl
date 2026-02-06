@@ -21,7 +21,11 @@ use crate::tools::wrap_list;
 
 /// Input for listing subscriptions
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListSubscriptionsInput {}
+pub struct ListSubscriptionsInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_subscriptions tool
 pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
@@ -31,9 +35,9 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListSubscriptionsInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListSubscriptionsInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListSubscriptionsInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -55,6 +59,9 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
 pub struct GetSubscriptionInput {
     /// Subscription ID
     pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_subscription tool
@@ -67,7 +74,7 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSubscriptionInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -89,6 +96,9 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
 pub struct ListDatabasesInput {
     /// Subscription ID
     pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the list_databases tool
@@ -103,7 +113,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -127,6 +137,9 @@ pub struct GetDatabaseInput {
     pub subscription_id: i32,
     /// Database ID
     pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_database tool
@@ -139,7 +152,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -162,7 +175,11 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
 
 /// Input for getting current account
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetAccountInput {}
+pub struct GetAccountInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_account tool
 pub fn get_account(state: Arc<AppState>) -> Tool {
@@ -172,9 +189,9 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetAccountInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetAccountInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetAccountInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -200,6 +217,9 @@ pub struct GetSystemLogsInput {
     /// Maximum number of entries to return
     #[serde(default)]
     pub limit: Option<i32>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_system_logs tool
@@ -215,7 +235,7 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSystemLogsInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -241,6 +261,9 @@ pub struct GetSessionLogsInput {
     /// Maximum number of entries to return
     #[serde(default)]
     pub limit: Option<i32>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_session_logs tool
@@ -256,7 +279,7 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSessionLogsInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -279,6 +302,9 @@ pub struct GetRegionsInput {
     /// Optional cloud provider filter (e.g., "AWS", "GCP", "Azure")
     #[serde(default)]
     pub provider: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_regions tool
@@ -293,7 +319,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRegionsInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -312,7 +338,11 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
 
 /// Input for getting database modules
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetModulesInput {}
+pub struct GetModulesInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the get_modules tool
 pub fn get_modules(state: Arc<AppState>) -> Tool {
@@ -324,9 +354,9 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, GetModulesInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<GetModulesInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetModulesInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -349,7 +379,11 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
 
 /// Input for listing tasks
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListTasksInput {}
+pub struct ListTasksInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_tasks tool
 pub fn list_tasks(state: Arc<AppState>) -> Tool {
@@ -359,9 +393,9 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListTasksInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListTasksInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListTasksInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -383,6 +417,9 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
 pub struct GetTaskInput {
     /// Task ID
     pub task_id: String,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_task tool
@@ -395,7 +432,7 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTaskInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -418,7 +455,11 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
 
 /// Input for listing account users
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListAccountUsersInput {}
+pub struct ListAccountUsersInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_account_users tool
 pub fn list_account_users(state: Arc<AppState>) -> Tool {
@@ -430,9 +471,9 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListAccountUsersInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAccountUsersInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListAccountUsersInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -454,6 +495,9 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
 pub struct GetAccountUserInput {
     /// Account user ID
     pub user_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_account_user tool
@@ -466,7 +510,7 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAccountUserInput>| async move {
-                let client = state.cloud_client().await.map_err(|e| {
+                let client = state.cloud_client_for_profile(input.profile.as_deref()).await.map_err(|e| {
                     ToolError::new(format!("Failed to get Cloud client: {}", e))
                 })?;
 
@@ -489,7 +533,11 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
 
 /// Input for listing ACL users
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListAclUsersInput {}
+pub struct ListAclUsersInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_acl_users tool
 pub fn list_acl_users(state: Arc<AppState>) -> Tool {
@@ -499,9 +547,9 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListAclUsersInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAclUsersInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListAclUsersInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -523,6 +571,9 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
 pub struct GetAclUserInput {
     /// ACL user ID
     pub user_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_acl_user tool
@@ -535,7 +586,7 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAclUserInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -554,7 +605,11 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
 
 /// Input for listing ACL roles
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListAclRolesInput {}
+pub struct ListAclRolesInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_acl_roles tool
 pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
@@ -564,9 +619,9 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListAclRolesInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListAclRolesInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListAclRolesInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -585,7 +640,11 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
 
 /// Input for listing Redis rules
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListRedisRulesInput {}
+pub struct ListRedisRulesInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
 
 /// Build the list_redis_rules tool
 pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
@@ -595,9 +654,9 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
         .idempotent()
         .extractor_handler_typed::<_, _, _, ListRedisRulesInput>(
             state,
-            |State(state): State<Arc<AppState>>, Json(_input): Json<ListRedisRulesInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListRedisRulesInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -628,6 +687,9 @@ pub struct GetBackupStatusInput {
     /// Optional region name for Active-Active databases
     #[serde(default)]
     pub region_name: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_backup_status tool
@@ -640,7 +702,7 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetBackupStatusInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -671,6 +733,9 @@ pub struct GetSlowLogInput {
     /// Optional region name for Active-Active databases
     #[serde(default)]
     pub region_name: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_slow_log tool
@@ -685,7 +750,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSlowLogInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -709,6 +774,9 @@ pub struct GetTagsInput {
     pub subscription_id: i32,
     /// Database ID
     pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_tags tool
@@ -721,7 +789,7 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTagsInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -745,6 +813,9 @@ pub struct GetCertificateInput {
     pub subscription_id: i32,
     /// Database ID
     pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the get_database_certificate tool
@@ -760,7 +831,7 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCertificateInput>| async move {
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -802,6 +873,9 @@ pub struct CreateDatabaseInput {
     /// Timeout in seconds to wait for database creation (default: 600)
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 fn default_replication() -> bool {
@@ -841,7 +915,7 @@ pub fn create_database(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -920,6 +994,9 @@ pub struct UpdateDatabaseInput {
     /// Timeout in seconds (default: 600)
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the update_database tool
@@ -943,7 +1020,7 @@ pub fn update_database(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -1000,6 +1077,9 @@ pub struct DeleteDatabaseInput {
     /// Timeout in seconds (default: 600)
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the delete_database tool
@@ -1021,7 +1101,7 @@ pub fn delete_database(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -1064,6 +1144,9 @@ pub struct BackupDatabaseInput {
     /// Timeout in seconds (default: 600)
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the backup_database tool
@@ -1085,7 +1168,7 @@ pub fn backup_database(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -1130,6 +1213,9 @@ pub struct ImportDatabaseInput {
     /// Timeout in seconds (default: 1800 for imports)
     #[serde(default = "default_import_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 fn default_import_timeout() -> u64 {
@@ -1157,7 +1243,7 @@ pub fn import_database(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -1202,6 +1288,9 @@ pub struct DeleteSubscriptionInput {
     /// Timeout in seconds (default: 600)
     #[serde(default = "default_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the delete_subscription tool
@@ -1223,7 +1312,7 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -1261,6 +1350,9 @@ pub struct FlushDatabaseInput {
     /// Timeout in seconds (default: 300)
     #[serde(default = "default_flush_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 fn default_flush_timeout() -> u64 {
@@ -1286,7 +1378,7 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
@@ -1341,6 +1433,9 @@ pub struct CreateSubscriptionInput {
     /// Timeout in seconds (default: 1800 - subscriptions take longer)
     #[serde(default = "default_subscription_timeout")]
     pub timeout_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 fn default_cloud_account_id() -> i32 {
@@ -1377,7 +1472,7 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
                 }
 
                 let client = state
-                    .cloud_client()
+                    .cloud_client_for_profile(input.profile.as_deref())
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
 
