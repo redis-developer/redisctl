@@ -26,6 +26,7 @@ use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
+use crate::tools::wrap_list;
 
 /// Input for getting cluster info (no required parameters)
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -194,7 +195,7 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list logs: {}", e)))?;
 
-                CallToolResult::from_serialize(&logs)
+                wrap_list("logs", &logs)
             },
         )
         .build()
@@ -260,7 +261,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                     })
                     .collect();
 
-                CallToolResult::from_serialize(&filtered)
+                wrap_list("databases", &filtered)
             },
         )
         .build()
@@ -323,21 +324,7 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list nodes: {}", e)))?;
 
-                let output = nodes
-                    .iter()
-                    .map(|node| {
-                        format!(
-                            "- Node {} ({}): {}",
-                            node.uid,
-                            node.addr.as_deref().unwrap_or("unknown"),
-                            node.status
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                let summary = format!("Found {} node(s)\n\n{}", nodes.len(), output);
-                Ok(CallToolResult::text(summary))
+                wrap_list("nodes", &nodes)
             },
         )
         .build()
@@ -410,21 +397,7 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
 
-                let output = users
-                    .iter()
-                    .map(|user| {
-                        format!(
-                            "- {} (UID: {}): {}",
-                            user.name.as_deref().unwrap_or("(unnamed)"),
-                            user.uid,
-                            user.email
-                        )
-                    })
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                let summary = format!("Found {} user(s)\n\n{}", users.len(), output);
-                Ok(CallToolResult::text(summary))
+                wrap_list("users", &users)
             },
         )
         .build()
@@ -493,7 +466,7 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list alerts: {}", e)))?;
 
-                CallToolResult::from_serialize(&alerts)
+                wrap_list("alerts", &alerts)
             },
         )
         .build()
@@ -527,7 +500,7 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list database alerts: {}", e)))?;
 
-                CallToolResult::from_serialize(&alerts)
+                wrap_list("alerts", &alerts)
             },
         )
         .build()
@@ -893,7 +866,7 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
                         .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
                 };
 
-                CallToolResult::from_serialize(&shards)
+                wrap_list("shards", &shards)
             },
         )
         .build()
@@ -968,7 +941,7 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to get endpoints: {}", e)))?;
 
-                CallToolResult::from_serialize(&endpoints)
+                wrap_list("endpoints", &endpoints)
             },
         )
         .build()
@@ -1007,7 +980,7 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list debug info tasks: {}", e)))?;
 
-                CallToolResult::from_serialize(&tasks)
+                wrap_list("tasks", &tasks)
             },
         )
         .build()
@@ -1083,7 +1056,7 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list modules: {}", e)))?;
 
-                CallToolResult::from_serialize(&modules)
+                wrap_list("modules", &modules)
             },
         )
         .build()
@@ -1496,7 +1469,7 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list roles: {}", e)))?;
 
-                CallToolResult::from_serialize(&roles)
+                wrap_list("roles", &roles)
             },
         )
         .build()
@@ -1569,7 +1542,7 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
                     .await
                     .map_err(|e| ToolError::new(format!("Failed to list ACLs: {}", e)))?;
 
-                CallToolResult::from_serialize(&acls)
+                wrap_list("acls", &acls)
             },
         )
         .build()

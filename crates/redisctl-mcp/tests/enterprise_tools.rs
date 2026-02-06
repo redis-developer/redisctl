@@ -178,8 +178,8 @@ async fn test_list_logs() {
 
     let result = call_tool_json(&tool, json!({})).await;
 
-    assert!(result.is_array());
-    let logs = result.as_array().unwrap();
+    assert_eq!(result["count"], 3);
+    let logs = result["logs"].as_array().unwrap();
     assert_eq!(logs.len(), 3);
     assert_eq!(logs[0]["type"], "bdb_created");
     assert_eq!(logs[1]["type"], "node_joined");
@@ -215,8 +215,8 @@ async fn test_list_logs_with_params() {
     )
     .await;
 
-    assert!(result.is_array());
-    let logs = result.as_array().unwrap();
+    assert_eq!(result["count"], 1);
+    let logs = result["logs"].as_array().unwrap();
     assert_eq!(logs.len(), 1);
 }
 
@@ -244,7 +244,7 @@ async fn test_list_enterprise_databases() {
 
     let result = call_tool_json(&tool, json!({})).await;
 
-    let databases = result.as_array().expect("expected array");
+    let databases = result["databases"].as_array().expect("expected array");
     assert_eq!(databases.len(), 2);
     assert!(databases.iter().any(|db| db["name"] == "cache-primary"));
     assert!(databases.iter().any(|db| db["name"] == "sessions"));
@@ -266,7 +266,7 @@ async fn test_list_enterprise_databases_with_filter() {
 
     let result = call_tool_json(&tool, json!({"name_filter": "cache"})).await;
 
-    let databases = result.as_array().expect("expected array");
+    let databases = result["databases"].as_array().expect("expected array");
     assert_eq!(databases.len(), 2);
     assert!(databases.iter().any(|db| db["name"] == "cache-primary"));
     assert!(databases.iter().any(|db| db["name"] == "cache-replica"));
@@ -312,12 +312,14 @@ async fn test_list_nodes() {
     let state = Arc::new(AppState::with_enterprise_client(client));
     let tool = enterprise::list_nodes(state);
 
-    let result = call_tool_text(&tool, json!({})).await;
+    let result = call_tool_json(&tool, json!({})).await;
 
-    assert!(result.contains("10.0.0.1"));
-    assert!(result.contains("10.0.0.2"));
-    assert!(result.contains("10.0.0.3"));
-    assert!(result.contains("3 node(s)"));
+    assert_eq!(result["count"], 3);
+    let nodes = result["nodes"].as_array().unwrap();
+    assert_eq!(nodes.len(), 3);
+    assert_eq!(nodes[0]["addr"], "10.0.0.1");
+    assert_eq!(nodes[1]["addr"], "10.0.0.2");
+    assert_eq!(nodes[2]["addr"], "10.0.0.3");
 }
 
 #[tokio::test]
@@ -360,11 +362,13 @@ async fn test_list_enterprise_users() {
     let state = Arc::new(AppState::with_enterprise_client(client));
     let tool = enterprise::list_users(state);
 
-    let result = call_tool_text(&tool, json!({})).await;
+    let result = call_tool_json(&tool, json!({})).await;
 
-    assert!(result.contains("admin@example.com"));
-    assert!(result.contains("dev@example.com"));
-    assert!(result.contains("2 user(s)"));
+    assert_eq!(result["count"], 2);
+    let users = result["users"].as_array().unwrap();
+    assert_eq!(users.len(), 2);
+    assert_eq!(users[0]["email"], "admin@example.com");
+    assert_eq!(users[1]["email"], "dev@example.com");
 }
 
 #[tokio::test]
@@ -414,8 +418,8 @@ async fn test_list_alerts() {
 
     let result = call_tool_json(&tool, json!({})).await;
 
-    assert!(result.is_array());
-    let alerts = result.as_array().unwrap();
+    assert_eq!(result["count"], 2);
+    let alerts = result["alerts"].as_array().unwrap();
     assert_eq!(alerts.len(), 2);
     assert_eq!(alerts[0]["name"], "high_memory_usage");
     assert_eq!(alerts[1]["name"], "node_cpu_critical");
@@ -705,7 +709,8 @@ async fn test_list_debug_info_tasks() {
 
     let result = call_tool_json(&tool, json!({})).await;
 
-    let tasks = result.as_array().unwrap();
+    assert_eq!(result["count"], 2);
+    let tasks = result["tasks"].as_array().unwrap();
     assert_eq!(tasks.len(), 2);
     assert_eq!(tasks[0]["task_id"], "debug-123");
     assert_eq!(tasks[0]["status"], "completed");
@@ -777,7 +782,8 @@ async fn test_list_modules() {
 
     let result = call_tool_json(&tool, json!({})).await;
 
-    let modules = result.as_array().unwrap();
+    assert_eq!(result["count"], 2);
+    let modules = result["modules"].as_array().unwrap();
     assert_eq!(modules.len(), 2);
     assert_eq!(modules[0]["uid"], "redisjson-2.6.0");
     assert_eq!(modules[0]["module_name"], "ReJSON");
