@@ -1559,7 +1559,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2606,7 +2606,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2644,7 +2644,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -2776,8 +2776,8 @@ dependencies = [
 
 [[package]]
 name = "redis-cloud"
-version = "0.9.3"
-source = "git+https://github.com/redis-developer/redis-cloud-rs?branch=main#e08b11e09aa7551390d48e6ddc7e0d9d2fdc0ae0"
+version = "0.9.5"
+source = "git+https://github.com/redis-developer/redis-cloud-rs?branch=main#989a32c1aac960945a4742e07da4dff07911d0ef"
 dependencies = [
  "anyhow",
  "async-stream",

@@ -109,6 +109,7 @@ impl AppState {
     }
 
     /// Get or create Cloud API client (uses default profile)
+    #[allow(dead_code)]
     pub async fn cloud_client(&self) -> Result<CloudClient> {
         self.cloud_client_for_profile(None).await
     }
