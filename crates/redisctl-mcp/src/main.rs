@@ -38,9 +38,9 @@ struct Args {
     #[arg(short, long, value_enum, default_value = "stdio")]
     transport: Transport,
 
-    /// Profile name (for local credential resolution)
+    /// Profile name(s) for local credential resolution. Can be specified multiple times.
     #[arg(short, long, env = "REDISCTL_PROFILE")]
-    profile: Option<String>,
+    profile: Vec<String>,
 
     /// Read-only mode (disables write operations)
     #[arg(long, default_value = "false")]
@@ -107,7 +107,7 @@ async fn main() -> Result<()> {
 
     info!(
         transport = ?args.transport,
-        profile = ?args.profile,
+        profiles = ?args.profile,
         read_only = args.read_only,
         "Starting redisctl-mcp server"
     );
@@ -119,7 +119,7 @@ async fn main() -> Result<()> {
             audience: args.oauth_audience.clone(),
         }
     } else {
-        CredentialSource::Profile(args.profile.clone())
+        CredentialSource::Profiles(args.profile.clone())
     };
 
     // Build application state
