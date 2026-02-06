@@ -42,8 +42,8 @@ struct Args {
     #[arg(short, long, env = "REDISCTL_PROFILE")]
     profile: Vec<String>,
 
-    /// Read-only mode (disables write operations)
-    #[arg(long, default_value = "false")]
+    /// Read-only mode (enabled by default; use --read-only=false to allow writes)
+    #[arg(long, default_value = "true")]
     read_only: bool,
 
     /// Redis database URL for direct connections
