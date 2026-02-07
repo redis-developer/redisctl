@@ -460,9 +460,27 @@ Configure your AI assistant (Claude Desktop, Cursor, etc.) to use it:
 }
 ```
 
-**For development:** Copy `.mcp.json.example` to `.mcp.json`, update the profile name, and restart your IDE.
+**Zero-install with Docker** -- no local install needed:
 
-See the [MCP Documentation](https://redis-field-engineering.github.io/redisctl-docs/mcp/) for full setup instructions.
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "REDIS_ENTERPRISE_URL=https://cluster:9443",
+        "-e", "REDIS_ENTERPRISE_USER=admin@redis.local",
+        "-e", "REDIS_ENTERPRISE_PASSWORD",
+        "ghcr.io/redis-developer/redisctl",
+        "redisctl-mcp"
+      ]
+    }
+  }
+}
+```
+
+See the [MCP Documentation](https://redis-field-engineering.github.io/redisctl-docs/mcp/) for full setup instructions including [Docker options](https://redis-field-engineering.github.io/redisctl-docs/getting-started/docker/#mcp-server-zero-install).
 
 ---
 

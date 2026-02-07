@@ -12,13 +12,33 @@ brew install redis-developer/homebrew-tap/redisctl
 
 ### Linux/Windows
 
-Download from [GitHub Releases](https://github.com/redis-developer/redisctl/releases) or use Docker:
-
-```bash
-docker pull ghcr.io/redis-developer/redisctl
-```
+Download from [GitHub Releases](https://github.com/redis-developer/redisctl/releases).
 
 See the [Installation Guide](../getting-started/installation.md) for all options.
+
+### Docker (Zero-Install)
+
+No local install required. Pass credentials via environment variables and point your AI assistant at the Docker image:
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "REDIS_ENTERPRISE_URL=https://cluster:9443",
+        "-e", "REDIS_ENTERPRISE_USER=admin@redis.local",
+        "-e", "REDIS_ENTERPRISE_PASSWORD",
+        "ghcr.io/redis-developer/redisctl",
+        "redisctl-mcp"
+      ]
+    }
+  }
+}
+```
+
+See [Docker Usage](../getting-started/docker.md#mcp-server-zero-install) for more options including mounted configs and local cluster access.
 
 ## Setting Up Credentials
 
