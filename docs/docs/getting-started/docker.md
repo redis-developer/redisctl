@@ -84,27 +84,35 @@ docker run --rm \
   enterprise support-package cluster --output-dir /output
 ```
 
-## MCP Server
+## MCP Server (Zero-Install)
 
-The Docker image also includes `redisctl-mcp` for AI assistant integration:
+The Docker image includes `redisctl-mcp`, so you can use the MCP server with your AI assistant without installing anything. Copy one of the `.mcp.json` snippets below and start chatting.
 
-```bash
-# Run MCP server with environment credentials
-docker run -i --rm \
-  -e REDIS_ENTERPRISE_URL \
-  -e REDIS_ENTERPRISE_USER \
-  -e REDIS_ENTERPRISE_PASSWORD \
-  ghcr.io/redis-developer/redisctl \
-  redisctl-mcp --read-only=false
+### Option 1: Environment Variables (Simplest)
 
-# Or mount config for profile-based auth
-docker run -i --rm \
-  -v ~/.config/redisctl:/root/.config/redisctl:ro \
-  ghcr.io/redis-developer/redisctl \
-  redisctl-mcp --profile my-profile
+Pass credentials as environment variables. The password is pulled from your host environment rather than hardcoded:
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "-e", "REDIS_ENTERPRISE_URL=https://cluster:9443",
+        "-e", "REDIS_ENTERPRISE_USER=admin@redis.local",
+        "-e", "REDIS_ENTERPRISE_PASSWORD",
+        "ghcr.io/redis-developer/redisctl",
+        "redisctl-mcp"
+      ]
+    }
+  }
+}
 ```
 
-For IDE configuration (note the `-i` flag for stdin):
+### Option 2: Mounted Config
+
+Mount your existing redisctl config directory for profile-based auth:
 
 ```json
 {
@@ -122,7 +130,55 @@ For IDE configuration (note the `-i` flag for stdin):
 }
 ```
 
-**Note:** Native installation is recommended for MCP usage since Docker adds latency to each tool call.
+### Option 3: Local Clusters (Host Networking)
+
+For clusters running on localhost (e.g. Docker Compose demos), use `--network host` so the container can reach host ports:
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "docker",
+      "args": [
+        "run", "-i", "--rm",
+        "--network", "host",
+        "-e", "REDIS_ENTERPRISE_URL=https://localhost:9443",
+        "-e", "REDIS_ENTERPRISE_USER=admin@redis.local",
+        "-e", "REDIS_ENTERPRISE_PASSWORD",
+        "-e", "REDIS_ENTERPRISE_INSECURE=true",
+        "ghcr.io/redis-developer/redisctl",
+        "redisctl-mcp"
+      ]
+    }
+  }
+}
+```
+
+!!! note
+    `--network host` is required on Linux. On macOS, Docker Desktop routes `host.docker.internal` to the host automatically, but `--network host` is the simplest cross-platform approach.
+
+### Running from the CLI
+
+You can also run the MCP server directly:
+
+```bash
+# With environment credentials
+docker run -i --rm \
+  -e REDIS_ENTERPRISE_URL \
+  -e REDIS_ENTERPRISE_USER \
+  -e REDIS_ENTERPRISE_PASSWORD \
+  ghcr.io/redis-developer/redisctl \
+  redisctl-mcp
+
+# With mounted config
+docker run -i --rm \
+  -v ~/.config/redisctl:/root/.config/redisctl:ro \
+  ghcr.io/redis-developer/redisctl \
+  redisctl-mcp --profile my-profile
+```
+
+!!! tip
+    Native installation is recommended for regular MCP usage since Docker adds latency to each tool call. Docker is best for quick trials and CI environments.
 
 ## Image Tags
 
