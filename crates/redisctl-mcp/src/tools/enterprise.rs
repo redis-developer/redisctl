@@ -64,7 +64,6 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -108,7 +107,6 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting license usage
@@ -146,7 +144,6 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -223,7 +220,6 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -295,7 +291,6 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific database
@@ -334,7 +329,6 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for listing nodes
@@ -371,7 +365,6 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -416,7 +409,6 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -457,7 +449,6 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific user
@@ -498,7 +489,6 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -539,7 +529,6 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for listing database alerts
@@ -576,7 +565,6 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -642,7 +630,6 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting database stats
@@ -705,7 +692,6 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting node stats
@@ -773,7 +759,6 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting all nodes stats
@@ -811,7 +796,6 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting all databases stats
@@ -849,7 +833,6 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting shard stats
@@ -888,7 +871,6 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting all shards stats
@@ -926,7 +908,6 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -979,7 +960,6 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific shard
@@ -1021,7 +1001,6 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1064,7 +1043,6 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1107,7 +1085,6 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting debug info task status
@@ -1148,7 +1125,6 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1193,7 +1169,6 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific module
@@ -1235,7 +1210,6 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1299,7 +1273,6 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for importing data into an Enterprise database
@@ -1364,7 +1337,6 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for creating an Enterprise database
@@ -1446,7 +1418,6 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for updating an Enterprise database
@@ -1496,7 +1467,6 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for deleting an Enterprise database
@@ -1548,7 +1518,6 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for flushing an Enterprise database
@@ -1607,7 +1576,6 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1651,7 +1619,6 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific role
@@ -1693,7 +1660,6 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1737,7 +1703,6 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific Redis ACL
@@ -1779,7 +1744,6 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1833,7 +1797,6 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for validating license
@@ -1875,7 +1838,6 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1927,7 +1889,6 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting cluster policy (no required parameters)
@@ -1966,7 +1927,6 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for updating cluster policy
@@ -2015,7 +1975,6 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -2070,7 +2029,6 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for disabling maintenance mode (no required parameters)
@@ -2121,7 +2079,6 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -2164,7 +2121,6 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for rotating cluster certificates (no required parameters)
@@ -2214,7 +2170,6 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for updating cluster certificates
@@ -2276,7 +2231,6 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Instructions text describing all Enterprise tools

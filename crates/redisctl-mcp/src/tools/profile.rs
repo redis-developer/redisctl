@@ -84,7 +84,6 @@ pub fn list_profiles(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for showing a specific profile
@@ -257,7 +256,6 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting config path (no required parameters)
@@ -284,7 +282,6 @@ pub fn config_path(_state: Arc<AppState>) -> Tool {
             Ok(CallToolResult::text(output))
         })
         .build()
-        .expect("valid tool")
 }
 
 /// Input for validating config (no required parameters)
@@ -398,7 +395,6 @@ pub fn validate_config(_state: Arc<AppState>) -> Tool {
             Ok(CallToolResult::text(output))
         })
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -453,7 +449,6 @@ pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for setting default enterprise profile
@@ -504,7 +499,6 @@ pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for deleting a profile
@@ -551,7 +545,6 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Instructions text describing all App-level tools, resources, and prompts
