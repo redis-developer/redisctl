@@ -51,7 +51,6 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific subscription
@@ -88,7 +87,6 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for listing databases
@@ -127,7 +125,6 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific database
@@ -166,7 +163,6 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -205,7 +201,6 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting account system logs
@@ -249,7 +244,6 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting account session logs
@@ -293,7 +287,6 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting supported regions
@@ -333,7 +326,6 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting database modules
@@ -370,7 +362,6 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -409,7 +400,6 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific task
@@ -446,7 +436,6 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -487,7 +476,6 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific account user
@@ -524,7 +512,6 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -563,7 +550,6 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting a specific ACL user
@@ -600,7 +586,6 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for listing ACL roles
@@ -635,7 +620,6 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for listing Redis rules
@@ -670,7 +654,6 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -720,7 +703,6 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting slow log
@@ -764,7 +746,6 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting database tags
@@ -803,7 +784,6 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for getting database certificate
@@ -845,7 +825,6 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -962,7 +941,6 @@ pub fn create_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1060,7 +1038,6 @@ pub fn update_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1124,7 +1101,6 @@ pub fn delete_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1192,7 +1168,6 @@ pub fn backup_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1273,7 +1248,6 @@ pub fn import_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1333,7 +1307,6 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1401,7 +1374,6 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1523,7 +1495,6 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Instructions text describing all Cloud tools

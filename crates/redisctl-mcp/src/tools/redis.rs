@@ -51,7 +51,6 @@ pub fn ping(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for info command
@@ -101,7 +100,6 @@ pub fn info(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for keys command
@@ -192,7 +190,6 @@ pub fn keys(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -247,7 +244,6 @@ pub fn get(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for TYPE command
@@ -292,7 +288,6 @@ pub fn key_type(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for TTL command
@@ -343,7 +338,6 @@ pub fn ttl(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for EXISTS command
@@ -396,7 +390,6 @@ pub fn exists(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for DBSIZE command
@@ -441,7 +434,6 @@ pub fn dbsize(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for MEMORY USAGE command
@@ -493,7 +485,6 @@ pub fn memory_usage(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -560,7 +551,6 @@ pub fn hgetall(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -640,7 +630,6 @@ pub fn lrange(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -701,7 +690,6 @@ pub fn smembers(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -812,7 +800,6 @@ pub fn zrange(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -859,7 +846,6 @@ pub fn cluster_info(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 /// Input for CLIENT LIST command
@@ -906,7 +892,6 @@ pub fn client_list(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1011,7 +996,6 @@ pub fn scan(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1071,7 +1055,6 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 // ============================================================================
@@ -1153,7 +1136,6 @@ pub fn slowlog(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-        .expect("valid tool")
 }
 
 fn format_value(v: &redis::Value) -> String {
