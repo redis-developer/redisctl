@@ -187,16 +187,30 @@ async fn handle_list(
                 }
             }
 
-            let sections: Vec<(&str, &[(&String, &redisctl_core::Profile)], Box<dyn Fn(&str) -> bool>)> = vec![
-                ("Cloud", &cloud_profiles, Box::new(|name: &str| {
-                    conn_mgr.config.default_cloud.as_deref() == Some(name)
-                })),
-                ("Enterprise", &enterprise_profiles, Box::new(|name: &str| {
-                    conn_mgr.config.default_enterprise.as_deref() == Some(name)
-                })),
-                ("Database", &database_profiles, Box::new(|name: &str| {
-                    conn_mgr.config.default_database.as_deref() == Some(name)
-                })),
+            let sections: Vec<(
+                &str,
+                &[(&String, &redisctl_core::Profile)],
+                Box<dyn Fn(&str) -> bool>,
+            )> = vec![
+                (
+                    "Cloud",
+                    &cloud_profiles,
+                    Box::new(|name: &str| conn_mgr.config.default_cloud.as_deref() == Some(name)),
+                ),
+                (
+                    "Enterprise",
+                    &enterprise_profiles,
+                    Box::new(|name: &str| {
+                        conn_mgr.config.default_enterprise.as_deref() == Some(name)
+                    }),
+                ),
+                (
+                    "Database",
+                    &database_profiles,
+                    Box::new(|name: &str| {
+                        conn_mgr.config.default_database.as_deref() == Some(name)
+                    }),
+                ),
             ];
 
             let mut first_section = true;
@@ -239,8 +253,7 @@ async fn handle_list(
                             }
                         }
                         redisctl_core::DeploymentType::Database => {
-                            if let Some((host, port, _, tls, _, _)) =
-                                profile.database_credentials()
+                            if let Some((host, port, _, tls, _, _)) = profile.database_credentials()
                             {
                                 println!(
                                     "    {} {}:{} {}",
