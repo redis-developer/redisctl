@@ -479,6 +479,57 @@ impl Config {
         }
     }
 
+    /// Resolve the deployment type from the active profile context.
+    ///
+    /// Used by the arg-rewriting layer to infer whether a shared command
+    /// (e.g. `database`, `user`, `acl`) should be routed to Cloud or Enterprise.
+    ///
+    /// Resolution order:
+    /// 1. If `explicit_profile` is given, look it up and return its `deployment_type`
+    /// 2. If only cloud profiles exist, return Cloud
+    /// 3. If only enterprise profiles exist, return Enterprise
+    /// 4. If both exist, return `Err(AmbiguousDeployment)` with guidance
+    /// 5. If neither exists, return `Err(NoProfilesOfType)`
+    pub fn resolve_profile_deployment(
+        &self,
+        explicit_profile: Option<&str>,
+    ) -> Result<DeploymentType> {
+        // 1. Explicit profile → look it up
+        if let Some(name) = explicit_profile {
+            let profile = self
+                .profiles
+                .get(name)
+                .ok_or_else(|| ConfigError::ProfileNotFound {
+                    name: name.to_string(),
+                })?;
+            return Ok(profile.deployment_type);
+        }
+
+        let has_cloud = self
+            .profiles
+            .values()
+            .any(|p| p.deployment_type == DeploymentType::Cloud);
+        let has_enterprise = self
+            .profiles
+            .values()
+            .any(|p| p.deployment_type == DeploymentType::Enterprise);
+
+        match (has_cloud, has_enterprise) {
+            (true, false) => Ok(DeploymentType::Cloud),
+            (false, true) => Ok(DeploymentType::Enterprise),
+            (true, true) => Err(ConfigError::AmbiguousDeployment {
+                suggestion: "You have both cloud and enterprise profiles. \
+                    Use 'redisctl cloud <command>' or 'redisctl enterprise <command>', \
+                    or specify a profile with --profile."
+                    .to_string(),
+            }),
+            (false, false) => Err(ConfigError::NoProfilesOfType {
+                deployment_type: "cloud or enterprise".to_string(),
+                suggestion: "Use 'redisctl profile set' to create a profile.".to_string(),
+            }),
+        }
+    }
+
     /// Load configuration from the standard location
     pub fn load() -> Result<Self> {
         let config_path = Self::config_path()?;
@@ -1017,5 +1068,134 @@ port = 12345
         assert!(tls); // defaults to true
         assert_eq!(username, "default"); // defaults to "default"
         assert_eq!(database, 0); // defaults to 0
+    }
+
+    // --- resolve_profile_deployment tests ---
+
+    fn make_cloud_profile() -> Profile {
+        Profile {
+            deployment_type: DeploymentType::Cloud,
+            credentials: ProfileCredentials::Cloud {
+                api_key: "k".to_string(),
+                api_secret: "s".to_string(),
+                api_url: "https://api.redislabs.com/v1".to_string(),
+            },
+            files_api_key: None,
+            resilience: None,
+        }
+    }
+
+    fn make_enterprise_profile() -> Profile {
+        Profile {
+            deployment_type: DeploymentType::Enterprise,
+            credentials: ProfileCredentials::Enterprise {
+                url: "https://localhost:9443".to_string(),
+                username: "admin".to_string(),
+                password: Some("pw".to_string()),
+                insecure: false,
+                ca_cert: None,
+            },
+            files_api_key: None,
+            resilience: None,
+        }
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_explicit_cloud() {
+        let mut config = Config::default();
+        config.set_profile("mycloud".to_string(), make_cloud_profile());
+        config.set_profile("myent".to_string(), make_enterprise_profile());
+
+        assert_eq!(
+            config.resolve_profile_deployment(Some("mycloud")).unwrap(),
+            DeploymentType::Cloud
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_explicit_enterprise() {
+        let mut config = Config::default();
+        config.set_profile("mycloud".to_string(), make_cloud_profile());
+        config.set_profile("myent".to_string(), make_enterprise_profile());
+
+        assert_eq!(
+            config.resolve_profile_deployment(Some("myent")).unwrap(),
+            DeploymentType::Enterprise
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_explicit_not_found() {
+        let config = Config::default();
+        let err = config
+            .resolve_profile_deployment(Some("nonexistent"))
+            .unwrap_err();
+        assert!(err.to_string().contains("not found"));
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_cloud_only() {
+        let mut config = Config::default();
+        config.set_profile("c1".to_string(), make_cloud_profile());
+
+        assert_eq!(
+            config.resolve_profile_deployment(None).unwrap(),
+            DeploymentType::Cloud
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_enterprise_only() {
+        let mut config = Config::default();
+        config.set_profile("e1".to_string(), make_enterprise_profile());
+
+        assert_eq!(
+            config.resolve_profile_deployment(None).unwrap(),
+            DeploymentType::Enterprise
+        );
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_ambiguous() {
+        let mut config = Config::default();
+        config.set_profile("c1".to_string(), make_cloud_profile());
+        config.set_profile("e1".to_string(), make_enterprise_profile());
+
+        let err = config.resolve_profile_deployment(None).unwrap_err();
+        let msg = err.to_string();
+        assert!(msg.contains("Ambiguous"));
+        assert!(msg.contains("--profile"));
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_no_profiles() {
+        let config = Config::default();
+        let err = config.resolve_profile_deployment(None).unwrap_err();
+        assert!(err.to_string().contains("No cloud or enterprise"));
+    }
+
+    #[test]
+    fn test_resolve_profile_deployment_ignores_database_profiles() {
+        let mut config = Config::default();
+        config.set_profile(
+            "db1".to_string(),
+            Profile {
+                deployment_type: DeploymentType::Database,
+                credentials: ProfileCredentials::Database {
+                    host: "localhost".to_string(),
+                    port: 6379,
+                    password: None,
+                    tls: false,
+                    username: "default".to_string(),
+                    database: 0,
+                },
+                files_api_key: None,
+                resilience: None,
+            },
+        );
+
+        // Only database profiles → treated as "no profiles" for deployment resolution
+        let err = config.resolve_profile_deployment(None).unwrap_err();
+        assert!(err.to_string().contains("No cloud or enterprise"));
     }
 }

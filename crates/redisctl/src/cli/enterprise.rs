@@ -4,128 +4,59 @@ use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
 pub enum EnterpriseCommands {
-    /// Action (task) operations
-    #[command(subcommand)]
-    Action(crate::commands::enterprise::actions::ActionCommands),
-    /// Alert management operations
-    #[command(subcommand)]
-    Alerts(crate::commands::enterprise::alerts::AlertsCommands),
-    /// Database group operations
-    #[command(subcommand, name = "bdb-group")]
-    BdbGroup(crate::commands::enterprise::bdb_group::BdbGroupCommands),
-    /// Cluster operations
-    #[command(subcommand)]
-    Cluster(EnterpriseClusterCommands),
-    /// Cluster manager settings
-    #[command(subcommand, name = "cm-settings")]
-    CmSettings(crate::commands::enterprise::cm_settings::CmSettingsCommands),
-
+    // -- Core Operations (display_order 1-9) --
     /// Database operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 1)]
     Database(EnterpriseDatabaseCommands),
 
-    /// Debug info collection
-    #[command(subcommand)]
-    DebugInfo(crate::commands::enterprise::debuginfo::DebugInfoCommands),
-
-    /// Diagnostics operations
-    #[command(subcommand)]
-    Diagnostics(crate::commands::enterprise::diagnostics::DiagnosticsCommands),
-
-    /// Endpoint operations
-    #[command(subcommand)]
-    Endpoint(crate::commands::enterprise::endpoint::EndpointCommands),
+    /// Cluster operations
+    #[command(subcommand, display_order = 2)]
+    Cluster(EnterpriseClusterCommands),
 
     /// Node operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 3)]
     Node(EnterpriseNodeCommands),
 
-    /// Proxy management
-    #[command(subcommand)]
-    Proxy(crate::commands::enterprise::proxy::ProxyCommands),
+    /// Shard management operations
+    #[command(subcommand, display_order = 4)]
+    Shard(crate::commands::enterprise::shard::ShardCommands),
 
+    /// Endpoint operations
+    #[command(subcommand, display_order = 5)]
+    Endpoint(crate::commands::enterprise::endpoint::EndpointCommands),
+
+    // -- Access Control (display_order 10-19) --
     /// User operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 10)]
     User(EnterpriseUserCommands),
 
     /// Role operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 11)]
     Role(EnterpriseRoleCommands),
 
     /// ACL operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 12)]
     Acl(EnterpriseAclCommands),
 
     /// LDAP integration
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 13)]
     Ldap(crate::commands::enterprise::ldap::LdapCommands),
 
     /// LDAP mappings management
-    #[command(subcommand, name = "ldap-mappings")]
+    #[command(subcommand, name = "ldap-mappings", display_order = 14)]
     LdapMappings(crate::commands::enterprise::ldap::LdapMappingsCommands),
 
     /// Authentication & sessions
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 15)]
     Auth(EnterpriseAuthCommands),
-    /// Bootstrap and initialization operations
-    #[command(subcommand)]
-    Bootstrap(crate::commands::enterprise::bootstrap::BootstrapCommands),
 
-    /// Active-Active database (CRDB) operations
-    #[command(subcommand)]
-    Crdb(EnterpriseCrdbCommands),
-    /// CRDB task operations
-    #[command(subcommand, name = "crdb-task")]
-    CrdbTask(crate::commands::enterprise::crdb_task::CrdbTaskCommands),
-
-    /// Job scheduler operations
-    #[command(subcommand, name = "job-scheduler")]
-    JobScheduler(crate::commands::enterprise::job_scheduler::JobSchedulerCommands),
-
-    /// JSON schema operations
-    #[command(subcommand)]
-    Jsonschema(crate::commands::enterprise::jsonschema::JsonSchemaCommands),
-
-    /// Log operations
-    #[command(subcommand)]
-    Logs(crate::commands::enterprise::logs::LogsCommands),
-    /// License management
-    #[command(subcommand)]
-    License(crate::commands::enterprise::license::LicenseCommands),
-
-    /// Migration operations
-    #[command(subcommand)]
-    Migration(crate::commands::enterprise::migration::MigrationCommands),
-
-    /// Module management operations
-    #[command(subcommand)]
-    Module(crate::commands::enterprise::module::ModuleCommands),
-
-    /// OCSP certificate validation
-    #[command(subcommand)]
-    Ocsp(crate::commands::enterprise::ocsp::OcspCommands),
-
-    /// Service management
-    #[command(subcommand)]
-    Services(crate::commands::enterprise::services::ServicesCommands),
-
-    /// Workflow operations for multi-step tasks
-    #[command(subcommand)]
-    Workflow(EnterpriseWorkflowCommands),
-
-    /// Local node operations
-    #[command(subcommand)]
-    Local(crate::commands::enterprise::local::LocalCommands),
-
-    /// Shard management operations
-    #[command(subcommand)]
-    Shard(crate::commands::enterprise::shard::ShardCommands),
-
+    // -- Monitoring (display_order 20-29) --
     /// Statistics and metrics operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 20)]
     Stats(EnterpriseStatsCommands),
 
     /// Comprehensive cluster status (cluster, nodes, databases, shards)
+    #[command(display_order = 21)]
     Status {
         /// Show only cluster information
         #[arg(long)]
@@ -144,17 +75,101 @@ pub enum EnterpriseCommands {
         shards: bool,
     },
 
-    /// Support package generation for troubleshooting
-    #[command(subcommand, name = "support-package")]
-    SupportPackage(crate::commands::enterprise::support_package::SupportPackageCommands),
+    /// Alert management operations
+    #[command(subcommand, display_order = 22)]
+    Alerts(crate::commands::enterprise::alerts::AlertsCommands),
+
+    /// Log operations
+    #[command(subcommand, display_order = 23)]
+    Logs(crate::commands::enterprise::logs::LogsCommands),
+
+    /// Diagnostics operations
+    #[command(subcommand, display_order = 24)]
+    Diagnostics(crate::commands::enterprise::diagnostics::DiagnosticsCommands),
+
+    /// Debug info collection
+    #[command(subcommand, display_order = 25)]
+    DebugInfo(crate::commands::enterprise::debuginfo::DebugInfoCommands),
+
+    // -- Administration (display_order 30-39) --
+    /// License management
+    #[command(subcommand, display_order = 30)]
+    License(crate::commands::enterprise::license::LicenseCommands),
+
+    /// Module management operations
+    #[command(subcommand, display_order = 31)]
+    Module(crate::commands::enterprise::module::ModuleCommands),
+
+    /// Proxy management
+    #[command(subcommand, display_order = 32)]
+    Proxy(crate::commands::enterprise::proxy::ProxyCommands),
+
+    /// Service management
+    #[command(subcommand, display_order = 33)]
+    Services(crate::commands::enterprise::services::ServicesCommands),
+
+    /// Cluster manager settings
+    #[command(subcommand, name = "cm-settings", display_order = 34)]
+    CmSettings(crate::commands::enterprise::cm_settings::CmSettingsCommands),
 
     /// DNS suffix management
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 35)]
     Suffix(crate::commands::enterprise::suffix::SuffixCommands),
 
+    // -- Advanced (display_order 40-49) --
+    /// Active-Active database (CRDB) operations
+    #[command(subcommand, display_order = 40)]
+    Crdb(EnterpriseCrdbCommands),
+
+    /// CRDB task operations
+    #[command(subcommand, name = "crdb-task", display_order = 41)]
+    CrdbTask(crate::commands::enterprise::crdb_task::CrdbTaskCommands),
+
+    /// Database group operations
+    #[command(subcommand, name = "bdb-group", display_order = 42)]
+    BdbGroup(crate::commands::enterprise::bdb_group::BdbGroupCommands),
+
+    /// Migration operations
+    #[command(subcommand, display_order = 43)]
+    Migration(crate::commands::enterprise::migration::MigrationCommands),
+
+    /// Bootstrap and initialization operations
+    #[command(subcommand, display_order = 44)]
+    Bootstrap(crate::commands::enterprise::bootstrap::BootstrapCommands),
+
+    /// Job scheduler operations
+    #[command(subcommand, name = "job-scheduler", display_order = 45)]
+    JobScheduler(crate::commands::enterprise::job_scheduler::JobSchedulerCommands),
+
+    // -- Troubleshooting (display_order 50-59) --
+    /// Support package generation for troubleshooting
+    #[command(subcommand, name = "support-package", display_order = 50)]
+    SupportPackage(crate::commands::enterprise::support_package::SupportPackageCommands),
+
+    /// OCSP certificate validation
+    #[command(subcommand, display_order = 51)]
+    Ocsp(crate::commands::enterprise::ocsp::OcspCommands),
+
     /// Usage report operations
-    #[command(subcommand, name = "usage-report")]
+    #[command(subcommand, name = "usage-report", display_order = 52)]
     UsageReport(crate::commands::enterprise::usage_report::UsageReportCommands),
+
+    /// Local node operations
+    #[command(subcommand, display_order = 53)]
+    Local(crate::commands::enterprise::local::LocalCommands),
+
+    // -- Other (display_order 60+) --
+    /// Action (task) operations
+    #[command(subcommand, display_order = 60)]
+    Action(crate::commands::enterprise::actions::ActionCommands),
+
+    /// JSON schema operations
+    #[command(subcommand, display_order = 61)]
+    Jsonschema(crate::commands::enterprise::jsonschema::JsonSchemaCommands),
+
+    /// Workflow operations for multi-step tasks
+    #[command(subcommand, display_order = 62)]
+    Workflow(EnterpriseWorkflowCommands),
 }
 
 /// Cloud workflow commands

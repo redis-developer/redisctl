@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::{generate, shells};
-use redisctl_core::Config;
+use redisctl_core::{Config, DeploymentType};
 use tracing::{debug, error, info, trace};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -16,9 +16,295 @@ use cli::{Cli, Commands};
 use connection::ConnectionManager;
 use error::RedisCtlError;
 
+/// Commands that are already top-level (no prefix needed) or are explicit platform prefixes.
+/// These pass through unchanged.
+const PASSTHROUGH_COMMANDS: &[&str] = &[
+    "cloud",
+    "cl", // cloud alias
+    "enterprise",
+    "ent", // enterprise alias
+    "en",  // enterprise alias
+    "profile",
+    "prof", // profile alias
+    "pr",   // profile alias
+    "api",
+    "db",
+    "version",
+    "ver", // version alias
+    "v",   // version alias
+    "completions",
+    "comp", // completions alias
+    "help",
+    "files-key",
+    "fk", // files-key alias
+];
+
+/// Commands that exist only under `cloud`.
+const CLOUD_ONLY_COMMANDS: &[&str] = &[
+    "subscription",
+    "account",
+    "payment-method",
+    "provider-account",
+    "task",
+    "connectivity",
+    "fixed-database",
+    "fixed-subscription",
+    "cost-report",
+];
+
+/// Commands that exist only under `enterprise`.
+const ENTERPRISE_ONLY_COMMANDS: &[&str] = &[
+    "cluster",
+    "node",
+    "shard",
+    "endpoint",
+    "proxy",
+    "role",
+    "ldap",
+    "ldap-mappings",
+    "auth",
+    "bootstrap",
+    "crdb",
+    "crdb-task",
+    "job-scheduler",
+    "jsonschema",
+    "logs",
+    "license",
+    "migration",
+    "module",
+    "ocsp",
+    "services",
+    "local",
+    "stats",
+    "status",
+    "support-package",
+    "suffix",
+    "usage-report",
+    "bdb-group",
+    "cm-settings",
+    "debug-info",
+    "diagnostics",
+    "alerts",
+    "action",
+];
+
+/// Commands that exist under both `cloud` and `enterprise`.
+const SHARED_COMMANDS: &[&str] = &["database", "user", "acl", "workflow"];
+
+/// Global flags that accept a following value (the value must be skipped when
+/// scanning for the first positional arg).
+///
+/// Keep in sync with `Cli` struct global args.
+const GLOBAL_VALUE_FLAGS: &[&str] = &[
+    "--profile",
+    "-p",
+    "--config-file",
+    "--output",
+    "-o",
+    "--query",
+    "-q",
+    "--retry-attempts",
+    "--rate-limit",
+];
+
+/// Rewrite `args` to inject the platform prefix when omitted.
+///
+/// Returns the (possibly modified) arg list that should be passed to
+/// `Cli::parse_from()`.
+fn maybe_inject_prefix(args: Vec<String>) -> Vec<String> {
+    // Parse out global flags to find the first positional arg and any --profile value.
+    let mut first_positional_idx: Option<usize> = None;
+    let mut explicit_profile: Option<String> = None;
+    let mut config_file: Option<String> = None;
+    let mut has_help = false;
+
+    let mut i = 1; // skip argv[0]
+    while i < args.len() {
+        let arg = &args[i];
+
+        if arg == "--help" || arg == "-h" {
+            has_help = true;
+            i += 1;
+            continue;
+        }
+
+        if arg == "--" {
+            // Everything after `--` is positional — stop scanning.
+            break;
+        }
+
+        // Boolean flags (no value)
+        if arg == "--verbose"
+            || arg == "--no-resilience"
+            || arg == "--no-circuit-breaker"
+            || arg == "--no-retry"
+        {
+            i += 1;
+            continue;
+        }
+
+        // Short verbose stacking: -v, -vv, -vvv
+        if arg.starts_with('-') && !arg.starts_with("--") && arg.chars().skip(1).all(|c| c == 'v') {
+            i += 1;
+            continue;
+        }
+
+        // Value flags: --flag value or --flag=value
+        if GLOBAL_VALUE_FLAGS.contains(&arg.as_str()) {
+            // --flag value form
+            if (arg == "--profile" || arg == "-p")
+                && let Some(val) = args.get(i + 1)
+            {
+                explicit_profile = Some(val.clone());
+            }
+            if arg == "--config-file"
+                && let Some(val) = args.get(i + 1)
+            {
+                config_file = Some(val.clone());
+            }
+            i += 2; // skip flag + value
+            continue;
+        }
+
+        // --flag=value form
+        if arg.starts_with("--")
+            && let Some((key, val)) = arg.split_once('=')
+            && GLOBAL_VALUE_FLAGS.contains(&key)
+        {
+            if key == "--profile" {
+                explicit_profile = Some(val.to_string());
+            }
+            if key == "--config-file" {
+                config_file = Some(val.to_string());
+            }
+            i += 1;
+            continue;
+        }
+
+        // If we get here and it's a flag we don't recognise, skip it
+        // (clap will handle the error later).
+        if arg.starts_with('-') {
+            i += 1;
+            continue;
+        }
+
+        // First non-flag arg = the subcommand
+        first_positional_idx = Some(i);
+        break;
+    }
+
+    let first_positional_idx = match first_positional_idx {
+        Some(idx) => idx,
+        None => return args, // no subcommand found — let clap handle it
+    };
+
+    let subcmd = args[first_positional_idx].as_str();
+
+    // Already a known top-level / explicit prefix → pass through
+    if PASSTHROUGH_COMMANDS.contains(&subcmd) {
+        return args;
+    }
+
+    // Unambiguous cloud-only command
+    if CLOUD_ONLY_COMMANDS.contains(&subcmd) {
+        let mut new_args = args[..first_positional_idx].to_vec();
+        new_args.push("cloud".to_string());
+        new_args.extend_from_slice(&args[first_positional_idx..]);
+        return new_args;
+    }
+
+    // Unambiguous enterprise-only command
+    if ENTERPRISE_ONLY_COMMANDS.contains(&subcmd) {
+        let mut new_args = args[..first_positional_idx].to_vec();
+        new_args.push("enterprise".to_string());
+        new_args.extend_from_slice(&args[first_positional_idx..]);
+        return new_args;
+    }
+
+    // Shared command — need to resolve from profile config
+    if SHARED_COMMANDS.contains(&subcmd) {
+        // If --help is present, show a helpful message about needing a platform
+        if has_help {
+            // Try to resolve, but if we can't, give guidance
+            let config = load_config_for_prefix(config_file.as_deref());
+            if let Some(config) = config
+                && let Ok(deployment) =
+                    config.resolve_profile_deployment(explicit_profile.as_deref())
+            {
+                let prefix = match deployment {
+                    DeploymentType::Cloud => "cloud",
+                    DeploymentType::Enterprise => "enterprise",
+                    _ => return args,
+                };
+                let mut new_args = args[..first_positional_idx].to_vec();
+                new_args.push(prefix.to_string());
+                new_args.extend_from_slice(&args[first_positional_idx..]);
+                return new_args;
+            }
+            // Can't resolve — print guidance and exit
+            eprintln!(
+                "The '{}' command exists in both cloud and enterprise.\n\n\
+                 To see help, specify the platform:\n  \
+                 redisctl cloud {} --help\n  \
+                 redisctl enterprise {} --help\n\n\
+                 Or configure a profile so the platform is inferred automatically:\n  \
+                 redisctl profile set <name> --type cloud ...\n  \
+                 redisctl profile set <name> --type enterprise ...",
+                subcmd, subcmd, subcmd
+            );
+            std::process::exit(0);
+        }
+
+        let config = load_config_for_prefix(config_file.as_deref());
+        match config {
+            Some(config) => {
+                match config.resolve_profile_deployment(explicit_profile.as_deref()) {
+                    Ok(deployment) => {
+                        let prefix = match deployment {
+                            DeploymentType::Cloud => "cloud",
+                            DeploymentType::Enterprise => "enterprise",
+                            _ => return args, // Database profiles don't apply
+                        };
+                        let mut new_args = args[..first_positional_idx].to_vec();
+                        new_args.push(prefix.to_string());
+                        new_args.extend_from_slice(&args[first_positional_idx..]);
+                        new_args
+                    }
+                    Err(e) => {
+                        eprintln!("Error: {}", e);
+                        std::process::exit(1);
+                    }
+                }
+            }
+            None => {
+                eprintln!(
+                    "The '{}' command exists in both cloud and enterprise.\n\
+                     No configuration found. Use 'redisctl cloud {}' or 'redisctl enterprise {}'.",
+                    subcmd, subcmd, subcmd
+                );
+                std::process::exit(1);
+            }
+        }
+    } else {
+        // Unknown command — pass through and let clap produce its error
+        args
+    }
+}
+
+/// Try to load config for the prefix-inference layer. Returns None on any error.
+fn load_config_for_prefix(config_file: Option<&str>) -> Option<Config> {
+    if let Some(path) = config_file {
+        Config::load_from_path(std::path::Path::new(path)).ok()
+    } else {
+        Config::load().ok()
+    }
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
-    let cli = Cli::parse();
+    let args: Vec<String> = std::env::args().collect();
+    let args = maybe_inject_prefix(args);
+    let cli = Cli::parse_from(args);
 
     // Initialize tracing based on verbosity level
     init_tracing(cli.verbose);
@@ -980,5 +1266,242 @@ async fn execute_cloud_command(
             )
             .await
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn args(s: &str) -> Vec<String> {
+        s.split_whitespace().map(String::from).collect()
+    }
+
+    // --- Passthrough tests ---
+
+    #[test]
+    fn passthrough_explicit_cloud() {
+        let input = args("redisctl cloud database list");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_explicit_enterprise() {
+        let input = args("redisctl enterprise cluster get");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_cloud_alias() {
+        let input = args("redisctl cl database list");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_enterprise_alias_ent() {
+        let input = args("redisctl ent cluster get");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_enterprise_alias_en() {
+        let input = args("redisctl en cluster get");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_profile() {
+        let input = args("redisctl profile list");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_profile_alias() {
+        let input = args("redisctl prof list");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_version() {
+        let input = args("redisctl version");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_help() {
+        let input = args("redisctl help");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_no_subcommand() {
+        let input = args("redisctl --help");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    #[test]
+    fn passthrough_no_args() {
+        let input = args("redisctl");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    // --- Cloud-only injection ---
+
+    #[test]
+    fn inject_cloud_subscription() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl subscription list")),
+            args("redisctl cloud subscription list")
+        );
+    }
+
+    #[test]
+    fn inject_cloud_account() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl account list")),
+            args("redisctl cloud account list")
+        );
+    }
+
+    #[test]
+    fn inject_cloud_payment_method() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl payment-method list")),
+            args("redisctl cloud payment-method list")
+        );
+    }
+
+    #[test]
+    fn inject_cloud_task() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl task list")),
+            args("redisctl cloud task list")
+        );
+    }
+
+    #[test]
+    fn inject_cloud_connectivity() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl connectivity list")),
+            args("redisctl cloud connectivity list")
+        );
+    }
+
+    #[test]
+    fn inject_cloud_fixed_database() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl fixed-database list")),
+            args("redisctl cloud fixed-database list")
+        );
+    }
+
+    #[test]
+    fn inject_cloud_cost_report() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl cost-report list")),
+            args("redisctl cloud cost-report list")
+        );
+    }
+
+    // --- Enterprise-only injection ---
+
+    #[test]
+    fn inject_enterprise_cluster() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl cluster get")),
+            args("redisctl enterprise cluster get")
+        );
+    }
+
+    #[test]
+    fn inject_enterprise_node() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl node list")),
+            args("redisctl enterprise node list")
+        );
+    }
+
+    #[test]
+    fn inject_enterprise_shard() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl shard list")),
+            args("redisctl enterprise shard list")
+        );
+    }
+
+    #[test]
+    fn inject_enterprise_module() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl module list")),
+            args("redisctl enterprise module list")
+        );
+    }
+
+    #[test]
+    fn inject_enterprise_status() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl status")),
+            args("redisctl enterprise status")
+        );
+    }
+
+    // --- Global flags in various positions ---
+
+    #[test]
+    fn inject_cloud_with_profile_flag() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl -p myprofile subscription list")),
+            args("redisctl -p myprofile cloud subscription list")
+        );
+    }
+
+    #[test]
+    fn inject_enterprise_with_verbose() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl -vvv cluster get")),
+            args("redisctl -vvv enterprise cluster get")
+        );
+    }
+
+    #[test]
+    fn inject_with_output_flag() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl -o json subscription list")),
+            args("redisctl -o json cloud subscription list")
+        );
+    }
+
+    #[test]
+    fn inject_with_long_profile() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl --profile mycloud subscription list")),
+            args("redisctl --profile mycloud cloud subscription list")
+        );
+    }
+
+    #[test]
+    fn inject_with_equals_profile() {
+        assert_eq!(
+            maybe_inject_prefix(args("redisctl --profile=mycloud subscription list")),
+            args("redisctl --profile=mycloud cloud subscription list")
+        );
+    }
+
+    #[test]
+    fn inject_enterprise_with_multiple_flags() {
+        assert_eq!(
+            maybe_inject_prefix(args(
+                "redisctl -p myent -o json --no-resilience cluster get"
+            )),
+            args("redisctl -p myent -o json --no-resilience enterprise cluster get")
+        );
+    }
+
+    // --- Unknown command passes through ---
+
+    #[test]
+    fn unknown_command_passthrough() {
+        let input = args("redisctl foobar baz");
+        assert_eq!(maybe_inject_prefix(input.clone()), input);
     }
 }

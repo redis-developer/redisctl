@@ -44,6 +44,9 @@ pub enum ConfigError {
     #[error("Environment variable expansion failed: {0}")]
     EnvExpansionError(String),
 
+    #[error("Ambiguous deployment type: {suggestion}")]
+    AmbiguousDeployment { suggestion: String },
+
     #[error("Failed to determine config directory")]
     ConfigDirError,
 

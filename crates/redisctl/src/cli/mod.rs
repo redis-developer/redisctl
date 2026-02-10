@@ -24,6 +24,15 @@ pub use enterprise::*;
 #[command(long_about = "
 Redis management CLI for Cloud and Enterprise deployments
 
+Commands infer platform from your profile — no prefix needed:
+    redisctl database list              # uses your configured profile
+    redisctl subscription list          # cloud-only, no prefix needed
+    redisctl cluster get                # enterprise-only, no prefix needed
+
+Or be explicit:
+    redisctl cloud database list
+    redisctl enterprise database list
+
 EXAMPLES:
     # Set up a Cloud profile
     redisctl profile set mycloud --type cloud --api-key KEY --api-secret SECRET
@@ -31,15 +40,11 @@ EXAMPLES:
     # Set up an Enterprise profile
     redisctl profile set myenterprise --type enterprise --url https://cluster:9443 --username admin
 
-    # List databases
-    redisctl cloud database list
-    redisctl enterprise database list
-
     # Get JSON output for scripting
-    redisctl cloud subscription list -o json
+    redisctl subscription list -o json
 
     # Filter output with JMESPath
-    redisctl cloud database list -q 'databases[?status==`active`]'
+    redisctl database list -q 'databases[?status==`active`]'
 
     # Direct API access
     redisctl api cloud get /subscriptions
@@ -174,10 +179,26 @@ pub enum Commands {
 
     /// Cloud-specific operations
     #[command(subcommand, visible_alias = "cl")]
+    #[command(before_long_help = "\
+COMMAND GROUPS:
+  Core:       database, subscription, fixed-database, fixed-subscription
+  Access:     user, acl
+  Billing:    account, payment-method, cost-report
+  Networking: connectivity, provider-account
+  Operations: task, workflow")]
     Cloud(CloudCommands),
 
     /// Enterprise-specific operations
     #[command(subcommand, visible_alias = "ent", visible_alias = "en")]
+    #[command(before_long_help = "\
+COMMAND GROUPS:
+  Core:          database, cluster, node, shard, endpoint
+  Access:        user, role, acl, ldap, ldap-mappings, auth
+  Monitoring:    stats, status, alerts, logs, diagnostics, debug-info
+  Admin:         license, module, proxy, services, cm-settings, suffix
+  Advanced:      crdb, crdb-task, bdb-group, migration, bootstrap, job-scheduler
+  Troubleshoot:  support-package, ocsp, usage-report, local
+  Other:         action, jsonschema, workflow")]
     Enterprise(EnterpriseCommands),
 
     /// Files.com API key management (for support package uploads)

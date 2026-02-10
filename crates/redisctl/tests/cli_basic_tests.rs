@@ -4496,3 +4496,251 @@ fn test_enterprise_ldap_mappings_update_requires_at_least_one_field() {
             predicate::str::contains("No enterprise profiles configured"),
         ));
 }
+
+// =====================================================================
+// Platform prefix inference tests
+// =====================================================================
+
+/// Cloud-only commands should work without the `cloud` prefix and no config needed.
+#[test]
+fn test_prefix_inference_subscription_help() {
+    // `subscription` is cloud-only — should route to `cloud subscription --help`
+    redisctl()
+        .args(["subscription", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Subscription"));
+}
+
+#[test]
+fn test_prefix_inference_account_help() {
+    redisctl()
+        .args(["account", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Account"));
+}
+
+#[test]
+fn test_prefix_inference_cost_report_help() {
+    redisctl()
+        .args(["cost-report", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("cost"));
+}
+
+/// Enterprise-only commands should work without the `enterprise` prefix and no config needed.
+#[test]
+fn test_prefix_inference_cluster_help() {
+    redisctl()
+        .args(["cluster", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Cluster"));
+}
+
+#[test]
+fn test_prefix_inference_node_help() {
+    redisctl()
+        .args(["node", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Node"));
+}
+
+#[test]
+fn test_prefix_inference_shard_help() {
+    redisctl()
+        .args(["shard", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Shard"));
+}
+
+#[test]
+fn test_prefix_inference_module_help() {
+    redisctl()
+        .args(["module", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Module"));
+}
+
+/// Backwards compat: explicit prefixes still work.
+#[test]
+fn test_prefix_inference_explicit_cloud_still_works() {
+    redisctl()
+        .args(["cloud", "subscription", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Subscription"));
+}
+
+#[test]
+fn test_prefix_inference_explicit_enterprise_still_works() {
+    redisctl()
+        .args(["enterprise", "cluster", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Cluster"));
+}
+
+/// Cloud-only command with global flags.
+#[test]
+fn test_prefix_inference_cloud_with_output_flag() {
+    redisctl()
+        .args(["-o", "json", "subscription", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Subscription"));
+}
+
+/// Enterprise-only command with verbose flag.
+#[test]
+fn test_prefix_inference_enterprise_with_verbose() {
+    redisctl()
+        .args(["-vvv", "cluster", "--help"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Cluster"));
+}
+
+/// Shared command `database` with cloud-only config → routes to cloud.
+#[test]
+fn test_prefix_inference_shared_database_cloud_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[profiles.mycloud]
+deployment_type = "cloud"
+api_key = "k"
+api_secret = "s"
+"#,
+    )
+    .unwrap();
+
+    redisctl()
+        .args([
+            "--config-file",
+            config_path.to_str().unwrap(),
+            "database",
+            "--help",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Database"));
+}
+
+/// Shared command `database` with enterprise-only config → routes to enterprise.
+#[test]
+fn test_prefix_inference_shared_database_enterprise_config() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[profiles.myent]
+deployment_type = "enterprise"
+url = "https://localhost:9443"
+username = "admin"
+password = "pw"
+"#,
+    )
+    .unwrap();
+
+    redisctl()
+        .args([
+            "--config-file",
+            config_path.to_str().unwrap(),
+            "database",
+            "--help",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Database"));
+}
+
+/// Shared command with both cloud and enterprise profiles (no --profile) → ambiguity error.
+#[test]
+fn test_prefix_inference_shared_database_ambiguous() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[profiles.mycloud]
+deployment_type = "cloud"
+api_key = "k"
+api_secret = "s"
+
+[profiles.myent]
+deployment_type = "enterprise"
+url = "https://localhost:9443"
+username = "admin"
+password = "pw"
+"#,
+    )
+    .unwrap();
+
+    redisctl()
+        .args([
+            "--config-file",
+            config_path.to_str().unwrap(),
+            "database",
+            "list",
+        ])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("Ambiguous"));
+}
+
+/// Shared command with --profile selecting a cloud profile → routes to cloud.
+#[test]
+fn test_prefix_inference_shared_database_with_profile_flag() {
+    let dir = tempfile::tempdir().unwrap();
+    let config_path = dir.path().join("config.toml");
+    std::fs::write(
+        &config_path,
+        r#"
+[profiles.mycloud]
+deployment_type = "cloud"
+api_key = "k"
+api_secret = "s"
+
+[profiles.myent]
+deployment_type = "enterprise"
+url = "https://localhost:9443"
+username = "admin"
+password = "pw"
+"#,
+    )
+    .unwrap();
+
+    redisctl()
+        .args([
+            "--config-file",
+            config_path.to_str().unwrap(),
+            "-p",
+            "mycloud",
+            "database",
+            "--help",
+        ])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Database"));
+}
+
+/// Updated help text shows the new shorthand examples.
+#[test]
+fn test_help_shows_prefix_inference_examples() {
+    redisctl()
+        .arg("--help")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "Commands infer platform from your profile",
+        ));
+}
