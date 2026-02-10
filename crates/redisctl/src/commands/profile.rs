@@ -7,6 +7,7 @@ use crate::connection::ConnectionManager;
 use crate::error::RedisCtlError;
 use crate::output;
 use anyhow::Context;
+use colored::Colorize;
 use redisctl_core::Config;
 use tracing::{debug, info, trace};
 
@@ -169,56 +170,89 @@ async fn handle_list(
                 return Ok(());
             }
 
-            println!("{:<15} {:<12} DETAILS", "NAME", "TYPE");
-            println!("{:-<15} {:-<12} {:-<30}", "", "", "");
+            // Group profiles by deployment type
+            let mut cloud_profiles = Vec::new();
+            let mut enterprise_profiles = Vec::new();
+            let mut database_profiles = Vec::new();
 
-            for (name, profile) in profiles {
-                let mut details = String::new();
+            for (name, profile) in &profiles {
                 match profile.deployment_type {
-                    redisctl_core::DeploymentType::Cloud => {
-                        if let Some((_, _, url)) = profile.cloud_credentials() {
-                            details = format!("URL: {}", url);
-                        }
-                    }
+                    redisctl_core::DeploymentType::Cloud => cloud_profiles.push((*name, *profile)),
                     redisctl_core::DeploymentType::Enterprise => {
-                        if let Some((url, username, _, insecure, _ca_cert)) =
-                            profile.enterprise_credentials()
-                        {
-                            details = format!(
-                                "URL: {}, User: {}{}",
-                                url,
-                                username,
-                                if insecure { " (insecure)" } else { "" }
-                            );
-                        }
+                        enterprise_profiles.push((*name, *profile))
                     }
                     redisctl_core::DeploymentType::Database => {
-                        if let Some((host, port, _, tls, _, _)) = profile.database_credentials() {
-                            details = format!(
-                                "{}:{} {}",
-                                host,
-                                port,
-                                if tls { "(TLS)" } else { "(no TLS)" }
-                            );
+                        database_profiles.push((*name, *profile))
+                    }
+                }
+            }
+
+            let sections: Vec<(&str, &[(&String, &redisctl_core::Profile)], Box<dyn Fn(&str) -> bool>)> = vec![
+                ("Cloud", &cloud_profiles, Box::new(|name: &str| {
+                    conn_mgr.config.default_cloud.as_deref() == Some(name)
+                })),
+                ("Enterprise", &enterprise_profiles, Box::new(|name: &str| {
+                    conn_mgr.config.default_enterprise.as_deref() == Some(name)
+                })),
+                ("Database", &database_profiles, Box::new(|name: &str| {
+                    conn_mgr.config.default_database.as_deref() == Some(name)
+                })),
+            ];
+
+            let mut first_section = true;
+            for (header, group, is_default) in &sections {
+                if group.is_empty() {
+                    continue;
+                }
+
+                if !first_section {
+                    println!();
+                }
+                first_section = false;
+
+                println!("{}", header.bold());
+
+                for (name, profile) in *group {
+                    if is_default(name) {
+                        println!("  {} {}", name.bold().cyan(), "(default)".green());
+                    } else {
+                        println!("  {}", name.bold().cyan());
+                    }
+
+                    match profile.deployment_type {
+                        redisctl_core::DeploymentType::Cloud => {
+                            if let Some((_, _, url)) = profile.cloud_credentials() {
+                                println!("    {} {}", "URL:".dimmed(), url);
+                            }
+                        }
+                        redisctl_core::DeploymentType::Enterprise => {
+                            if let Some((url, username, _, insecure, _ca_cert)) =
+                                profile.enterprise_credentials()
+                            {
+                                println!("    {}  {}", "URL:".dimmed(), url);
+                                println!(
+                                    "    {} {}{}",
+                                    "User:".dimmed(),
+                                    username,
+                                    if insecure { " (insecure)" } else { "" }
+                                );
+                            }
+                        }
+                        redisctl_core::DeploymentType::Database => {
+                            if let Some((host, port, _, tls, _, _)) =
+                                profile.database_credentials()
+                            {
+                                println!(
+                                    "    {} {}:{} {}",
+                                    "Host:".dimmed(),
+                                    host,
+                                    port,
+                                    if tls { "(TLS)" } else { "(no TLS)" }
+                                );
+                            }
                         }
                     }
                 }
-
-                let is_default_enterprise =
-                    conn_mgr.config.default_enterprise.as_deref() == Some(name);
-                let is_default_cloud = conn_mgr.config.default_cloud.as_deref() == Some(name);
-                let is_default_database = conn_mgr.config.default_database.as_deref() == Some(name);
-                let name_display =
-                    if is_default_enterprise || is_default_cloud || is_default_database {
-                        format!("{}*", name)
-                    } else {
-                        name.to_string()
-                    };
-
-                println!(
-                    "{:<15} {:<12} {}",
-                    name_display, profile.deployment_type, details
-                );
             }
         }
     }
