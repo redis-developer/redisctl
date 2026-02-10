@@ -187,52 +187,24 @@ async fn handle_list(
                 }
             }
 
-            let sections: Vec<(
-                &str,
-                &[(&String, &redisctl_core::Profile)],
-                Box<dyn Fn(&str) -> bool>,
-            )> = vec![
-                (
-                    "Cloud",
-                    &cloud_profiles,
-                    Box::new(|name: &str| conn_mgr.config.default_cloud.as_deref() == Some(name)),
-                ),
-                (
-                    "Enterprise",
-                    &enterprise_profiles,
-                    Box::new(|name: &str| {
-                        conn_mgr.config.default_enterprise.as_deref() == Some(name)
-                    }),
-                ),
-                (
-                    "Database",
-                    &database_profiles,
-                    Box::new(|name: &str| {
-                        conn_mgr.config.default_database.as_deref() == Some(name)
-                    }),
-                ),
-            ];
-
-            let mut first_section = true;
-            for (header, group, is_default) in &sections {
+            let print_section = |header: &str,
+                                 group: &[(&String, &redisctl_core::Profile)],
+                                 default_name: Option<&str>,
+                                 first: &mut bool| {
                 if group.is_empty() {
-                    continue;
+                    return;
                 }
-
-                if !first_section {
+                if !*first {
                     println!();
                 }
-                first_section = false;
-
+                *first = false;
                 println!("{}", header.bold());
-
-                for (name, profile) in *group {
-                    if is_default(name) {
+                for (name, profile) in group {
+                    if default_name == Some(name.as_str()) {
                         println!("  {} {}", name.bold().cyan(), "(default)".green());
                     } else {
                         println!("  {}", name.bold().cyan());
                     }
-
                     match profile.deployment_type {
                         redisctl_core::DeploymentType::Cloud => {
                             if let Some((_, _, url)) = profile.cloud_credentials() {
@@ -266,7 +238,27 @@ async fn handle_list(
                         }
                     }
                 }
-            }
+            };
+
+            let mut first = true;
+            print_section(
+                "Cloud",
+                &cloud_profiles,
+                conn_mgr.config.default_cloud.as_deref(),
+                &mut first,
+            );
+            print_section(
+                "Enterprise",
+                &enterprise_profiles,
+                conn_mgr.config.default_enterprise.as_deref(),
+                &mut first,
+            );
+            print_section(
+                "Database",
+                &database_profiles,
+                conn_mgr.config.default_database.as_deref(),
+                &mut first,
+            );
         }
     }
 
