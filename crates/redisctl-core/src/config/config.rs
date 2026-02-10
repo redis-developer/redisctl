@@ -517,12 +517,7 @@ impl Config {
         match (has_cloud, has_enterprise) {
             (true, false) => Ok(DeploymentType::Cloud),
             (false, true) => Ok(DeploymentType::Enterprise),
-            (true, true) => Err(ConfigError::AmbiguousDeployment {
-                suggestion: "You have both cloud and enterprise profiles. \
-                    Use 'redisctl cloud <command>' or 'redisctl enterprise <command>', \
-                    or specify a profile with --profile."
-                    .to_string(),
-            }),
+            (true, true) => Err(ConfigError::AmbiguousDeployment),
             (false, false) => Err(ConfigError::NoProfilesOfType {
                 deployment_type: "cloud or enterprise".to_string(),
                 suggestion: "Use 'redisctl profile set' to create a profile.".to_string(),
@@ -1163,8 +1158,7 @@ port = 12345
 
         let err = config.resolve_profile_deployment(None).unwrap_err();
         let msg = err.to_string();
-        assert!(msg.contains("Ambiguous"));
-        assert!(msg.contains("--profile"));
+        assert!(msg.contains("ambiguous deployment type"));
     }
 
     #[test]

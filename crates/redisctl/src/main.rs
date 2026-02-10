@@ -1,7 +1,7 @@
 use anyhow::Result;
 use clap::{CommandFactory, Parser};
 use clap_complete::{generate, shells};
-use redisctl_core::{Config, DeploymentType};
+use redisctl_core::{Config, ConfigError, DeploymentType};
 use tracing::{debug, error, info, trace};
 use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
 
@@ -242,16 +242,23 @@ fn maybe_inject_prefix(args: Vec<String>) -> Vec<String> {
                 return new_args;
             }
             // Can't resolve — print guidance and exit
-            eprintln!(
-                "The '{}' command exists in both cloud and enterprise.\n\n\
-                 To see help, specify the platform:\n  \
-                 redisctl cloud {} --help\n  \
-                 redisctl enterprise {} --help\n\n\
-                 Or configure a profile so the platform is inferred automatically:\n  \
-                 redisctl profile set <name> --type cloud ...\n  \
-                 redisctl profile set <name> --type enterprise ...",
-                subcmd, subcmd, subcmd
-            );
+            error::CliDiagnostic::error(&format!("cannot determine platform for '{}'", subcmd))
+                .detail("This command exists in both cloud and enterprise.")
+                .tip(
+                    "specify the platform:",
+                    &[
+                        &format!("redisctl cloud {} --help", subcmd),
+                        &format!("redisctl enterprise {} --help", subcmd),
+                    ],
+                )
+                .tip(
+                    "or configure a profile so the platform is inferred automatically:",
+                    &[
+                        "redisctl profile set <name> --type cloud ...",
+                        "redisctl profile set <name> --type enterprise ...",
+                    ],
+                )
+                .print();
             std::process::exit(0);
         }
 
@@ -271,17 +278,70 @@ fn maybe_inject_prefix(args: Vec<String>) -> Vec<String> {
                         new_args
                     }
                     Err(e) => {
-                        eprintln!("Error: {}", e);
+                        match &e {
+                            ConfigError::AmbiguousDeployment => {
+                                error::CliDiagnostic::error(&format!(
+                                    "cannot determine platform for '{}'",
+                                    subcmd
+                                ))
+                                .detail("You have both cloud and enterprise profiles.")
+                                .tip(
+                                    "be explicit about the platform:",
+                                    &[
+                                        &format!("redisctl cloud {} list", subcmd),
+                                        &format!("redisctl enterprise {} list", subcmd),
+                                    ],
+                                )
+                                .tip(
+                                    "or specify a profile:",
+                                    &[&format!("redisctl {} list --profile <name>", subcmd)],
+                                )
+                                .print();
+                            }
+                            ConfigError::ProfileNotFound { name } => {
+                                error::CliDiagnostic::error(&format!(
+                                    "profile '{}' not found",
+                                    name
+                                ))
+                                .tip("list available profiles:", &["redisctl profile list"])
+                                .tip(
+                                    "create a new profile:",
+                                    &[&format!(
+                                        "redisctl profile set {} --type cloud --api-key KEY --api-secret SECRET",
+                                        name
+                                    )],
+                                )
+                                .print();
+                            }
+                            _ => {
+                                error::CliDiagnostic::error(&format!("{}", e)).print();
+                            }
+                        }
                         std::process::exit(1);
                     }
                 }
             }
             None => {
-                eprintln!(
-                    "The '{}' command exists in both cloud and enterprise.\n\
-                     No configuration found. Use 'redisctl cloud {}' or 'redisctl enterprise {}'.",
-                    subcmd, subcmd, subcmd
-                );
+                error::CliDiagnostic::error(&format!(
+                    "cannot determine platform for '{}'",
+                    subcmd
+                ))
+                .detail("No configuration found and this command exists in both cloud and enterprise.")
+                .tip(
+                    "be explicit about the platform:",
+                    &[
+                        &format!("redisctl cloud {} list", subcmd),
+                        &format!("redisctl enterprise {} list", subcmd),
+                    ],
+                )
+                .tip(
+                    "create a profile so the platform is inferred automatically:",
+                    &[
+                        "redisctl profile set <name> --type cloud --api-key KEY --api-secret SECRET",
+                        "redisctl profile set <name> --type enterprise --url URL --username USER",
+                    ],
+                )
+                .print();
                 std::process::exit(1);
             }
         }
@@ -327,7 +387,7 @@ async fn main() -> Result<()> {
 
     // Execute command
     if let Err(e) = execute_command(&cli, &conn_mgr).await {
-        eprintln!("{}", e.display_with_suggestions());
+        e.print_diagnostic();
         std::process::exit(1);
     }
 
