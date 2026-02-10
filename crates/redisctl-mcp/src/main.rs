@@ -8,6 +8,7 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
+use redisctl_core::{Config, DeploymentType};
 use tower_mcp::{CapabilityFilter, DenialBehavior, McpRouter, Tool, transport::StdioTransport};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -130,21 +131,78 @@ struct Args {
     log_level: String,
 }
 
-/// Resolve which toolsets are enabled based on CLI args and compiled features
-fn enabled_toolsets(args: &Args) -> HashSet<Toolset> {
-    if let Some(ref tools) = args.tools {
-        tools.iter().copied().collect()
-    } else {
-        let mut set = HashSet::new();
-        #[cfg(feature = "cloud")]
-        set.insert(Toolset::Cloud);
-        #[cfg(feature = "enterprise")]
-        set.insert(Toolset::Enterprise);
-        #[cfg(feature = "database")]
-        set.insert(Toolset::Database);
-        set.insert(Toolset::App);
-        set
+/// Derive which toolsets to enable based on profile types in the config.
+/// Returns `None` if config has no profiles (caller should fall back to all compiled-in).
+fn toolsets_from_config(config: &Config) -> Option<HashSet<Toolset>> {
+    if config.profiles.is_empty() {
+        return None;
     }
+
+    let has_cloud = !config
+        .get_profiles_of_type(DeploymentType::Cloud)
+        .is_empty();
+    let has_enterprise = !config
+        .get_profiles_of_type(DeploymentType::Enterprise)
+        .is_empty();
+    let has_database = !config
+        .get_profiles_of_type(DeploymentType::Database)
+        .is_empty();
+
+    let mut set = HashSet::new();
+    set.insert(Toolset::App); // always include profile management
+
+    #[cfg(feature = "cloud")]
+    if has_cloud {
+        set.insert(Toolset::Cloud);
+    }
+    #[cfg(feature = "enterprise")]
+    if has_enterprise {
+        set.insert(Toolset::Enterprise);
+    }
+    #[cfg(feature = "database")]
+    if has_database {
+        set.insert(Toolset::Database);
+    }
+
+    Some(set)
+}
+
+/// Try to auto-detect toolsets from the config file on disk.
+/// Returns `None` if config cannot be loaded or has no profiles.
+fn detect_toolsets_from_config() -> Option<HashSet<Toolset>> {
+    let config = Config::load().ok()?;
+    let result = toolsets_from_config(&config);
+    if let Some(ref toolsets) = result {
+        let names: Vec<String> = toolsets.iter().map(|t| t.to_string()).collect();
+        info!(toolsets = ?names, "Auto-detected toolsets from config profiles");
+    }
+    result
+}
+
+/// Resolve which toolsets are enabled based on CLI args, config profiles, and compiled features.
+///
+/// Priority: explicit `--tools` flag > config-based auto-detection > all compiled-in features.
+fn enabled_toolsets(args: &Args) -> HashSet<Toolset> {
+    // 1. Explicit --tools flag always wins
+    if let Some(ref tools) = args.tools {
+        return tools.iter().copied().collect();
+    }
+
+    // 2. Auto-detect from config profiles
+    if let Some(toolsets) = detect_toolsets_from_config() {
+        return toolsets;
+    }
+
+    // 3. Fallback: all compiled-in features
+    let mut set = HashSet::new();
+    #[cfg(feature = "cloud")]
+    set.insert(Toolset::Cloud);
+    #[cfg(feature = "enterprise")]
+    set.insert(Toolset::Enterprise);
+    #[cfg(feature = "database")]
+    set.insert(Toolset::Database);
+    set.insert(Toolset::App);
+    set
 }
 
 #[tokio::main]
@@ -315,4 +373,138 @@ async fn run_http_server(router: McpRouter, args: &Args) -> Result<()> {
 #[cfg(not(feature = "http"))]
 async fn run_http_server(_router: McpRouter, _args: &Args) -> Result<()> {
     anyhow::bail!("HTTP transport requires the 'http' feature")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use redisctl_core::{Profile, ProfileCredentials};
+
+    fn cloud_profile() -> Profile {
+        Profile {
+            deployment_type: DeploymentType::Cloud,
+            credentials: ProfileCredentials::Cloud {
+                api_key: "key".to_string(),
+                api_secret: "secret".to_string(),
+                api_url: "https://api.redislabs.com/v1".to_string(),
+            },
+            files_api_key: None,
+            resilience: None,
+        }
+    }
+
+    fn enterprise_profile() -> Profile {
+        Profile {
+            deployment_type: DeploymentType::Enterprise,
+            credentials: ProfileCredentials::Enterprise {
+                url: "https://localhost:9443".to_string(),
+                username: "admin".to_string(),
+                password: Some("password".to_string()),
+                insecure: false,
+                ca_cert: None,
+            },
+            files_api_key: None,
+            resilience: None,
+        }
+    }
+
+    fn database_profile() -> Profile {
+        Profile {
+            deployment_type: DeploymentType::Database,
+            credentials: ProfileCredentials::Database {
+                host: "localhost".to_string(),
+                port: 6379,
+                password: None,
+                tls: false,
+                username: "default".to_string(),
+                database: 0,
+            },
+            files_api_key: None,
+            resilience: None,
+        }
+    }
+
+    #[test]
+    fn empty_config_returns_none() {
+        let config = Config::default();
+        assert!(toolsets_from_config(&config).is_none());
+    }
+
+    #[test]
+    fn cloud_only_profiles() {
+        let mut config = Config::default();
+        config.set_profile("mycloud".to_string(), cloud_profile());
+
+        let toolsets = toolsets_from_config(&config).unwrap();
+        assert!(toolsets.contains(&Toolset::App));
+        #[cfg(feature = "cloud")]
+        assert!(toolsets.contains(&Toolset::Cloud));
+        #[cfg(feature = "enterprise")]
+        assert!(!toolsets.contains(&Toolset::Enterprise));
+        #[cfg(feature = "database")]
+        assert!(!toolsets.contains(&Toolset::Database));
+    }
+
+    #[test]
+    fn enterprise_only_profiles() {
+        let mut config = Config::default();
+        config.set_profile("myent".to_string(), enterprise_profile());
+
+        let toolsets = toolsets_from_config(&config).unwrap();
+        assert!(toolsets.contains(&Toolset::App));
+        #[cfg(feature = "cloud")]
+        assert!(!toolsets.contains(&Toolset::Cloud));
+        #[cfg(feature = "enterprise")]
+        assert!(toolsets.contains(&Toolset::Enterprise));
+        #[cfg(feature = "database")]
+        assert!(!toolsets.contains(&Toolset::Database));
+    }
+
+    #[test]
+    fn cloud_and_enterprise_profiles() {
+        let mut config = Config::default();
+        config.set_profile("mycloud".to_string(), cloud_profile());
+        config.set_profile("myent".to_string(), enterprise_profile());
+
+        let toolsets = toolsets_from_config(&config).unwrap();
+        assert!(toolsets.contains(&Toolset::App));
+        #[cfg(feature = "cloud")]
+        assert!(toolsets.contains(&Toolset::Cloud));
+        #[cfg(feature = "enterprise")]
+        assert!(toolsets.contains(&Toolset::Enterprise));
+        #[cfg(feature = "database")]
+        assert!(!toolsets.contains(&Toolset::Database));
+    }
+
+    #[test]
+    fn database_only_profiles() {
+        let mut config = Config::default();
+        config.set_profile("mydb".to_string(), database_profile());
+
+        let toolsets = toolsets_from_config(&config).unwrap();
+        assert!(toolsets.contains(&Toolset::App));
+        #[cfg(feature = "cloud")]
+        assert!(!toolsets.contains(&Toolset::Cloud));
+        #[cfg(feature = "enterprise")]
+        assert!(!toolsets.contains(&Toolset::Enterprise));
+        #[cfg(feature = "database")]
+        assert!(toolsets.contains(&Toolset::Database));
+    }
+
+    #[test]
+    fn all_three_profile_types() {
+        let mut config = Config::default();
+        config.set_profile("mycloud".to_string(), cloud_profile());
+        config.set_profile("myent".to_string(), enterprise_profile());
+        config.set_profile("mydb".to_string(), database_profile());
+
+        let toolsets = toolsets_from_config(&config).unwrap();
+        assert!(toolsets.contains(&Toolset::App));
+        #[cfg(feature = "cloud")]
+        assert!(toolsets.contains(&Toolset::Cloud));
+        #[cfg(feature = "enterprise")]
+        assert!(toolsets.contains(&Toolset::Enterprise));
+        #[cfg(feature = "database")]
+        assert!(toolsets.contains(&Toolset::Database));
+    }
 }
