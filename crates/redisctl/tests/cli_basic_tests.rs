@@ -4694,7 +4694,7 @@ password = "pw"
         ])
         .assert()
         .failure()
-        .stderr(predicate::str::contains("Ambiguous"));
+        .stderr(predicate::str::contains("cannot determine platform"));
 }
 
 /// Shared command with --profile selecting a cloud profile → routes to cloud.

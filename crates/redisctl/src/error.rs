@@ -4,7 +4,70 @@
 
 #![allow(dead_code)] // Foundation code - will be used in future PRs
 
+use colored::Colorize;
 use thiserror::Error;
+
+/// Cargo-style diagnostic formatter for CLI errors.
+///
+/// Produces structured output like:
+/// ```text
+/// error: cannot determine platform for 'database'
+///   You have both cloud and enterprise profiles.
+///
+///   tip: be explicit about the platform:
+///       redisctl cloud database list
+///       redisctl enterprise database list
+/// ```
+pub struct CliDiagnostic {
+    message: String,
+    detail: Option<String>,
+    tips: Vec<(String, Vec<String>)>,
+}
+
+impl CliDiagnostic {
+    /// Start a new error diagnostic with the given message.
+    pub fn error(message: &str) -> Self {
+        Self {
+            message: message.to_string(),
+            detail: None,
+            tips: Vec::new(),
+        }
+    }
+
+    /// Add a detail line below the error message.
+    pub fn detail(mut self, text: &str) -> Self {
+        self.detail = Some(text.to_string());
+        self
+    }
+
+    /// Add a tip with optional example commands.
+    pub fn tip(mut self, description: &str, commands: &[&str]) -> Self {
+        self.tips.push((
+            description.to_string(),
+            commands.iter().map(|s| s.to_string()).collect(),
+        ));
+        self
+    }
+
+    /// Print the diagnostic to stderr with colored formatting.
+    pub fn print(&self) {
+        eprint!("{}{}", "error".red().bold(), ": ".bold());
+        eprintln!("{}", self.message);
+
+        if let Some(detail) = &self.detail {
+            eprintln!("  {}", detail);
+        }
+
+        for (description, commands) in &self.tips {
+            eprintln!();
+            eprint!("  {}{}", "tip".yellow().bold(), ": ".bold());
+            eprintln!("{}", description);
+            for cmd in commands {
+                eprintln!("      {}", cmd);
+            }
+        }
+    }
+}
 
 /// Main error type for the redisctl application
 #[derive(Error, Debug)]
@@ -119,19 +182,15 @@ impl RedisCtlError {
         }
     }
 
-    /// Format error with suggestions for display
-    pub fn display_with_suggestions(&self) -> String {
-        let mut output = format!("Error: {}", self);
+    /// Print a cargo-style diagnostic to stderr using colored formatting.
+    pub fn print_diagnostic(&self) {
+        let mut diag = CliDiagnostic::error(&format!("{}", self));
 
-        let suggestions = self.suggestions();
-        if !suggestions.is_empty() {
-            output.push_str("\n\nTry:\n");
-            for suggestion in suggestions {
-                output.push_str(&format!("  • {}\n", suggestion));
-            }
+        for suggestion in self.suggestions() {
+            diag = diag.tip(&suggestion, &[]);
         }
 
-        output
+        diag.print();
     }
 }
 
