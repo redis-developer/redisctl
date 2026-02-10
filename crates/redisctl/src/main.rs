@@ -144,10 +144,7 @@ fn maybe_inject_prefix(args: Vec<String>) -> Vec<String> {
         }
 
         // Short verbose stacking: -v, -vv, -vvv
-        if arg.starts_with('-')
-            && !arg.starts_with("--")
-            && arg.chars().skip(1).all(|c| c == 'v')
-        {
+        if arg.starts_with('-') && !arg.starts_with("--") && arg.chars().skip(1).all(|c| c == 'v') {
             i += 1;
             continue;
         }

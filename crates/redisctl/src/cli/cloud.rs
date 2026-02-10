@@ -1539,7 +1539,6 @@ pub enum CloudProviderAccountCommands {
 #[derive(Subcommand, Debug)]
 pub enum CloudCommands {
     // -- Core (display_order 1-9) --
-
     /// Database operations
     #[command(subcommand, display_order = 1)]
     Database(CloudDatabaseCommands),
@@ -1557,7 +1556,6 @@ pub enum CloudCommands {
     FixedSubscription(CloudFixedSubscriptionCommands),
 
     // -- Access Control (display_order 10-19) --
-
     /// User operations
     #[command(subcommand, display_order = 10)]
     User(CloudUserCommands),
@@ -1567,7 +1565,6 @@ pub enum CloudCommands {
     Acl(CloudAclCommands),
 
     // -- Billing (display_order 20-29) --
-
     /// Account operations
     #[command(subcommand, display_order = 20)]
     Account(CloudAccountCommands),
@@ -1581,7 +1578,6 @@ pub enum CloudCommands {
     CostReport(CloudCostReportCommands),
 
     // -- Networking (display_order 30-39) --
-
     /// Network connectivity operations (VPC, PSC, TGW)
     #[command(subcommand, display_order = 30)]
     Connectivity(CloudConnectivityCommands),
@@ -1591,7 +1587,6 @@ pub enum CloudCommands {
     ProviderAccount(CloudProviderAccountCommands),
 
     // -- Operations (display_order 40+) --
-
     /// Task operations
     #[command(subcommand, display_order = 40)]
     Task(CloudTaskCommands),

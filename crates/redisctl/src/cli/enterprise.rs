@@ -5,7 +5,6 @@ use clap::Subcommand;
 #[derive(Subcommand, Debug)]
 pub enum EnterpriseCommands {
     // -- Core Operations (display_order 1-9) --
-
     /// Database operations
     #[command(subcommand, display_order = 1)]
     Database(EnterpriseDatabaseCommands),
@@ -27,7 +26,6 @@ pub enum EnterpriseCommands {
     Endpoint(crate::commands::enterprise::endpoint::EndpointCommands),
 
     // -- Access Control (display_order 10-19) --
-
     /// User operations
     #[command(subcommand, display_order = 10)]
     User(EnterpriseUserCommands),
@@ -53,7 +51,6 @@ pub enum EnterpriseCommands {
     Auth(EnterpriseAuthCommands),
 
     // -- Monitoring (display_order 20-29) --
-
     /// Statistics and metrics operations
     #[command(subcommand, display_order = 20)]
     Stats(EnterpriseStatsCommands),
@@ -95,7 +92,6 @@ pub enum EnterpriseCommands {
     DebugInfo(crate::commands::enterprise::debuginfo::DebugInfoCommands),
 
     // -- Administration (display_order 30-39) --
-
     /// License management
     #[command(subcommand, display_order = 30)]
     License(crate::commands::enterprise::license::LicenseCommands),
@@ -121,7 +117,6 @@ pub enum EnterpriseCommands {
     Suffix(crate::commands::enterprise::suffix::SuffixCommands),
 
     // -- Advanced (display_order 40-49) --
-
     /// Active-Active database (CRDB) operations
     #[command(subcommand, display_order = 40)]
     Crdb(EnterpriseCrdbCommands),
@@ -147,7 +142,6 @@ pub enum EnterpriseCommands {
     JobScheduler(crate::commands::enterprise::job_scheduler::JobSchedulerCommands),
 
     // -- Troubleshooting (display_order 50-59) --
-
     /// Support package generation for troubleshooting
     #[command(subcommand, name = "support-package", display_order = 50)]
     SupportPackage(crate::commands::enterprise::support_package::SupportPackageCommands),
@@ -165,7 +159,6 @@ pub enum EnterpriseCommands {
     Local(crate::commands::enterprise::local::LocalCommands),
 
     // -- Other (display_order 60+) --
-
     /// Action (task) operations
     #[command(subcommand, display_order = 60)]
     Action(crate::commands::enterprise::actions::ActionCommands),

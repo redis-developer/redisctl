@@ -496,12 +496,12 @@ impl Config {
     ) -> Result<DeploymentType> {
         // 1. Explicit profile → look it up
         if let Some(name) = explicit_profile {
-            let profile =
-                self.profiles
-                    .get(name)
-                    .ok_or_else(|| ConfigError::ProfileNotFound {
-                        name: name.to_string(),
-                    })?;
+            let profile = self
+                .profiles
+                .get(name)
+                .ok_or_else(|| ConfigError::ProfileNotFound {
+                    name: name.to_string(),
+                })?;
             return Ok(profile.deployment_type);
         }
 
@@ -1107,9 +1107,7 @@ port = 12345
         config.set_profile("myent".to_string(), make_enterprise_profile());
 
         assert_eq!(
-            config
-                .resolve_profile_deployment(Some("mycloud"))
-                .unwrap(),
+            config.resolve_profile_deployment(Some("mycloud")).unwrap(),
             DeploymentType::Cloud
         );
     }
