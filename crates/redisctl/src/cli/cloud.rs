@@ -1535,53 +1535,70 @@ pub enum CloudProviderAccountCommands {
     },
 }
 
-/// Cloud-specific commands (placeholder for now)
+/// Cloud-specific commands
 #[derive(Subcommand, Debug)]
 pub enum CloudCommands {
-    /// Account operations
-    #[command(subcommand)]
-    Account(CloudAccountCommands),
-
-    /// Payment method operations
-    #[command(subcommand, name = "payment-method")]
-    PaymentMethod(CloudPaymentMethodCommands),
-
-    /// Subscription operations
-    #[command(subcommand)]
-    Subscription(CloudSubscriptionCommands),
+    // -- Core (display_order 1-9) --
 
     /// Database operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 1)]
     Database(CloudDatabaseCommands),
 
+    /// Subscription operations
+    #[command(subcommand, display_order = 2)]
+    Subscription(CloudSubscriptionCommands),
+
+    /// Fixed database operations (Essentials)
+    #[command(subcommand, name = "fixed-database", display_order = 3)]
+    FixedDatabase(CloudFixedDatabaseCommands),
+
+    /// Fixed subscription operations (Essentials)
+    #[command(subcommand, name = "fixed-subscription", display_order = 4)]
+    FixedSubscription(CloudFixedSubscriptionCommands),
+
+    // -- Access Control (display_order 10-19) --
+
     /// User operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 10)]
     User(CloudUserCommands),
 
     /// ACL (Access Control List) operations
-    #[command(subcommand)]
+    #[command(subcommand, display_order = 11)]
     Acl(CloudAclCommands),
-    /// Cloud provider account operations
-    #[command(subcommand, name = "provider-account")]
-    ProviderAccount(CloudProviderAccountCommands),
-    /// Task operations
-    #[command(subcommand)]
-    Task(CloudTaskCommands),
-    /// Network connectivity operations (VPC, PSC, TGW)
-    #[command(subcommand)]
-    Connectivity(CloudConnectivityCommands),
-    /// Fixed database operations
-    #[command(subcommand, name = "fixed-database")]
-    FixedDatabase(CloudFixedDatabaseCommands),
-    /// Fixed subscription operations
-    #[command(subcommand, name = "fixed-subscription")]
-    FixedSubscription(CloudFixedSubscriptionCommands),
-    /// Workflow operations for multi-step tasks
-    #[command(subcommand)]
-    Workflow(CloudWorkflowCommands),
+
+    // -- Billing (display_order 20-29) --
+
+    /// Account operations
+    #[command(subcommand, display_order = 20)]
+    Account(CloudAccountCommands),
+
+    /// Payment method operations
+    #[command(subcommand, name = "payment-method", display_order = 21)]
+    PaymentMethod(CloudPaymentMethodCommands),
+
     /// Cost report operations (Beta)
-    #[command(subcommand, name = "cost-report")]
+    #[command(subcommand, name = "cost-report", display_order = 22)]
     CostReport(CloudCostReportCommands),
+
+    // -- Networking (display_order 30-39) --
+
+    /// Network connectivity operations (VPC, PSC, TGW)
+    #[command(subcommand, display_order = 30)]
+    Connectivity(CloudConnectivityCommands),
+
+    /// Cloud provider account operations
+    #[command(subcommand, name = "provider-account", display_order = 31)]
+    ProviderAccount(CloudProviderAccountCommands),
+
+    // -- Operations (display_order 40+) --
+
+    /// Task operations
+    #[command(subcommand, display_order = 40)]
+    Task(CloudTaskCommands),
+
+    /// Workflow operations for multi-step tasks
+    #[command(subcommand, display_order = 41)]
+    Workflow(CloudWorkflowCommands),
 }
 #[derive(Debug, Subcommand)]
 pub enum CloudWorkflowCommands {
