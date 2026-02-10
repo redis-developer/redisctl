@@ -8,6 +8,9 @@ Run redisctl without installing anything.
 docker run ghcr.io/redis-developer/redisctl --help
 ```
 
+!!! note "Explicit prefixes in Docker"
+    The examples on this page use explicit `cloud`/`enterprise` prefixes because Docker containers typically don't have a persistent config file. If you mount a config directory (see [Mount Config File](#mount-config-file) below), prefix inference works the same as a native install. See [Platform Inference](../common/profiles.md#platform-inference) for details.
+
 ## Passing Credentials
 
 ### Environment Variables

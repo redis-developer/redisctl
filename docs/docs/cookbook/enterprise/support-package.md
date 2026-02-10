@@ -2,6 +2,9 @@
 
 Collect diagnostics for Redis Support in 30 seconds.
 
+!!! tip "Prefix optional"
+    The `enterprise` prefix is optional when your profile config is unambiguous. The examples below use the full form for copy-paste convenience in scripts. See [Platform Inference](../../common/profiles.md#platform-inference).
+
 ## Quick Start
 
 ```bash

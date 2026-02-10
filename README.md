@@ -9,14 +9,16 @@
 
 ```bash
 # Create a Redis Cloud subscription with one command
-redisctl cloud subscription create @subscription.json --wait
+redisctl subscription create @subscription.json --wait
 
 # Stream logs in real-time
-redisctl enterprise logs list --follow
+redisctl logs list --follow
 
 # Generate and upload support packages
-redisctl enterprise support-package cluster --optimize --upload
+redisctl support-package cluster --optimize --upload
 ```
+
+> **Prefix-free commands** — `cloud`/`enterprise` prefixes are optional. The CLI infers the platform from your [profile configuration](#profiles). Use explicit prefixes in scripts or when multiple profiles exist.
 
 ---
 
@@ -70,18 +72,20 @@ redisctl profile set dev \
 ### 3. Run Your First Commands
 
 ```bash
-# List all databases
-redisctl cloud database list
+# List all databases (platform inferred from your profile)
+redisctl database list
 
 # Get cluster info in table format
-redisctl enterprise cluster get -o table
+redisctl cluster get -o table
 
 # Create a database and wait for it to be ready
-redisctl cloud database create @db-config.json --wait
+redisctl database create @db-config.json --wait
 
 # Stream cluster logs
-redisctl enterprise logs list --follow
+redisctl logs list --follow
 ```
+
+> **Tip:** The commands above omit the `cloud`/`enterprise` prefix — the CLI infers the platform from your profile. You can always be explicit: `redisctl cloud database list` or `redisctl enterprise cluster get`.
 
 **That's it!** You're ready to manage your Redis deployments.
 

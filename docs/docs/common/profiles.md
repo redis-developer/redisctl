@@ -76,8 +76,13 @@ redisctl profile set local-redis --type database \
 ### Per-Command
 
 ```bash
+# With explicit prefix
 redisctl --profile prod cloud subscription list
 redisctl --profile dev enterprise cluster get
+
+# Prefix optional — profile type tells the CLI which platform
+redisctl --profile prod subscription list
+redisctl --profile dev cluster get
 ```
 
 ### Default Profiles
@@ -100,6 +105,50 @@ Now commands use the appropriate default automatically:
 ```bash
 redisctl cloud subscription list      # Uses prod-cloud
 redisctl enterprise cluster get       # Uses prod-cluster
+```
+
+## Platform Inference
+
+When your configuration makes the platform unambiguous, you can omit the `cloud` or `enterprise` prefix entirely. The CLI infers the correct platform from your profile.
+
+### How It Works
+
+**Cloud-only commands** — never need a prefix:
+
+- `subscription`, `account`, `payment-method`, `cloud-account`, `essentials`, `vpc-peering`, `transit-gateway`, `private-link`
+
+```bash
+redisctl subscription list                   # always Cloud
+```
+
+**Enterprise-only commands** — never need a prefix:
+
+- `cluster`, `node`, `shard`, `module`, `logs`, `stats`, `support-package`, `debuginfo`, `diagnostics`, `endpoint`, `crdb`, `ldap`, `alert`
+
+```bash
+redisctl cluster get                         # always Enterprise
+```
+
+**Shared commands** — inferred from your default profile:
+
+- `database`, `user`, `acl`, `role`
+
+```bash
+redisctl database list                       # uses your default profile's platform
+```
+
+### When You Still Need Prefixes
+
+- **Both cloud and enterprise profiles configured with no default** — the CLI can't guess which you mean
+- **Scripts and automation** — explicit prefixes make scripts config-independent
+- **`--profile` flag** — when overriding the default, the prefix is optional since the profile type is known
+
+```bash
+# Explicit for clarity in scripts
+redisctl cloud database list --subscription-id 123
+
+# --profile makes the platform clear, so prefix is optional
+redisctl --profile prod-cluster database list
 ```
 
 ### Override with Environment

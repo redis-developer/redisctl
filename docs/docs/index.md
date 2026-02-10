@@ -59,7 +59,7 @@ curl -s -X POST "https://api.redislabs.com/v1/subscriptions/123/databases" \
 # Then poll for status... parse JSON... hope nothing changes...
 
 # With redisctl
-redisctl cloud database create --subscription 123 --name mydb --wait
+redisctl database create --subscription 123 --name mydb --wait
 ```
 
 ## Key Features
@@ -106,7 +106,7 @@ graph LR
 |-------|---------|---------|
 | **Profiles** | Credential management | `redisctl profile set prod --api-key $KEY` |
 | **Raw API** | Direct REST access | `redisctl api cloud get /subscriptions` |
-| **Human Commands** | Type-safe wrappers | `redisctl cloud database list` |
+| **Human Commands** | Type-safe wrappers | `redisctl database list` |
 | **Workflows** | Multi-step operations | `redisctl cloud workflow subscription-setup` |
 
 ## Quick Install
