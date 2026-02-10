@@ -49,19 +49,22 @@ That's it! You just ran your first redisctl command.
 
 ## Common First Commands
 
+!!! tip "Prefix-free commands"
+    The `cloud` and `enterprise` prefixes are optional when your profile makes the platform unambiguous. The examples below use the short form — add `cloud` or `enterprise` if you have profiles for both platforms.
+
 ### List Resources
 
 ```bash
-# Cloud: List all subscriptions
-redisctl cloud subscription list
+# List all subscriptions (cloud-only command, prefix optional)
+redisctl subscription list
 
-# Cloud: List databases in a subscription
-redisctl cloud database list --subscription-id 123456
+# List databases in a subscription (inferred from profile)
+redisctl database list --subscription-id 123456
 
-# Enterprise: Get cluster info
-redisctl enterprise cluster get
+# Get cluster info (enterprise-only command, prefix optional)
+redisctl cluster get
 
-# Enterprise: List all databases
+# Or be explicit
 redisctl enterprise database list
 ```
 

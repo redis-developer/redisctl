@@ -24,8 +24,8 @@ redisctl api enterprise post /v1/bdbs -d @database.json
 ### 2. Commands
 Human-friendly commands for day-to-day operations:
 ```bash
-redisctl enterprise cluster get
-redisctl enterprise database create --name mydb --memory-size 1073741824
+redisctl cluster get                                      # prefix optional
+redisctl database create --name mydb --memory-size 1073741824
 ```
 
 ### 3. Workflows
@@ -89,23 +89,26 @@ Databases run across the cluster. Each database has:
 ## Quick Examples
 
 ```bash
-# Get cluster info
-redisctl enterprise cluster get
+# Get cluster info (enterprise-only, prefix optional)
+redisctl cluster get
 
 # List databases
-redisctl enterprise database list -o table
+redisctl database list -o table
 
 # Create database
-redisctl enterprise database create \
+redisctl database create \
   --name cache \
   --memory-size 1073741824
 
 # Stream cluster stats
-redisctl enterprise stats cluster --follow
+redisctl stats cluster --follow
 
 # Generate support package
-redisctl enterprise support-package cluster --upload
+redisctl support-package cluster --upload
 ```
+
+!!! tip "Prefix-free commands"
+    The `enterprise` prefix is optional when your profile is an Enterprise profile. All examples above work with or without `redisctl enterprise ...`. See [Platform Inference](../common/profiles.md#platform-inference) for details.
 
 ## Command Groups
 

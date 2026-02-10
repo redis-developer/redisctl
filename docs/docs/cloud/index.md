@@ -24,8 +24,8 @@ redisctl api cloud post /subscriptions -d @subscription.json
 ### 2. Commands
 Human-friendly commands for day-to-day operations:
 ```bash
-redisctl cloud subscription list
-redisctl cloud database create --subscription 123 --data @db.json --wait
+redisctl subscription list                                # prefix optional
+redisctl database create --subscription 123 --data @db.json --wait
 ```
 
 ### 3. Workflows
@@ -81,26 +81,29 @@ Most operations are async and return task IDs. Use `--wait` to block until compl
 ## Quick Examples
 
 ```bash
-# List subscriptions
-redisctl cloud subscription list -o table
+# List subscriptions (cloud-only, prefix optional)
+redisctl subscription list -o table
 
 # Create database and wait
-redisctl cloud database create \
+redisctl database create \
   --subscription 123456 \
   --name cache \
   --memory-limit-in-gb 1 \
   --wait
 
 # Get database connection info
-redisctl cloud database get 123456 789 \
+redisctl database get 123456 789 \
   -o json -q '{endpoint: publicEndpoint, password: password}'
 
 # Set up VPC peering
-redisctl cloud vpc-peering create \
+redisctl vpc-peering create \
   --subscription 123456 \
   --data @peering.json \
   --wait
 ```
+
+!!! tip "Prefix-free commands"
+    The `cloud` prefix is optional when your profile is a Cloud profile. All examples above work with or without `redisctl cloud ...`. See [Platform Inference](../common/profiles.md#platform-inference) for details.
 
 ## Command Groups
 

@@ -8,6 +8,9 @@ Go from zero to a running Redis database in 5 minutes.
 - API keys from Redis Cloud console (Access Management > API Keys)
 - redisctl installed (`brew install redis-developer/homebrew-tap/redisctl`)
 
+!!! tip "Prefix optional"
+    The `cloud` prefix is optional when your profile config is unambiguous. The examples below use the full form for copy-paste convenience in scripts. See [Platform Inference](../../common/profiles.md#platform-inference).
+
 ## Step 1: Configure Credentials
 
 ```bash
