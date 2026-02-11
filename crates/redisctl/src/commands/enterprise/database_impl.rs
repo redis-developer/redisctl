@@ -181,8 +181,7 @@ pub async fn create_database(
         let mut module_list: Vec<Value> = Vec::new();
 
         for module_spec in modules {
-            let (module_name, module_version, module_args) =
-                parse_module_spec(module_spec);
+            let (module_name, module_version, module_args) = parse_module_spec(module_spec);
 
             // Find matching module (case-insensitive)
             let matching: Vec<_> = available_modules
@@ -1017,8 +1016,7 @@ pub async fn update_database_modules(
         let mut module_list: Vec<serde_json::Value> = Vec::new();
 
         for module_spec in add_modules {
-            let (module_name, _module_version, module_args) =
-                parse_module_spec(module_spec);
+            let (module_name, _module_version, module_args) = parse_module_spec(module_spec);
 
             let mut module_config = serde_json::json!({
                 "module_name": module_name
