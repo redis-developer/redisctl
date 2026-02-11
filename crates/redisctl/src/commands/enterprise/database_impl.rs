@@ -14,6 +14,26 @@ use crate::error::{RedisCtlError, Result as CliResult};
 
 use super::utils::*;
 
+/// Parse a module spec string into (name, version, args).
+/// Format: `name[@version][:args]`
+fn parse_module_spec(spec: &str) -> (&str, Option<&str>, Option<&str>) {
+    let (name_and_version, module_args) = match spec.find(':') {
+        Some(idx) => {
+            let (nv, args) = spec.split_at(idx);
+            (nv.trim(), Some(args[1..].trim()))
+        }
+        None => (spec.trim(), None),
+    };
+    let (module_name, module_version) = match name_and_version.find('@') {
+        Some(idx) => {
+            let (name, ver) = name_and_version.split_at(idx);
+            (name.trim(), Some(ver[1..].trim()))
+        }
+        None => (name_and_version, None),
+    };
+    (module_name, module_version, module_args)
+}
+
 /// List all databases
 pub async fn list_databases(
     conn_mgr: &ConnectionManager,
@@ -161,13 +181,7 @@ pub async fn create_database(
         let mut module_list: Vec<Value> = Vec::new();
 
         for module_spec in modules {
-            // Parse module_name:args format
-            let (module_name, module_args) = if let Some(idx) = module_spec.find(':') {
-                let (name, args) = module_spec.split_at(idx);
-                (name.trim(), Some(args[1..].trim())) // Skip the ':' character
-            } else {
-                (module_spec.as_str(), None)
-            };
+            let (module_name, module_version, module_args) = parse_module_spec(module_spec);
 
             // Find matching module (case-insensitive)
             let matching: Vec<_> = available_modules
@@ -179,6 +193,21 @@ pub async fn create_database(
                         .unwrap_or(false)
                 })
                 .collect();
+
+            // If a version was specified, filter by exact version match
+            let matching: Vec<_> = if let Some(version) = module_version {
+                matching
+                    .into_iter()
+                    .filter(|m| {
+                        m.semantic_version
+                            .as_ref()
+                            .map(|v| v == version)
+                            .unwrap_or(false)
+                    })
+                    .collect()
+            } else {
+                matching
+            };
 
             match matching.len() {
                 0 => {
@@ -226,12 +255,12 @@ pub async fn create_database(
                     module_list.push(module_config);
                 }
                 _ => {
-                    // Multiple matches - show versions and ask user to be specific
+                    // Multiple matches - show versions and suggest @version syntax
                     let versions: Vec<_> = matching
                         .iter()
                         .map(|m| {
                             format!(
-                                "{} (version: {})",
+                                "{}@{}",
                                 m.module_name.as_deref().unwrap_or("unknown"),
                                 m.semantic_version.as_deref().unwrap_or("unknown")
                             )
@@ -239,7 +268,8 @@ pub async fn create_database(
                         .collect();
                     return Err(RedisCtlError::InvalidInput {
                         message: format!(
-                            "Multiple modules found matching '{}'. Available versions:\n  {}",
+                            "Multiple modules found matching '{}'. Specify a version with '{}@<version>':\n  {}",
+                            module_name,
                             module_name,
                             versions.join("\n  ")
                         ),
@@ -986,13 +1016,7 @@ pub async fn update_database_modules(
         let mut module_list: Vec<serde_json::Value> = Vec::new();
 
         for module_spec in add_modules {
-            // Parse module_name:args format
-            let (module_name, module_args) = if let Some(idx) = module_spec.find(':') {
-                let (name, args) = module_spec.split_at(idx);
-                (name.trim(), Some(args[1..].trim()))
-            } else {
-                (module_spec.as_str(), None)
-            };
+            let (module_name, _module_version, module_args) = parse_module_spec(module_spec);
 
             let mut module_config = serde_json::json!({
                 "module_name": module_name
@@ -1307,4 +1331,41 @@ pub async fn upgrade_database(
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_parse_module_spec_name_only() {
+        let (name, version, args) = parse_module_spec("search");
+        assert_eq!(name, "search");
+        assert_eq!(version, None);
+        assert_eq!(args, None);
+    }
+
+    #[test]
+    fn test_parse_module_spec_name_with_version() {
+        let (name, version, args) = parse_module_spec("search@2.10.27");
+        assert_eq!(name, "search");
+        assert_eq!(version, Some("2.10.27"));
+        assert_eq!(args, None);
+    }
+
+    #[test]
+    fn test_parse_module_spec_name_with_args() {
+        let (name, version, args) = parse_module_spec("search:ARGS");
+        assert_eq!(name, "search");
+        assert_eq!(version, None);
+        assert_eq!(args, Some("ARGS"));
+    }
+
+    #[test]
+    fn test_parse_module_spec_name_with_version_and_args() {
+        let (name, version, args) = parse_module_spec("search@2.10.27:PARTITIONS=AUTO");
+        assert_eq!(name, "search");
+        assert_eq!(version, Some("2.10.27"));
+        assert_eq!(args, Some("PARTITIONS=AUTO"));
+    }
 }

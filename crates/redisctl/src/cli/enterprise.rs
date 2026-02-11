@@ -592,9 +592,10 @@ NOTE: Memory size is in bytes. Common values:
         #[arg(long)]
         redis_password: Option<String>,
 
-        /// Module to enable (by name, can be repeated). Use 'module list' to see available modules.
-        /// Format: module_name or module_name:args (e.g., --module search --module ReJSON)
-        #[arg(long = "module", value_name = "NAME[:ARGS]")]
+        /// Module to enable (can be repeated). Format: name[@version][:args]
+        /// Use 'enterprise module list' to see available modules.
+        /// Examples: --module search  --module search@2.10.27  --module search@2.10.27:PARTITIONS=AUTO
+        #[arg(long = "module", value_name = "NAME[@VERSION][:ARGS]")]
         modules: Vec<String>,
 
         /// Advanced: Full database configuration as JSON string or @file.json
