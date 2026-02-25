@@ -8,7 +8,9 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use clap::{Parser, ValueEnum};
-use redisctl_core::{Config, DeploymentType};
+use redisctl_core::Config;
+#[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
+use redisctl_core::DeploymentType;
 use tower_mcp::{CapabilityFilter, DenialBehavior, McpRouter, Tool, transport::StdioTransport};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -138,29 +140,28 @@ fn toolsets_from_config(config: &Config) -> Option<HashSet<Toolset>> {
         return None;
     }
 
-    let has_cloud = !config
-        .get_profiles_of_type(DeploymentType::Cloud)
-        .is_empty();
-    let has_enterprise = !config
-        .get_profiles_of_type(DeploymentType::Enterprise)
-        .is_empty();
-    let has_database = !config
-        .get_profiles_of_type(DeploymentType::Database)
-        .is_empty();
-
     let mut set = HashSet::new();
     set.insert(Toolset::App); // always include profile management
 
     #[cfg(feature = "cloud")]
-    if has_cloud {
+    if !config
+        .get_profiles_of_type(DeploymentType::Cloud)
+        .is_empty()
+    {
         set.insert(Toolset::Cloud);
     }
     #[cfg(feature = "enterprise")]
-    if has_enterprise {
+    if !config
+        .get_profiles_of_type(DeploymentType::Enterprise)
+        .is_empty()
+    {
         set.insert(Toolset::Enterprise);
     }
     #[cfg(feature = "database")]
-    if has_database {
+    if !config
+        .get_profiles_of_type(DeploymentType::Database)
+        .is_empty()
+    {
         set.insert(Toolset::Database);
     }
 

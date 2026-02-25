@@ -188,12 +188,12 @@ docker run -i --rm \
 | Tag | Description |
 |-----|-------------|
 | `latest` | Most recent release |
-| `0.7.3` | Specific version |
+| `0.7.7` | Specific version |
 | `0.7` | Latest patch in minor version |
 
 ```bash
 # Pin to specific version
-docker run ghcr.io/redis-developer/redisctl:0.7.3 --version
+docker run ghcr.io/redis-developer/redisctl:0.7.7 --version
 ```
 
 ## CI/CD Example
