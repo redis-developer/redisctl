@@ -9,6 +9,8 @@ use crate::output;
 use anyhow::Context;
 use colored::Colorize;
 use redisctl_core::Config;
+use serde::Serialize;
+use std::time::{Duration, Instant};
 use tracing::{debug, info, trace};
 
 /// Handle profile management commands
@@ -66,7 +68,7 @@ pub async fn handle_profile_command(
         DefaultEnterprise { name } => handle_default_enterprise(conn_mgr, name).await,
         DefaultCloud { name } => handle_default_cloud(conn_mgr, name).await,
         DefaultDatabase { name } => handle_default_database(conn_mgr, name).await,
-        Validate => handle_validate(conn_mgr).await,
+        Validate { connect } => handle_validate(conn_mgr, *connect, output_format).await,
     }
 }
 
@@ -850,152 +852,667 @@ async fn handle_default_database(
     Ok(())
 }
 
-async fn handle_validate(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlError> {
-    debug!("Validating configuration");
+/// Result of a connectivity test for a single profile
+#[derive(Debug, Serialize)]
+struct ConnectResult {
+    status: ConnectStatus,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    latency_ms: Option<u64>,
+    detail: String,
+}
 
-    // Configuration file validation
-    let config_path = Config::config_path()?;
-    println!("Configuration file: {}", config_path.display());
+/// Connectivity test outcome
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+enum ConnectStatus {
+    Ok,
+    AuthFailed,
+    ConnectionRefused,
+    Timeout,
+    TlsError,
+    Error,
+}
 
-    if !config_path.exists() {
-        println!("✗ Configuration file does not exist");
-        println!("\nTry:");
-        println!("  • Create a profile: redisctl profile set <name> <type>");
-        return Ok(());
-    }
+/// Structured result for a single profile validation
+#[derive(Debug, Serialize)]
+struct ProfileValidationResult {
+    name: String,
+    deployment_type: String,
+    structural: StructuralResult,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    connectivity: Option<ConnectResult>,
+}
 
-    println!("✓ Configuration file exists and is readable");
+/// Structural validation result
+#[derive(Debug, Serialize)]
+struct StructuralResult {
+    valid: bool,
+    errors: Vec<String>,
+    warnings: Vec<String>,
+}
 
-    // Profile validation
-    let profiles = conn_mgr.config.list_profiles();
-    println!("✓ Found {} profile(s)", profiles.len());
+/// Full validation output
+#[derive(Debug, Serialize)]
+struct ValidationOutput {
+    config_path: String,
+    config_exists: bool,
+    profile_count: usize,
+    profiles: Vec<ProfileValidationResult>,
+    defaults: DefaultsValidation,
+    overall_valid: bool,
+}
 
-    if profiles.is_empty() {
-        println!("\n⚠ No profiles configured");
-        println!("\nTry:");
-        println!(
-            "  • Create a Cloud profile: redisctl profile set mycloud cloud --api-key <key> --api-secret <secret>"
-        );
-        println!(
-            "  • Create an Enterprise profile: redisctl profile set myenterprise enterprise --url <url> --username <user>"
-        );
-        return Ok(());
-    }
+/// Default profile validation
+#[derive(Debug, Serialize)]
+struct DefaultsValidation {
+    #[serde(skip_serializing_if = "Option::is_none")]
+    cloud: Option<DefaultValidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    enterprise: Option<DefaultValidation>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    database: Option<DefaultValidation>,
+}
 
-    println!();
+#[derive(Debug, Serialize)]
+struct DefaultValidation {
+    name: String,
+    valid: bool,
+}
 
-    let mut has_warnings = false;
-    let mut has_errors = false;
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
-    for (name, profile) in profiles {
-        print!("Profile '{}' ({}): ", name, profile.deployment_type);
-
-        match profile.deployment_type {
-            redisctl_core::DeploymentType::Cloud => match profile.cloud_credentials() {
-                Some((api_key, api_secret, api_url)) => {
-                    if api_key.is_empty() || api_secret.is_empty() {
-                        println!("✗ Missing credentials");
-                        has_errors = true;
-                    } else {
-                        println!("✓ Valid");
-                    }
-
-                    // Check for valid URL
-                    if !api_url.starts_with("http://") && !api_url.starts_with("https://") {
-                        println!("  ⚠ API URL should start with http:// or https://");
-                        has_warnings = true;
-                    }
-                }
-                None => {
-                    println!("✗ Missing Cloud credentials");
-                    has_errors = true;
-                }
-            },
-            redisctl_core::DeploymentType::Enterprise => match profile.enterprise_credentials() {
-                Some((url, username, password, _insecure, _ca_cert)) => {
-                    if username.is_empty() {
-                        println!("✗ Missing username");
-                        has_errors = true;
-                    } else if password.is_none()
-                        || password.as_ref().is_none_or(|p: &&str| p.is_empty())
-                    {
-                        println!("⚠ Missing password (will be prompted)");
-                        has_warnings = true;
-                    } else {
-                        println!("✓ Valid");
-                    }
-
-                    // Check for valid URL
-                    if !url.starts_with("http://") && !url.starts_with("https://") {
-                        println!("  ⚠ URL should start with http:// or https://");
-                        has_warnings = true;
-                    }
-                }
-                None => {
-                    println!("✗ Missing Enterprise credentials");
-                    has_errors = true;
-                }
-            },
-            redisctl_core::DeploymentType::Database => match profile.database_credentials() {
-                Some((host, port, password, _tls, _username, _database)) => {
-                    if host.is_empty() {
-                        println!("✗ Missing host");
-                        has_errors = true;
-                    } else if port == 0 {
-                        println!("✗ Invalid port");
-                        has_errors = true;
-                    } else if password.is_none() || password.as_ref().is_none_or(|p| p.is_empty()) {
-                        println!("⚠ No password configured");
-                        has_warnings = true;
-                    } else {
-                        println!("✓ Valid");
-                    }
-                }
-                None => {
-                    println!("✗ Missing Database credentials");
-                    has_errors = true;
-                }
-            },
+/// Test connectivity for a Cloud profile
+async fn test_cloud_connectivity(conn_mgr: &ConnectionManager, name: &str) -> ConnectResult {
+    let start = Instant::now();
+    match conn_mgr.create_cloud_client(Some(name)).await {
+        Ok(client) => {
+            use redis_cloud::flexible::SubscriptionHandler;
+            let handler = SubscriptionHandler::new(client);
+            match tokio::time::timeout(CONNECT_TIMEOUT, handler.get_all_subscriptions()).await {
+                Ok(Ok(_)) => ConnectResult {
+                    status: ConnectStatus::Ok,
+                    latency_ms: Some(start.elapsed().as_millis() as u64),
+                    detail: "Successfully authenticated and listed subscriptions".to_string(),
+                },
+                Ok(Err(e)) => classify_cloud_error(e, start.elapsed()),
+                Err(_) => ConnectResult {
+                    status: ConnectStatus::Timeout,
+                    latency_ms: Some(start.elapsed().as_millis() as u64),
+                    detail: format!("Connection timed out after {}s", CONNECT_TIMEOUT.as_secs()),
+                },
+            }
         }
+        Err(e) => ConnectResult {
+            status: ConnectStatus::Error,
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+            detail: format!("Failed to create client: {}", e),
+        },
     }
+}
 
-    // Check default profiles
-    println!();
-    if let Some(default_ent) = &conn_mgr.config.default_enterprise {
-        if conn_mgr.config.profiles.contains_key(default_ent) {
-            println!("✓ Default enterprise profile: {}", default_ent);
-        } else {
-            println!("✗ Default enterprise profile '{}' not found", default_ent);
-            has_errors = true;
+/// Classify a Cloud API error into a ConnectResult
+fn classify_cloud_error(err: redis_cloud::CloudError, elapsed: Duration) -> ConnectResult {
+    let latency_ms = Some(elapsed.as_millis() as u64);
+    let msg = err.to_string();
+
+    if matches!(err, redis_cloud::CloudError::AuthenticationFailed { .. }) {
+        ConnectResult {
+            status: ConnectStatus::AuthFailed,
+            latency_ms,
+            detail: msg,
         }
-    }
-
-    if let Some(default_cloud) = &conn_mgr.config.default_cloud {
-        if conn_mgr.config.profiles.contains_key(default_cloud) {
-            println!("✓ Default cloud profile: {}", default_cloud);
-        } else {
-            println!("✗ Default cloud profile '{}' not found", default_cloud);
-            has_errors = true;
+    } else if msg.contains("tls") || msg.contains("certificate") || msg.contains("SSL") {
+        ConnectResult {
+            status: ConnectStatus::TlsError,
+            latency_ms,
+            detail: msg,
         }
-    }
-
-    if let Some(default_db) = &conn_mgr.config.default_database {
-        if conn_mgr.config.profiles.contains_key(default_db) {
-            println!("✓ Default database profile: {}", default_db);
-        } else {
-            println!("✗ Default database profile '{}' not found", default_db);
-            has_errors = true;
+    } else if msg.contains("Connection refused") {
+        ConnectResult {
+            status: ConnectStatus::ConnectionRefused,
+            latency_ms,
+            detail: msg,
         }
-    }
-
-    println!();
-    if has_errors {
-        println!("⚠ Configuration has errors. Fix them before using affected profiles.");
-    } else if has_warnings {
-        println!("⚠ Configuration has warnings but should work.");
     } else {
-        println!("✓ Configuration is valid");
+        ConnectResult {
+            status: ConnectStatus::Error,
+            latency_ms,
+            detail: msg,
+        }
+    }
+}
+
+/// Test connectivity for an Enterprise profile
+async fn test_enterprise_connectivity(conn_mgr: &ConnectionManager, name: &str) -> ConnectResult {
+    let start = Instant::now();
+    match conn_mgr.create_enterprise_client(Some(name)).await {
+        Ok(client) => {
+            use redis_enterprise::cluster::ClusterHandler;
+            let handler = ClusterHandler::new(client);
+            match tokio::time::timeout(CONNECT_TIMEOUT, handler.info()).await {
+                Ok(Ok(cluster)) => ConnectResult {
+                    status: ConnectStatus::Ok,
+                    latency_ms: Some(start.elapsed().as_millis() as u64),
+                    detail: format!("Connected to cluster '{}'", cluster.name),
+                },
+                Ok(Err(e)) => classify_enterprise_error(e, start.elapsed()),
+                Err(_) => ConnectResult {
+                    status: ConnectStatus::Timeout,
+                    latency_ms: Some(start.elapsed().as_millis() as u64),
+                    detail: format!("Connection timed out after {}s", CONNECT_TIMEOUT.as_secs()),
+                },
+            }
+        }
+        Err(e) => ConnectResult {
+            status: ConnectStatus::Error,
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+            detail: format!("Failed to create client: {}", e),
+        },
+    }
+}
+
+/// Classify an Enterprise REST error into a ConnectResult
+fn classify_enterprise_error(err: redis_enterprise::RestError, elapsed: Duration) -> ConnectResult {
+    let latency_ms = Some(elapsed.as_millis() as u64);
+    let msg = err.to_string();
+
+    match err {
+        redis_enterprise::RestError::AuthenticationFailed
+        | redis_enterprise::RestError::Unauthorized => ConnectResult {
+            status: ConnectStatus::AuthFailed,
+            latency_ms,
+            detail: msg,
+        },
+        redis_enterprise::RestError::RequestFailed(ref reqwest_err) => {
+            let inner = reqwest_err.to_string();
+            if inner.contains("tls") || inner.contains("certificate") || inner.contains("SSL") {
+                ConnectResult {
+                    status: ConnectStatus::TlsError,
+                    latency_ms,
+                    detail: inner,
+                }
+            } else if inner.contains("Connection refused") {
+                ConnectResult {
+                    status: ConnectStatus::ConnectionRefused,
+                    latency_ms,
+                    detail: inner,
+                }
+            } else {
+                ConnectResult {
+                    status: ConnectStatus::Error,
+                    latency_ms,
+                    detail: inner,
+                }
+            }
+        }
+        redis_enterprise::RestError::ConnectionError(ref e) if e.contains("Connection refused") => {
+            ConnectResult {
+                status: ConnectStatus::ConnectionRefused,
+                latency_ms,
+                detail: msg,
+            }
+        }
+        _ => ConnectResult {
+            status: ConnectStatus::Error,
+            latency_ms,
+            detail: msg,
+        },
+    }
+}
+
+/// Test connectivity for a Database profile via Redis PING
+async fn test_database_connectivity(profile: &redisctl_core::Profile) -> ConnectResult {
+    let start = Instant::now();
+
+    let (host, port, password, tls, username, database) =
+        match profile.resolve_database_credentials() {
+            Ok(Some(creds)) => creds,
+            Ok(None) => {
+                return ConnectResult {
+                    status: ConnectStatus::Error,
+                    latency_ms: None,
+                    detail: "No database credentials in profile".to_string(),
+                };
+            }
+            Err(e) => {
+                return ConnectResult {
+                    status: ConnectStatus::Error,
+                    latency_ms: None,
+                    detail: format!("Failed to resolve credentials: {}", e),
+                };
+            }
+        };
+
+    // Build Redis URL
+    let scheme = if tls { "rediss" } else { "redis" };
+    let auth = match (&password, username.as_str()) {
+        (Some(pwd), "default") => format!(":{}@", urlencoding::encode(pwd)),
+        (Some(pwd), user) => {
+            format!(
+                "{}:{}@",
+                urlencoding::encode(user),
+                urlencoding::encode(pwd)
+            )
+        }
+        (None, "default") => String::new(),
+        (None, user) => format!("{}@", urlencoding::encode(user)),
+    };
+    let url = format!("{}://{}{}:{}/{}", scheme, auth, host, port, database);
+
+    let client = match redis::Client::open(url.as_str()) {
+        Ok(c) => c,
+        Err(e) => {
+            return ConnectResult {
+                status: ConnectStatus::Error,
+                latency_ms: Some(start.elapsed().as_millis() as u64),
+                detail: format!("Invalid connection URL: {}", e),
+            };
+        }
+    };
+
+    match tokio::time::timeout(CONNECT_TIMEOUT, client.get_multiplexed_async_connection()).await {
+        Ok(Ok(mut conn)) => match redis::cmd("PING").query_async::<String>(&mut conn).await {
+            Ok(response) => ConnectResult {
+                status: ConnectStatus::Ok,
+                latency_ms: Some(start.elapsed().as_millis() as u64),
+                detail: format!("PING response: {}", response),
+            },
+            Err(e) => ConnectResult {
+                status: ConnectStatus::Error,
+                latency_ms: Some(start.elapsed().as_millis() as u64),
+                detail: format!("PING failed: {}", e),
+            },
+        },
+        Ok(Err(e)) => {
+            let msg = e.to_string();
+            let latency_ms = Some(start.elapsed().as_millis() as u64);
+            if msg.contains("WRONGPASS")
+                || msg.contains("NOAUTH")
+                || msg.contains("AUTH")
+                || msg.contains("invalid username-password")
+            {
+                ConnectResult {
+                    status: ConnectStatus::AuthFailed,
+                    latency_ms,
+                    detail: msg,
+                }
+            } else if msg.contains("tls")
+                || msg.contains("certificate")
+                || msg.contains("SSL")
+                || msg.contains("HandshakeFailure")
+            {
+                ConnectResult {
+                    status: ConnectStatus::TlsError,
+                    latency_ms,
+                    detail: msg,
+                }
+            } else if msg.contains("Connection refused") {
+                ConnectResult {
+                    status: ConnectStatus::ConnectionRefused,
+                    latency_ms,
+                    detail: msg,
+                }
+            } else {
+                ConnectResult {
+                    status: ConnectStatus::Error,
+                    latency_ms,
+                    detail: msg,
+                }
+            }
+        }
+        Err(_) => ConnectResult {
+            status: ConnectStatus::Timeout,
+            latency_ms: Some(start.elapsed().as_millis() as u64),
+            detail: format!("Connection timed out after {}s", CONNECT_TIMEOUT.as_secs()),
+        },
+    }
+}
+
+/// Perform structural validation of a single profile
+fn validate_profile_structure(name: &str, profile: &redisctl_core::Profile) -> StructuralResult {
+    let mut errors = Vec::new();
+    let mut warnings = Vec::new();
+
+    match profile.deployment_type {
+        redisctl_core::DeploymentType::Cloud => match profile.cloud_credentials() {
+            Some((api_key, api_secret, api_url)) => {
+                if api_key.is_empty() || api_secret.is_empty() {
+                    errors.push("Missing API key or secret".to_string());
+                }
+                if !api_url.starts_with("http://") && !api_url.starts_with("https://") {
+                    warnings.push("API URL should start with http:// or https://".to_string());
+                }
+                if !api_url.contains("api.redislabs.com") && api_url.starts_with("https://") {
+                    warnings.push(format!(
+                        "Non-standard Cloud API URL: {} (expected api.redislabs.com)",
+                        api_url
+                    ));
+                }
+            }
+            None => {
+                errors.push("Missing Cloud credentials".to_string());
+            }
+        },
+        redisctl_core::DeploymentType::Enterprise => match profile.enterprise_credentials() {
+            Some((url, username, password, _insecure, ca_cert)) => {
+                if username.is_empty() {
+                    errors.push("Missing username".to_string());
+                }
+                if password.is_none() || password.as_ref().is_none_or(|p: &&str| p.is_empty()) {
+                    warnings.push("Missing password (will be prompted)".to_string());
+                }
+                if !url.starts_with("http://") && !url.starts_with("https://") {
+                    warnings.push("URL should start with http:// or https://".to_string());
+                }
+                if url.starts_with("http://") && !url.contains("localhost") {
+                    warnings.push(
+                        "Using HTTP (not HTTPS) for non-localhost Enterprise URL".to_string(),
+                    );
+                }
+                if let Some(cert_path) = ca_cert
+                    && !std::path::Path::new(cert_path).exists()
+                {
+                    warnings.push(format!("CA certificate path does not exist: {}", cert_path));
+                }
+            }
+            None => {
+                errors.push("Missing Enterprise credentials".to_string());
+            }
+        },
+        redisctl_core::DeploymentType::Database => match profile.database_credentials() {
+            Some((host, port, password, _tls, _username, _database)) => {
+                if host.is_empty() {
+                    errors.push("Missing host".to_string());
+                }
+                if port == 0 {
+                    errors.push("Invalid port (0)".to_string());
+                }
+                if password.is_none() || password.as_ref().is_none_or(|p| p.is_empty()) {
+                    warnings.push("No password configured".to_string());
+                }
+            }
+            None => {
+                errors.push("Missing Database credentials".to_string());
+            }
+        },
     }
 
+    debug!(
+        "Profile '{}' structural validation: {} errors, {} warnings",
+        name,
+        errors.len(),
+        warnings.len()
+    );
+
+    StructuralResult {
+        valid: errors.is_empty(),
+        errors,
+        warnings,
+    }
+}
+
+async fn handle_validate(
+    conn_mgr: &ConnectionManager,
+    connect: bool,
+    output_format: OutputFormat,
+) -> Result<(), RedisCtlError> {
+    debug!("Validating configuration (connect={})", connect);
+
+    let config_path = Config::config_path()?;
+    let config_exists = config_path.exists();
+    let config_path_str = config_path.display().to_string();
+
+    if !config_exists {
+        let result = ValidationOutput {
+            config_path: config_path_str.clone(),
+            config_exists: false,
+            profile_count: 0,
+            profiles: vec![],
+            defaults: DefaultsValidation {
+                cloud: None,
+                enterprise: None,
+                database: None,
+            },
+            overall_valid: false,
+        };
+
+        return output_validation(result, output_format);
+    }
+
+    let profiles = conn_mgr.config.list_profiles();
+    let mut profile_results = Vec::new();
+
+    for (name, profile) in &profiles {
+        let structural = validate_profile_structure(name, profile);
+
+        let connectivity = if connect && structural.valid {
+            Some(match profile.deployment_type {
+                redisctl_core::DeploymentType::Cloud => {
+                    test_cloud_connectivity(conn_mgr, name).await
+                }
+                redisctl_core::DeploymentType::Enterprise => {
+                    test_enterprise_connectivity(conn_mgr, name).await
+                }
+                redisctl_core::DeploymentType::Database => {
+                    test_database_connectivity(profile).await
+                }
+            })
+        } else {
+            None
+        };
+
+        profile_results.push(ProfileValidationResult {
+            name: (*name).clone(),
+            deployment_type: profile.deployment_type.to_string(),
+            structural,
+            connectivity,
+        });
+    }
+
+    // Validate defaults
+    let cloud_default = conn_mgr
+        .config
+        .default_cloud
+        .as_ref()
+        .map(|name| DefaultValidation {
+            name: name.clone(),
+            valid: conn_mgr.config.profiles.contains_key(name),
+        });
+    let enterprise_default =
+        conn_mgr
+            .config
+            .default_enterprise
+            .as_ref()
+            .map(|name| DefaultValidation {
+                name: name.clone(),
+                valid: conn_mgr.config.profiles.contains_key(name),
+            });
+    let database_default =
+        conn_mgr
+            .config
+            .default_database
+            .as_ref()
+            .map(|name| DefaultValidation {
+                name: name.clone(),
+                valid: conn_mgr.config.profiles.contains_key(name),
+            });
+
+    let overall_valid = profile_results.iter().all(|r| r.structural.valid)
+        && cloud_default.as_ref().is_none_or(|d| d.valid)
+        && enterprise_default.as_ref().is_none_or(|d| d.valid)
+        && database_default.as_ref().is_none_or(|d| d.valid);
+
+    let result = ValidationOutput {
+        config_path: config_path_str,
+        config_exists: true,
+        profile_count: profiles.len(),
+        profiles: profile_results,
+        defaults: DefaultsValidation {
+            cloud: cloud_default,
+            enterprise: enterprise_default,
+            database: database_default,
+        },
+        overall_valid,
+    };
+
+    output_validation(result, output_format)
+}
+
+/// Output validation results in the requested format
+fn output_validation(
+    result: ValidationOutput,
+    output_format: OutputFormat,
+) -> Result<(), RedisCtlError> {
+    match output_format {
+        OutputFormat::Json | OutputFormat::Yaml => {
+            let fmt = match output_format {
+                OutputFormat::Json => output::OutputFormat::Json,
+                OutputFormat::Yaml => output::OutputFormat::Yaml,
+                _ => output::OutputFormat::Json,
+            };
+            output::print_output(&result, fmt, None)?;
+        }
+        _ => {
+            print_validation_human(&result);
+        }
+    }
     Ok(())
+}
+
+/// Print validation results in human-readable format
+fn print_validation_human(result: &ValidationOutput) {
+    println!("Configuration file: {}", result.config_path);
+
+    if !result.config_exists {
+        println!("{} Configuration file does not exist", "x".red());
+        println!("\nTry:");
+        println!("  Create a profile: redisctl profile set <name> --type <type>");
+        return;
+    }
+
+    println!("{} Configuration file exists and is readable", "ok".green());
+    println!("{} Found {} profile(s)", "ok".green(), result.profile_count);
+
+    if result.profiles.is_empty() {
+        println!("\n{} No profiles configured", "!!".yellow());
+        println!("\nTry:");
+        println!(
+            "  Create a Cloud profile: redisctl profile set mycloud --type cloud --api-key <key> --api-secret <secret>"
+        );
+        println!(
+            "  Create an Enterprise profile: redisctl profile set myenterprise --type enterprise --url <url> --username <user>"
+        );
+        return;
+    }
+
+    println!();
+
+    for p in &result.profiles {
+        // Structural result
+        print!("Profile '{}' ({}): ", p.name, p.deployment_type);
+        if p.structural.valid {
+            println!("{}", "ok".green());
+        } else {
+            println!("{}", "FAIL".red());
+        }
+
+        for err in &p.structural.errors {
+            println!("  {} {}", "x".red(), err);
+        }
+        for warn in &p.structural.warnings {
+            println!("  {} {}", "!!".yellow(), warn);
+        }
+
+        // Connectivity result
+        if let Some(ref conn) = p.connectivity {
+            match conn.status {
+                ConnectStatus::Ok => {
+                    let latency = conn
+                        .latency_ms
+                        .map(|ms| format!(" ({}ms)", ms))
+                        .unwrap_or_default();
+                    println!("  {} {}{}", "ok".green(), conn.detail, latency);
+                }
+                ConnectStatus::AuthFailed => {
+                    println!("  {} Authentication failed: {}", "x".red(), conn.detail);
+                }
+                ConnectStatus::ConnectionRefused => {
+                    println!("  {} Connection refused: {}", "x".red(), conn.detail);
+                }
+                ConnectStatus::Timeout => {
+                    println!("  {} {}", "x".red(), conn.detail);
+                }
+                ConnectStatus::TlsError => {
+                    println!("  {} TLS error: {}", "x".red(), conn.detail);
+                }
+                ConnectStatus::Error => {
+                    println!("  {} {}", "x".red(), conn.detail);
+                }
+            }
+        }
+    }
+
+    // Default profiles
+    println!();
+    if let Some(ref d) = result.defaults.enterprise {
+        if d.valid {
+            println!("{} Default enterprise profile: {}", "ok".green(), d.name);
+        } else {
+            println!(
+                "{} Default enterprise profile '{}' not found",
+                "x".red(),
+                d.name
+            );
+        }
+    }
+    if let Some(ref d) = result.defaults.cloud {
+        if d.valid {
+            println!("{} Default cloud profile: {}", "ok".green(), d.name);
+        } else {
+            println!("{} Default cloud profile '{}' not found", "x".red(), d.name);
+        }
+    }
+    if let Some(ref d) = result.defaults.database {
+        if d.valid {
+            println!("{} Default database profile: {}", "ok".green(), d.name);
+        } else {
+            println!(
+                "{} Default database profile '{}' not found",
+                "x".red(),
+                d.name
+            );
+        }
+    }
+
+    // Overall summary
+    println!();
+    let has_errors = result.profiles.iter().any(|p| !p.structural.valid);
+    let has_warnings = result
+        .profiles
+        .iter()
+        .any(|p| !p.structural.warnings.is_empty());
+    let has_conn_failures = result.profiles.iter().any(|p| {
+        p.connectivity
+            .as_ref()
+            .is_some_and(|c| !matches!(c.status, ConnectStatus::Ok))
+    });
+
+    if has_errors {
+        println!(
+            "{} Configuration has errors. Fix them before using affected profiles.",
+            "!!".yellow()
+        );
+    } else if has_conn_failures {
+        println!(
+            "{} Structural checks passed but connectivity tests failed for some profiles.",
+            "!!".yellow()
+        );
+    } else if has_warnings {
+        println!(
+            "{} Configuration has warnings but should work.",
+            "!!".yellow()
+        );
+    } else {
+        println!("{} Configuration is valid", "ok".green());
+    }
 }
