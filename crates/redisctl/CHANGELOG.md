@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/redis-developer/redisctl/compare/redisctl-v0.7.7...redisctl-v0.8.0) - 2026-02-25
+
+### Added
+
+- *(cli)* support name@version syntax for --module flag ([#675](https://github.com/redis-developer/redisctl/pull/675))
+- *(cli)* group `profile list` output by deployment type ([#674](https://github.com/redis-developer/redisctl/pull/674))
+- *(cli)* cargo-style diagnostic error formatting ([#671](https://github.com/redis-developer/redisctl/pull/671))
+- *(cli)* infer platform from profile — make cloud/enterprise prefix optional ([#668](https://github.com/redis-developer/redisctl/pull/668))
+- *(mcp)* add Enterprise license, cluster, and certificate management tools ([#636](https://github.com/redis-developer/redisctl/pull/636))
+- [**breaking**] implement Layer 2 architecture in redisctl-core ([#630](https://github.com/redis-developer/redisctl/pull/630))
+- add 'db open' command to spawn redis-cli with profile credentials ([#627](https://github.com/redis-developer/redisctl/pull/627))
+- add custom CA certificate support for Kubernetes deployments ([#624](https://github.com/redis-developer/redisctl/pull/624))
+- [**breaking**] rewrite redisctl-mcp using tower-mcp framework ([#597](https://github.com/redis-developer/redisctl/pull/597))
+- update to redis-enterprise 0.8 ([#600](https://github.com/redis-developer/redisctl/pull/600))
+- update to redis-cloud 0.9 ([#599](https://github.com/redis-developer/redisctl/pull/599))
+- add one-shot cost-report export command ([#595](https://github.com/redis-developer/redisctl/pull/595))
+
+### Fixed
+
+- handle rate limits (429) and processing-completed state in task polling ([#587](https://github.com/redis-developer/redisctl/pull/587))
+
+### Other
+
+- update examples for prefix-free CLI commands ([#673](https://github.com/redis-developer/redisctl/pull/673))
+- document Docker as zero-install MCP option ([#647](https://github.com/redis-developer/redisctl/pull/647)) ([#659](https://github.com/redis-developer/redisctl/pull/659))
+- consolidate workspace dependencies ([#640](https://github.com/redis-developer/redisctl/pull/640))
+- [**breaking**] extract redis-cloud and redis-enterprise to standalone repos ([#596](https://github.com/redis-developer/redisctl/pull/596))
+
 ## [0.7.7](https://github.com/redis-developer/redisctl/compare/redisctl-v0.7.6...redisctl-v0.7.7) - 2026-01-23
 
 ### Other

@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.2.0...redisctl-mcp-v0.3.0) - 2026-02-25
+
+### Added
+
+- *(mcp)* auto-detect toolsets from config profiles ([#667](https://github.com/redis-developer/redisctl/pull/667))
+- *(mcp)* modular router with feature flags and runtime toolset selection ([#656](https://github.com/redis-developer/redisctl/pull/656))
+- *(mcp)* default to read-only mode ([#655](https://github.com/redis-developer/redisctl/pull/655))
+- *(mcp)* add multi-profile support for Cloud tools ([#654](https://github.com/redis-developer/redisctl/pull/654))
+- *(mcp)* add multi-profile support for Enterprise tools ([#651](https://github.com/redis-developer/redisctl/pull/651)) ([#652](https://github.com/redis-developer/redisctl/pull/652))
+- *(mcp)* add create_subscription tool for Cloud ([#643](https://github.com/redis-developer/redisctl/pull/643))
+- *(mcp)* add Enterprise license, cluster, and certificate management tools ([#636](https://github.com/redis-developer/redisctl/pull/636))
+- *(mcp)* add Enterprise Redis ACL tools ([#635](https://github.com/redis-developer/redisctl/pull/635))
+- *(mcp)* add Cloud certificate and Enterprise roles tools ([#634](https://github.com/redis-developer/redisctl/pull/634))
+- *(mcp)* add Cloud database flush operation ([#633](https://github.com/redis-developer/redisctl/pull/633))
+- *(mcp)* add Enterprise database write operations ([#632](https://github.com/redis-developer/redisctl/pull/632))
+- [**breaking**] implement Layer 2 architecture in redisctl-core ([#630](https://github.com/redis-developer/redisctl/pull/630))
+- add custom CA certificate support for Kubernetes deployments ([#624](https://github.com/redis-developer/redisctl/pull/624))
+- *(mcp)* upgrade tower-mcp to 0.3.4 ([#622](https://github.com/redis-developer/redisctl/pull/622))
+- add filtering support and new Redis diagnostic tools ([#621](https://github.com/redis-developer/redisctl/pull/621))
+- add individual getter tools for Cloud and Enterprise resources ([#620](https://github.com/redis-developer/redisctl/pull/620))
+- add MCP resources and prompts to redisctl-mcp ([#619](https://github.com/redis-developer/redisctl/pull/619))
+- *(mcp)* add read-only tool filter using CapabilityFilter ([#618](https://github.com/redis-developer/redisctl/pull/618))
+- *(mcp)* add historical stats, Cloud logs, debug info, and modules tools ([#617](https://github.com/redis-developer/redisctl/pull/617))
+- *(mcp)* add Enterprise logs and aggregate stats tools ([#616](https://github.com/redis-developer/redisctl/pull/616))
+- *(mcp)* add Enterprise license tools ([#615](https://github.com/redis-developer/redisctl/pull/615))
+- *(mcp)* add mock testing support for cloud and enterprise tools ([#611](https://github.com/redis-developer/redisctl/pull/611))
+- *(mcp)* add profile management tools ([#609](https://github.com/redis-developer/redisctl/pull/609))
+
+### Fixed
+
+- pre-release cleanup — cfg-gate warnings and stale doc versions ([#676](https://github.com/redis-developer/redisctl/pull/676))
+- *(mcp)* wrap array results in JSON objects for structuredContent compliance ([#653](https://github.com/redis-developer/redisctl/pull/653))
+- *(mcp)* normalize 'default' profile to use configured default ([#608](https://github.com/redis-developer/redisctl/pull/608))
+
+### Other
+
+- *(mcp)* bump tower-mcp to 0.5.0 ([#658](https://github.com/redis-developer/redisctl/pull/658))
+- consolidate workspace dependencies ([#640](https://github.com/redis-developer/redisctl/pull/640))
+- upgrade tower-mcp to 0.2.3 and use from_serialize() ([#607](https://github.com/redis-developer/redisctl/pull/607))
+
 ## [0.1.2](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.1.1...redisctl-mcp-v0.1.2) - 2026-01-23
 
 ### Added
