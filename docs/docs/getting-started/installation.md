@@ -91,7 +91,7 @@ redisctl --version
 Expected output:
 
 ```
-redisctl 0.7.3
+redisctl 0.7.7
 ```
 
 ## Shell Completions
