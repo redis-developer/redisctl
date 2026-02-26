@@ -24,6 +24,8 @@ struct ProfileSummary {
     name: String,
     deployment_type: String,
     is_default: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
 }
 
 /// Build the profile_list tool
@@ -60,6 +62,7 @@ pub fn list_profiles(state: Arc<AppState>) -> Tool {
                             name: (*name).clone(),
                             deployment_type: deployment_type.to_string(),
                             is_default,
+                            tags: profile.tags.clone(),
                         }
                     })
                     .collect();
@@ -74,9 +77,14 @@ pub fn list_profiles(state: Arc<AppState>) -> Tool {
                 let mut output = format!("Found {} profile(s):\n\n", profiles.len());
                 for p in &profiles {
                     let default_marker = if p.is_default { " (default)" } else { "" };
+                    let tag_suffix = if p.tags.is_empty() {
+                        String::new()
+                    } else {
+                        format!(" [{}]", p.tags.join(", "))
+                    };
                     output.push_str(&format!(
-                        "- {}: {}{}\n",
-                        p.name, p.deployment_type, default_marker
+                        "- {}: {}{}{}\n",
+                        p.name, p.deployment_type, default_marker, tag_suffix
                     ));
                 }
 
@@ -99,6 +107,8 @@ struct MaskedProfileDetails {
     name: String,
     deployment_type: String,
     is_default: bool,
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    tags: Vec<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     cloud: Option<MaskedCloudCredentials>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -247,6 +257,7 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
                     name: input.name,
                     deployment_type: deployment_type.to_string(),
                     is_default,
+                    tags: profile.tags.clone(),
                     cloud,
                     enterprise,
                     database,
@@ -865,6 +876,7 @@ pub fn create_profile(state: Arc<AppState>) -> Tool {
                     credentials,
                     files_api_key: None,
                     resilience: None,
+                    tags: vec![],
                 };
 
                 // Check if this is the first profile of its type
