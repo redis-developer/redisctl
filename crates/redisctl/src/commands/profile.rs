@@ -472,9 +472,12 @@ async fn handle_set(
 
     // Check if profile already exists
     if conn_mgr.config.profiles.contains_key(name) {
-        // Ask for confirmation before overwriting
-        println!("Profile '{}' already exists.", name);
-        print!("Do you want to overwrite it? (y/N): ");
+        // Ask for confirmation before updating
+        println!(
+            "Profile '{}' already exists. Credentials will be updated (other settings preserved).",
+            name
+        );
+        print!("Continue? (y/N): ");
         use std::io::{self, Write};
         io::stdout().flush().unwrap();
 
@@ -650,6 +653,17 @@ async fn handle_set(
                 resilience: None,
             }
         }
+    };
+
+    // Preserve non-credential settings from existing profile when updating
+    let profile = if let Some(existing) = conn_mgr.config.profiles.get(name) {
+        redisctl_core::Profile {
+            files_api_key: profile.files_api_key.or(existing.files_api_key.clone()),
+            resilience: profile.resilience.or(existing.resilience.clone()),
+            ..profile
+        }
+    } else {
+        profile
     };
 
     // Update the configuration

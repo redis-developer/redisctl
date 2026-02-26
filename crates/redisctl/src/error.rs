@@ -155,7 +155,7 @@ impl RedisCtlError {
                     profile_name,
                 )];
                 suggestions.push(format!(
-                    "Re-enter credentials: redisctl profile set {} --type <type> ...",
+                    "Refresh credentials: redisctl profile set {} --type <type> ... (preserves other settings)",
                     profile_name,
                 ));
                 suggestions.push(
