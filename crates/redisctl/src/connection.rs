@@ -129,6 +129,12 @@ impl ConnectionManager {
                         }
                         .to_string(),
                         expected_type: "cloud".to_string(),
+                        available_profiles: self
+                            .config
+                            .get_profiles_of_type(DeploymentType::Cloud)
+                            .into_iter()
+                            .map(String::from)
+                            .collect(),
                     });
                 }
 
@@ -275,6 +281,12 @@ impl ConnectionManager {
                         }
                         .to_string(),
                         expected_type: "enterprise".to_string(),
+                        available_profiles: self
+                            .config
+                            .get_profiles_of_type(DeploymentType::Enterprise)
+                            .into_iter()
+                            .map(String::from)
+                            .collect(),
                     });
                 }
 
