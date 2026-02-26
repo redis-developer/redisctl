@@ -706,6 +706,212 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// Input for creating a new profile
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateProfileInput {
+    /// Name for the new profile
+    pub name: String,
+    /// Profile type: "cloud", "enterprise", or "database"
+    pub profile_type: String,
+
+    // Cloud credentials
+    /// Redis Cloud API key (required for cloud profiles)
+    #[serde(default)]
+    pub api_key: Option<String>,
+    /// Redis Cloud API secret (required for cloud profiles)
+    #[serde(default)]
+    pub api_secret: Option<String>,
+    /// Redis Cloud API URL (defaults to https://api.redislabs.com/v1)
+    #[serde(default)]
+    pub api_url: Option<String>,
+
+    // Enterprise credentials
+    /// Enterprise cluster URL, e.g. https://cluster.example.com:9443 (required for enterprise profiles)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Enterprise admin username (required for enterprise profiles)
+    #[serde(default)]
+    pub username: Option<String>,
+    /// Enterprise admin password
+    #[serde(default)]
+    pub password: Option<String>,
+    /// Skip TLS verification for self-signed certificates
+    #[serde(default)]
+    pub insecure: Option<bool>,
+    /// Path to CA certificate for TLS verification
+    #[serde(default)]
+    pub ca_cert: Option<String>,
+
+    // Database credentials
+    /// Redis host (required for database profiles)
+    #[serde(default)]
+    pub host: Option<String>,
+    /// Redis port (defaults to 6379)
+    #[serde(default)]
+    pub port: Option<u16>,
+    /// Redis database password
+    #[serde(default)]
+    pub db_password: Option<String>,
+    /// Enable TLS (defaults to true)
+    #[serde(default)]
+    pub tls: Option<bool>,
+    /// Redis username (defaults to "default")
+    #[serde(default)]
+    pub db_username: Option<String>,
+    /// Redis database number (defaults to 0)
+    #[serde(default)]
+    pub database: Option<u8>,
+
+    /// Set this profile as the default for its type (defaults to true if it's the first profile of its type)
+    #[serde(default)]
+    pub set_default: Option<bool>,
+}
+
+/// Build the profile_create tool
+pub fn create_profile(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("profile_create")
+        .description(
+            "Create a new redisctl profile with credentials. Requires write access.\n\n\
+             Profile types and required fields:\n\
+             - cloud: api_key, api_secret (api_url optional, defaults to Redis Cloud API)\n\
+             - enterprise: url, username (password, insecure, ca_cert optional)\n\
+             - database: host (port defaults to 6379, tls defaults to true, db_username defaults to 'default')\n\n\
+             The profile is automatically set as default for its type if it's the first of that type, \
+             unless set_default is explicitly false.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateProfileInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateProfileInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool("Write operations require --read-only=false"));
+                }
+
+                let mut config = Config::load().unwrap_or_default();
+
+                // Check if profile already exists
+                if config.profiles.contains_key(&input.name) {
+                    return Err(McpError::tool(format!(
+                        "Profile '{}' already exists. Use profile_delete first to replace it.",
+                        input.name
+                    )));
+                }
+
+                // Parse deployment type
+                let deployment_type = match input.profile_type.to_lowercase().as_str() {
+                    "cloud" => DeploymentType::Cloud,
+                    "enterprise" => DeploymentType::Enterprise,
+                    "database" | "db" => DeploymentType::Database,
+                    other => {
+                        return Err(McpError::tool(format!(
+                            "Invalid profile type '{}'. Must be 'cloud', 'enterprise', or 'database'.",
+                            other
+                        )));
+                    }
+                };
+
+                // Build credentials based on type
+                let credentials = match deployment_type {
+                    DeploymentType::Cloud => {
+                        let api_key = input.api_key.ok_or_else(|| {
+                            McpError::tool("Cloud profiles require 'api_key'")
+                        })?;
+                        let api_secret = input.api_secret.ok_or_else(|| {
+                            McpError::tool("Cloud profiles require 'api_secret'")
+                        })?;
+                        ProfileCredentials::Cloud {
+                            api_key,
+                            api_secret,
+                            api_url: input
+                                .api_url
+                                .unwrap_or_else(|| "https://api.redislabs.com/v1".to_string()),
+                        }
+                    }
+                    DeploymentType::Enterprise => {
+                        let url = input.url.ok_or_else(|| {
+                            McpError::tool("Enterprise profiles require 'url'")
+                        })?;
+                        let username = input.username.ok_or_else(|| {
+                            McpError::tool("Enterprise profiles require 'username'")
+                        })?;
+                        ProfileCredentials::Enterprise {
+                            url,
+                            username,
+                            password: input.password,
+                            insecure: input.insecure.unwrap_or(false),
+                            ca_cert: input.ca_cert,
+                        }
+                    }
+                    DeploymentType::Database => {
+                        let host = input.host.ok_or_else(|| {
+                            McpError::tool("Database profiles require 'host'")
+                        })?;
+                        ProfileCredentials::Database {
+                            host,
+                            port: input.port.unwrap_or(6379),
+                            password: input.db_password,
+                            tls: input.tls.unwrap_or(true),
+                            username: input
+                                .db_username
+                                .unwrap_or_else(|| "default".to_string()),
+                            database: input.database.unwrap_or(0),
+                        }
+                    }
+                };
+
+                let profile = redisctl_core::Profile {
+                    deployment_type,
+                    credentials,
+                    files_api_key: None,
+                    resilience: None,
+                };
+
+                // Check if this is the first profile of its type
+                let is_first_of_type =
+                    config.get_profiles_of_type(deployment_type).is_empty();
+
+                // Determine whether to set as default
+                let should_set_default = input.set_default.unwrap_or(is_first_of_type);
+
+                config.set_profile(input.name.clone(), profile);
+
+                if should_set_default {
+                    match deployment_type {
+                        DeploymentType::Cloud => {
+                            config.default_cloud = Some(input.name.clone());
+                        }
+                        DeploymentType::Enterprise => {
+                            config.default_enterprise = Some(input.name.clone());
+                        }
+                        DeploymentType::Database => {
+                            config.default_database = Some(input.name.clone());
+                        }
+                    }
+                }
+
+                config
+                    .save()
+                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+
+                let mut output = format!(
+                    "Profile '{}' created (type: {})",
+                    input.name,
+                    input.profile_type.to_lowercase()
+                );
+                if should_set_default {
+                    output.push_str(&format!(
+                        "\nSet as default {} profile",
+                        input.profile_type.to_lowercase()
+                    ));
+                }
+
+                Ok(CallToolResult::text(output))
+            },
+        )
+        .build()
+}
+
 /// Instructions text describing all App-level tools, resources, and prompts
 pub fn instructions() -> &'static str {
     r#"
@@ -716,6 +922,7 @@ pub fn instructions() -> &'static str {
 - profile_validate: Validate configuration file (set connect=true to test connectivity)
 
 ### Profile Management - Write (requires --read-only=false)
+- profile_create: Create a new profile (cloud, enterprise, or database)
 - profile_set_default_cloud: Set default Cloud profile
 - profile_set_default_enterprise: Set default Enterprise profile
 - profile_delete: Delete a profile
@@ -746,6 +953,7 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(config_path(state.clone()))
         .tool(validate_config(state.clone()))
         // Profile Tools - Write
+        .tool(create_profile(state.clone()))
         .tool(set_default_cloud(state.clone()))
         .tool(set_default_enterprise(state.clone()))
         .tool(delete_profile(state.clone()))
