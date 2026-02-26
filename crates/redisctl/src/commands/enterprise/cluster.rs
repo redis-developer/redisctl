@@ -173,6 +173,15 @@ pub async fn handle_cluster_command(
         EnterpriseClusterCommands::CheckStatus => {
             cluster_impl::check_cluster_status(conn_mgr, profile_name, output_format, query).await
         }
+        EnterpriseClusterCommands::Health => {
+            cluster_impl::cluster_health(conn_mgr, profile_name, output_format, query).await
+        }
+        EnterpriseClusterCommands::VerifyBalance => {
+            cluster_impl::verify_balance(conn_mgr, profile_name, output_format, query).await
+        }
+        EnterpriseClusterCommands::VerifyRackAwareness => {
+            cluster_impl::verify_rack_awareness(conn_mgr, profile_name, output_format, query).await
+        }
 
         // Certificates & Security
         EnterpriseClusterCommands::GetCertificates => {

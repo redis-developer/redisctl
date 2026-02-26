@@ -419,6 +419,18 @@ pub enum EnterpriseClusterCommands {
     #[command(name = "check-status")]
     CheckStatus,
 
+    /// Combined cluster health check (status, balance, rack-awareness)
+    #[command(name = "health")]
+    Health,
+
+    /// Verify shard distribution balance across nodes
+    #[command(name = "verify-balance")]
+    VerifyBalance,
+
+    /// Verify rack-aware placement of master/replica pairs
+    #[command(name = "verify-rack-awareness")]
+    VerifyRackAwareness,
+
     /// Get cluster certificates
     #[command(name = "get-certificates")]
     GetCertificates,
