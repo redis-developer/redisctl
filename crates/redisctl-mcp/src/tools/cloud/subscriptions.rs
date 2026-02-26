@@ -977,16 +977,1146 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// Input for updating a subscription
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateSubscriptionInput {
+    /// Subscription ID to update
+    pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_subscription tool
+pub fn update_subscription(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_subscription")
+        .description(
+            "Update a Redis Cloud subscription. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateSubscriptionInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateSubscriptionInput>| async move {
+                use redis_cloud::flexible::subscriptions::BaseSubscriptionUpdateRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = BaseSubscriptionUpdateRequest {
+                    subscription_id: None,
+                    command_type: None,
+                };
+
+                let handler = SubscriptionHandler::new(client);
+                let result = handler
+                    .update_subscription(input.subscription_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to update subscription: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for getting subscription pricing
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSubscriptionPricingInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_subscription_pricing tool
+pub fn get_subscription_pricing(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_subscription_pricing")
+        .description(
+            "Get pricing details for a Redis Cloud subscription.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetSubscriptionPricingInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetSubscriptionPricingInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = SubscriptionHandler::new(client);
+                let pricing = handler
+                    .get_subscription_pricing(input.subscription_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get subscription pricing: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&pricing)
+            },
+        )
+        .build()
+}
+
+/// Input for getting available Redis versions
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetRedisVersionsInput {
+    /// Optional subscription ID to filter versions
+    #[serde(default)]
+    pub subscription_id: Option<i32>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_redis_versions tool
+pub fn get_redis_versions(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_redis_versions")
+        .description(
+            "Get available Redis versions. Optionally filter by subscription ID.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetRedisVersionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetRedisVersionsInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = SubscriptionHandler::new(client);
+                let versions = handler
+                    .get_redis_versions(input.subscription_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get Redis versions: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&versions)
+            },
+        )
+        .build()
+}
+
+/// Input for getting subscription CIDR allowlist
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSubscriptionCidrAllowlistInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_subscription_cidr_allowlist tool
+pub fn get_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_subscription_cidr_allowlist")
+        .description("Get the CIDR allowlist for a Redis Cloud subscription.")
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetSubscriptionCidrAllowlistInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetSubscriptionCidrAllowlistInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = SubscriptionHandler::new(client);
+                let allowlist = handler
+                    .get_cidr_allowlist(input.subscription_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get subscription CIDR allowlist: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&allowlist)
+            },
+        )
+        .build()
+}
+
+/// Input for updating subscription CIDR allowlist
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateSubscriptionCidrAllowlistInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// List of CIDR IP ranges to allow (e.g., ["192.168.1.0/24", "10.0.0.0/8"])
+    #[serde(default)]
+    pub cidr_ips: Option<Vec<String>>,
+    /// List of security group IDs to allow (AWS only)
+    #[serde(default)]
+    pub security_group_ids: Option<Vec<String>>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_subscription_cidr_allowlist tool
+pub fn update_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_subscription_cidr_allowlist")
+        .description(
+            "Update the CIDR allowlist for a Redis Cloud subscription. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateSubscriptionCidrAllowlistInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateSubscriptionCidrAllowlistInput>| async move {
+                use redis_cloud::flexible::subscriptions::CidrAllowlistUpdateRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = CidrAllowlistUpdateRequest {
+                    subscription_id: None,
+                    cidr_ips: input.cidr_ips,
+                    security_group_ids: input.security_group_ids,
+                    command_type: None,
+                };
+
+                let handler = SubscriptionHandler::new(client);
+                let result = handler
+                    .update_subscription_cidr_allowlist(input.subscription_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!(
+                            "Failed to update subscription CIDR allowlist: {}",
+                            e
+                        ))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for getting subscription maintenance windows
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetSubscriptionMaintenanceWindowsInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_subscription_maintenance_windows tool
+pub fn get_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_subscription_maintenance_windows")
+        .description("Get maintenance windows for a Redis Cloud subscription.")
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetSubscriptionMaintenanceWindowsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetSubscriptionMaintenanceWindowsInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = SubscriptionHandler::new(client);
+                let windows = handler
+                    .get_subscription_maintenance_windows(input.subscription_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!(
+                            "Failed to get subscription maintenance windows: {}",
+                            e
+                        ))
+                    })?;
+
+                CallToolResult::from_serialize(&windows)
+            },
+        )
+        .build()
+}
+
+/// Input for a maintenance window specification
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct MaintenanceWindowInput {
+    /// Start hour (0-23 UTC)
+    pub start_hour: i32,
+    /// Duration in hours
+    pub duration_in_hours: i32,
+    /// Days of the week (e.g., ["Monday", "Wednesday", "Friday"])
+    pub days: Vec<String>,
+}
+
+/// Input for updating subscription maintenance windows
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateSubscriptionMaintenanceWindowsInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Maintenance mode: "manual" or "automatic"
+    pub mode: String,
+    /// Maintenance windows (required when mode is "manual")
+    #[serde(default)]
+    pub windows: Option<Vec<MaintenanceWindowInput>>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_subscription_maintenance_windows tool
+pub fn update_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_subscription_maintenance_windows")
+        .description(
+            "Update maintenance windows for a Redis Cloud subscription. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateSubscriptionMaintenanceWindowsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateSubscriptionMaintenanceWindowsInput>| async move {
+                use redis_cloud::flexible::subscriptions::{
+                    MaintenanceWindowSpec, SubscriptionMaintenanceWindowsSpec,
+                };
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let windows = input.windows.map(|ws| {
+                    ws.into_iter()
+                        .map(|w| MaintenanceWindowSpec {
+                            start_hour: w.start_hour,
+                            duration_in_hours: w.duration_in_hours,
+                            days: w.days,
+                        })
+                        .collect()
+                });
+
+                let request = SubscriptionMaintenanceWindowsSpec {
+                    mode: input.mode,
+                    windows,
+                };
+
+                let handler = SubscriptionHandler::new(client);
+                let result = handler
+                    .update_subscription_maintenance_windows(input.subscription_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!(
+                            "Failed to update subscription maintenance windows: {}",
+                            e
+                        ))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for getting Active-Active subscription regions
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetActiveActiveRegionsInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_active_active_regions tool
+pub fn get_active_active_regions(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_active_active_regions")
+        .description(
+            "Get regions from an Active-Active Redis Cloud subscription.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetActiveActiveRegionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetActiveActiveRegionsInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = SubscriptionHandler::new(client);
+                let regions = handler
+                    .get_regions_from_active_active_subscription(input.subscription_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!(
+                            "Failed to get Active-Active regions: {}",
+                            e
+                        ))
+                    })?;
+
+                CallToolResult::from_serialize(&regions)
+            },
+        )
+        .build()
+}
+
+/// Input for adding a region to an Active-Active subscription
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AddActiveActiveRegionInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Deployment CIDR for the new region (e.g., "10.0.0.0/24")
+    pub deployment_cidr: String,
+    /// Region name (e.g., "us-east-1")
+    #[serde(default)]
+    pub region: Option<String>,
+    /// VPC ID for the region
+    #[serde(default)]
+    pub vpc_id: Option<String>,
+    /// Whether to perform a dry run without making changes
+    #[serde(default)]
+    pub dry_run: Option<bool>,
+    /// RESP version for the region
+    #[serde(default)]
+    pub resp_version: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the add_active_active_region tool
+pub fn add_active_active_region(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("add_active_active_region")
+        .description(
+            "Add a new region to an Active-Active Redis Cloud subscription. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, AddActiveActiveRegionInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<AddActiveActiveRegionInput>| async move {
+                use redis_cloud::flexible::subscriptions::ActiveActiveRegionCreateRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = ActiveActiveRegionCreateRequest {
+                    subscription_id: None,
+                    region: input.region,
+                    vpc_id: input.vpc_id,
+                    deployment_cidr: input.deployment_cidr,
+                    dry_run: input.dry_run,
+                    databases: None,
+                    resp_version: input.resp_version,
+                    customer_managed_key_resource_name: None,
+                    command_type: None,
+                };
+
+                let handler = SubscriptionHandler::new(client);
+                let result = handler
+                    .add_new_region_to_active_active_subscription(
+                        input.subscription_id,
+                        &request,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!(
+                            "Failed to add Active-Active region: {}",
+                            e
+                        ))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for a region to delete from an Active-Active subscription
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ActiveActiveRegionToDeleteInput {
+    /// Region name to delete (e.g., "us-east-1")
+    pub region: String,
+}
+
+/// Input for deleting regions from an Active-Active subscription
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteActiveActiveRegionsInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Regions to delete
+    pub regions: Vec<ActiveActiveRegionToDeleteInput>,
+    /// Whether to perform a dry run without making changes
+    #[serde(default)]
+    pub dry_run: Option<bool>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the delete_active_active_regions tool
+pub fn delete_active_active_regions(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_active_active_regions")
+        .description(
+            "Delete regions from an Active-Active Redis Cloud subscription. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteActiveActiveRegionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteActiveActiveRegionsInput>| async move {
+                use redis_cloud::flexible::subscriptions::{
+                    ActiveActiveRegionDeleteRequest, ActiveActiveRegionToDelete,
+                };
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let regions = input
+                    .regions
+                    .into_iter()
+                    .map(|r| ActiveActiveRegionToDelete {
+                        region: Some(r.region),
+                    })
+                    .collect();
+
+                let request = ActiveActiveRegionDeleteRequest {
+                    subscription_id: None,
+                    regions: Some(regions),
+                    dry_run: input.dry_run,
+                    command_type: None,
+                };
+
+                let handler = SubscriptionHandler::new(client);
+                let result = handler
+                    .delete_regions_from_active_active_subscription(input.subscription_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to delete Active-Active regions: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for getting available database versions
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetAvailableDatabaseVersionsInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_available_database_versions tool
+pub fn get_available_database_versions(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_available_database_versions")
+        .description("Get available target Redis versions for upgrading a database.")
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetAvailableDatabaseVersionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetAvailableDatabaseVersionsInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let versions = handler
+                    .get_available_target_versions(input.subscription_id, input.database_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get available database versions: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&versions)
+            },
+        )
+        .build()
+}
+
+/// Input for upgrading a database Redis version
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpgradeDatabaseRedisVersionInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Target Redis version to upgrade to (e.g., "7.2")
+    pub target_redis_version: String,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the upgrade_database_redis_version tool
+pub fn upgrade_database_redis_version(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("upgrade_database_redis_version")
+        .description(
+            "Upgrade the Redis version of a database. \
+             Use get_available_database_versions to find valid target versions. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpgradeDatabaseRedisVersionInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpgradeDatabaseRedisVersionInput>| async move {
+                use redis_cloud::databases::DatabaseUpgradeRedisVersionRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = DatabaseUpgradeRedisVersionRequest {
+                    database_id: None,
+                    subscription_id: None,
+                    target_redis_version: input.target_redis_version,
+                    command_type: None,
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let result = handler
+                    .upgrade_database_redis_version(
+                        input.subscription_id,
+                        input.database_id,
+                        &request,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to upgrade database Redis version: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for getting database upgrade status
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetDatabaseUpgradeStatusInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_database_upgrade_status tool
+pub fn get_database_upgrade_status(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_database_upgrade_status")
+        .description("Get the Redis version upgrade status for a database.")
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetDatabaseUpgradeStatusInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetDatabaseUpgradeStatusInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let status = handler
+                    .get_database_redis_version_upgrade_status(
+                        input.subscription_id,
+                        input.database_id,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get database upgrade status: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&status)
+            },
+        )
+        .build()
+}
+
+/// Input for getting database import status
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetDatabaseImportStatusInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_database_import_status tool
+pub fn get_database_import_status(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_database_import_status")
+        .description("Get the import status for a Redis Cloud database.")
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetDatabaseImportStatusInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetDatabaseImportStatusInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let status = handler
+                    .get_database_import_status(input.subscription_id, input.database_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get database import status: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&status)
+            },
+        )
+        .build()
+}
+
+/// Input for creating a database tag
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateDatabaseTagInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Tag key
+    pub key: String,
+    /// Tag value
+    pub value: String,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the create_database_tag tool
+pub fn create_database_tag(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_database_tag")
+        .description(
+            "Create a tag on a Redis Cloud database. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateDatabaseTagInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateDatabaseTagInput>| async move {
+                use redis_cloud::databases::DatabaseTagCreateRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = DatabaseTagCreateRequest {
+                    key: input.key,
+                    value: input.value,
+                    subscription_id: None,
+                    database_id: None,
+                    command_type: None,
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let tag = handler
+                    .create_tag(input.subscription_id, input.database_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to create database tag: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&tag)
+            },
+        )
+        .build()
+}
+
+/// Input for updating a database tag
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateDatabaseTagInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Tag key to update
+    pub tag_key: String,
+    /// New tag value
+    pub value: String,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_database_tag tool
+pub fn update_database_tag(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_database_tag")
+        .description(
+            "Update a tag on a Redis Cloud database. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateDatabaseTagInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateDatabaseTagInput>| async move {
+                use redis_cloud::databases::DatabaseTagUpdateRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = DatabaseTagUpdateRequest {
+                    subscription_id: None,
+                    database_id: None,
+                    key: None,
+                    value: input.value,
+                    command_type: None,
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let tag = handler
+                    .update_tag(
+                        input.subscription_id,
+                        input.database_id,
+                        input.tag_key,
+                        &request,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to update database tag: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&tag)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting a database tag
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteDatabaseTagInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Tag key to delete
+    pub tag_key: String,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the delete_database_tag tool
+pub fn delete_database_tag(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_database_tag")
+        .description(
+            "Delete a tag from a Redis Cloud database. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteDatabaseTagInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteDatabaseTagInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let result = handler
+                    .delete_tag(input.subscription_id, input.database_id, input.tag_key)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to delete database tag: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for a tag key-value pair
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct TagInput {
+    /// Tag key
+    pub key: String,
+    /// Tag value
+    pub value: String,
+}
+
+/// Input for updating all database tags
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateDatabaseTagsInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Tags to set on the database (replaces all existing tags)
+    pub tags: Vec<TagInput>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_database_tags tool
+pub fn update_database_tags(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_database_tags")
+        .description(
+            "Update all tags on a Redis Cloud database (replaces existing tags). \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateDatabaseTagsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateDatabaseTagsInput>| async move {
+                use redis_cloud::databases::{DatabaseTagsUpdateRequest, Tag};
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let tags = input
+                    .tags
+                    .into_iter()
+                    .map(|t| Tag {
+                        key: t.key,
+                        value: t.value,
+                        command_type: None,
+                    })
+                    .collect();
+
+                let request = DatabaseTagsUpdateRequest {
+                    subscription_id: None,
+                    database_id: None,
+                    tags,
+                    command_type: None,
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let result = handler
+                    .update_tags(input.subscription_id, input.database_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to update database tags: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for updating CRDB local properties
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateCrdbLocalPropertiesInput {
+    /// Subscription ID
+    pub subscription_id: i32,
+    /// Database ID
+    pub database_id: i32,
+    /// Updated database name
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether to perform a dry run without making changes
+    #[serde(default)]
+    pub dry_run: Option<bool>,
+    /// Total memory limit in GB including replication overhead
+    #[serde(default)]
+    pub memory_limit_in_gb: Option<f64>,
+    /// Maximum dataset size in GB
+    #[serde(default)]
+    pub dataset_size_in_gb: Option<f64>,
+    /// Enable OSS Cluster API support
+    #[serde(default)]
+    pub support_oss_cluster_api: Option<bool>,
+    /// Use external endpoint for OSS Cluster API
+    #[serde(default)]
+    pub use_external_endpoint_for_oss_cluster_api: Option<bool>,
+    /// Enable TLS for connections
+    #[serde(default)]
+    pub enable_tls: Option<bool>,
+    /// Global data persistence setting for all regions
+    #[serde(default)]
+    pub global_data_persistence: Option<String>,
+    /// Global password for all regions
+    #[serde(default)]
+    pub global_password: Option<String>,
+    /// Global source IP allowlist for all regions
+    #[serde(default)]
+    pub global_source_ip: Option<Vec<String>>,
+    /// Data eviction policy
+    #[serde(default)]
+    pub data_eviction_policy: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_crdb_local_properties tool
+pub fn update_crdb_local_properties(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_crdb_local_properties")
+        .description(
+            "Update local properties of an Active-Active (CRDB) database. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateCrdbLocalPropertiesInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateCrdbLocalPropertiesInput>| async move {
+                use redis_cloud::databases::CrdbUpdatePropertiesRequest;
+
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let request = CrdbUpdatePropertiesRequest {
+                    subscription_id: None,
+                    database_id: None,
+                    name: input.name,
+                    dry_run: input.dry_run,
+                    memory_limit_in_gb: input.memory_limit_in_gb,
+                    dataset_size_in_gb: input.dataset_size_in_gb,
+                    support_oss_cluster_api: input.support_oss_cluster_api,
+                    use_external_endpoint_for_oss_cluster_api: input
+                        .use_external_endpoint_for_oss_cluster_api,
+                    client_ssl_certificate: None,
+                    client_tls_certificates: None,
+                    enable_tls: input.enable_tls,
+                    global_data_persistence: input.global_data_persistence,
+                    global_password: input.global_password,
+                    global_source_ip: input.global_source_ip,
+                    global_alerts: None,
+                    regions: None,
+                    data_eviction_policy: input.data_eviction_policy,
+                    command_type: None,
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let result = handler
+                    .update_crdb_local_properties(
+                        input.subscription_id,
+                        input.database_id,
+                        &request,
+                    )
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to update CRDB local properties: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
 pub(super) const INSTRUCTIONS: &str = r#"
 ### Redis Cloud - Subscriptions & Databases
 - list_subscriptions: List all Cloud subscriptions
 - get_subscription: Get subscription details
+- get_subscription_pricing: Get pricing details for a subscription
+- get_redis_versions: Get available Redis versions
+- get_subscription_cidr_allowlist: Get CIDR allowlist for a subscription
+- get_subscription_maintenance_windows: Get maintenance windows for a subscription
+- get_active_active_regions: Get regions from an Active-Active subscription
 - list_databases: List databases in a subscription
 - get_database: Get database details
 - get_backup_status: Get database backup status
 - get_slow_log: Get slow query log
 - get_database_tags: Get tags for a database
 - get_database_certificate: Get TLS/SSL certificate for a database
+- get_available_database_versions: Get available target Redis versions for upgrade
+- get_database_upgrade_status: Get Redis version upgrade status
+- get_database_import_status: Get database import status
 
 ### Redis Cloud - Write Operations (require --read-only=false)
 - create_database: Create a new database and wait for it to be ready
@@ -996,6 +2126,17 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - import_database: Import data into a database
 - delete_subscription: Delete a subscription (all databases must be deleted first)
 - flush_database: Flush all data from a database
+- update_subscription: Update a subscription
+- update_subscription_cidr_allowlist: Update CIDR allowlist for a subscription
+- update_subscription_maintenance_windows: Update maintenance windows for a subscription
+- add_active_active_region: Add a region to an Active-Active subscription
+- delete_active_active_regions: Delete regions from an Active-Active subscription
+- upgrade_database_redis_version: Upgrade the Redis version of a database
+- create_database_tag: Create a tag on a database
+- update_database_tag: Update a tag on a database
+- delete_database_tag: Delete a tag from a database
+- update_database_tags: Update all tags on a database
+- update_crdb_local_properties: Update local properties of an Active-Active database
 "#;
 
 /// Build an MCP sub-router containing subscription and database tools
@@ -1004,12 +2145,20 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         // Subscriptions & Databases
         .tool(list_subscriptions(state.clone()))
         .tool(get_subscription(state.clone()))
+        .tool(get_subscription_pricing(state.clone()))
+        .tool(get_redis_versions(state.clone()))
+        .tool(get_subscription_cidr_allowlist(state.clone()))
+        .tool(get_subscription_maintenance_windows(state.clone()))
+        .tool(get_active_active_regions(state.clone()))
         .tool(list_databases(state.clone()))
         .tool(get_database(state.clone()))
         .tool(get_backup_status(state.clone()))
         .tool(get_slow_log(state.clone()))
         .tool(get_tags(state.clone()))
         .tool(get_database_certificate(state.clone()))
+        .tool(get_available_database_versions(state.clone()))
+        .tool(get_database_upgrade_status(state.clone()))
+        .tool(get_database_import_status(state.clone()))
         // Write Operations
         .tool(create_database(state.clone()))
         .tool(update_database(state.clone()))
@@ -1019,4 +2168,15 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(delete_subscription(state.clone()))
         .tool(flush_database(state.clone()))
         .tool(create_subscription(state.clone()))
+        .tool(update_subscription(state.clone()))
+        .tool(update_subscription_cidr_allowlist(state.clone()))
+        .tool(update_subscription_maintenance_windows(state.clone()))
+        .tool(add_active_active_region(state.clone()))
+        .tool(delete_active_active_regions(state.clone()))
+        .tool(upgrade_database_redis_version(state.clone()))
+        .tool(create_database_tag(state.clone()))
+        .tool(update_database_tag(state.clone()))
+        .tool(delete_database_tag(state.clone()))
+        .tool(update_database_tags(state.clone()))
+        .tool(update_crdb_local_properties(state.clone()))
 }
