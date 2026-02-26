@@ -39,7 +39,7 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = SubscriptionHandler::new(client);
                 let account_subs = handler
@@ -75,7 +75,7 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = SubscriptionHandler::new(client);
                 let subscription = handler
@@ -113,7 +113,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let databases = handler
@@ -151,7 +151,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let database = handler
@@ -189,7 +189,7 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AccountHandler::new(client);
                 let account = handler
@@ -232,7 +232,7 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AccountHandler::new(client);
                 let logs = handler
@@ -275,7 +275,7 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AccountHandler::new(client);
                 let logs = handler
@@ -314,7 +314,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AccountHandler::new(client);
                 let regions = handler
@@ -350,7 +350,7 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AccountHandler::new(client);
                 let modules = handler
@@ -388,7 +388,7 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = TaskHandler::new(client);
                 let tasks = handler
@@ -424,7 +424,7 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = TaskHandler::new(client);
                 let task = handler
@@ -464,7 +464,7 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = UserHandler::new(client);
                 let users = handler
@@ -498,9 +498,10 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAccountUserInput>| async move {
-                let client = state.cloud_client_for_profile(input.profile.as_deref()).await.map_err(|e| {
-                    ToolError::new(format!("Failed to get Cloud client: {}", e))
-                })?;
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = UserHandler::new(client);
                 let user = handler
@@ -538,7 +539,7 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AclHandler::new(client);
                 let users = handler
@@ -574,7 +575,7 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AclHandler::new(client);
                 let user = handler
@@ -608,7 +609,7 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AclHandler::new(client);
                 let roles = handler
@@ -642,7 +643,7 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = AclHandler::new(client);
                 let rules = handler
@@ -687,7 +688,7 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let status = handler
@@ -734,7 +735,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let log = handler
@@ -772,7 +773,7 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let tags = handler
@@ -813,7 +814,7 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let cert = handler
@@ -896,7 +897,7 @@ pub fn create_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Build the request using Layer 1's TypedBuilder
                 let request = match (input.protocol.as_str(), input.data_persistence.as_ref()) {
@@ -1000,7 +1001,7 @@ pub fn update_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Build the update request
                 let mut request = DatabaseUpdateRequest::builder().build();
@@ -1080,7 +1081,7 @@ pub fn delete_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Use Layer 2 workflow
                 delete_database_and_wait(
@@ -1146,7 +1147,7 @@ pub fn backup_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Use Layer 2 workflow
                 backup_database_and_wait(
@@ -1220,7 +1221,7 @@ pub fn import_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Build the import request
                 let request = DatabaseImportRequest::builder()
@@ -1288,7 +1289,7 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Use Layer 2 workflow
                 delete_subscription_and_wait(
@@ -1353,7 +1354,7 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Use Layer 2 workflow
                 flush_database_and_wait(
@@ -1446,7 +1447,7 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
                 let client = state
                     .cloud_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Cloud client: {}", e)))?;
+                    .map_err(|e| super::credential_error("cloud", e))?;
 
                 // Build the subscription request
                 let request = SubscriptionCreateRequest::builder()
