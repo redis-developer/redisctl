@@ -111,6 +111,7 @@ nav:
   - Common Features:
       - common/index.md
       - Profiles: common/profiles.md
+      - Troubleshooting: common/troubleshooting.md
       - Output Formats: common/output-formats.md
       - JMESPath Queries: common/jmespath.md
       - Async Operations: common/async-operations.md

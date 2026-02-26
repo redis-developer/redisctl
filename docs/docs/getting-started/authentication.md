@@ -1,6 +1,6 @@
 # Authentication
 
-Configure credentials for Redis Cloud and Redis Enterprise.
+Configure credentials for Redis Cloud, Redis Enterprise, and direct database connections.
 
 ## Overview
 
@@ -9,6 +9,15 @@ redisctl supports three credential sources, in order of precedence:
 1. **Command-line flags** - Highest priority
 2. **Environment variables** - Good for CI/CD
 3. **Profiles** - Best for daily use
+
+## Credential Method Comparison
+
+| Method | Security | Persistence | Best for |
+|--------|----------|-------------|----------|
+| Config file (plaintext) | Low | Persistent | Local dev |
+| OS keyring | High | Persistent | Production workstations |
+| Environment variables | Medium | Session | CI/CD, containers |
+| Env var references in config | Medium | Persistent | CI/CD with profiles |
 
 ## Environment Variables
 
@@ -45,19 +54,35 @@ redisctl enterprise cluster get
 
 Profiles store credentials for multiple environments. Much better than juggling environment variables.
 
+### Interactive Setup
+
+The fastest way to get started:
+
+```bash
+redisctl profile init
+```
+
+The wizard guides you through choosing a profile name, deployment type, and entering credentials.
+
 ### Create a Profile
 
 ```bash
 # Redis Cloud profile
-redisctl profile set prod-cloud \
-  --cloud-api-key "$API_KEY" \
-  --cloud-secret-key "$SECRET_KEY"
+redisctl profile set prod-cloud --type cloud \
+  --api-key "$API_KEY" \
+  --api-secret "$SECRET_KEY"
 
 # Redis Enterprise profile
-redisctl profile set prod-enterprise \
-  --enterprise-url "https://cluster.example.com:9443" \
-  --enterprise-user "admin@cluster.local" \
-  --enterprise-password "$PASSWORD"
+redisctl profile set prod-enterprise --type enterprise \
+  --url "https://cluster.example.com:9443" \
+  --username "admin@cluster.local" \
+  --password "$PASSWORD"
+
+# Database profile
+redisctl profile set my-cache --type database \
+  --host "redis-12345.cloud.redislabs.com" \
+  --port 12345 \
+  --password "$PASSWORD"
 ```
 
 ### Use a Profile
@@ -66,8 +91,12 @@ redisctl profile set prod-enterprise \
 # Specify profile per command
 redisctl --profile prod-cloud cloud subscription list
 
-# Or set a default
-redisctl profile set-default prod-cloud
+# Or set a default for each profile type
+redisctl profile default-cloud prod-cloud
+redisctl profile default-enterprise prod-enterprise
+redisctl profile default-database my-cache
+
+# Now commands use the appropriate default
 redisctl cloud subscription list  # Uses prod-cloud
 ```
 
@@ -87,13 +116,9 @@ redisctl profile list
 Store credentials in your operating system's keychain:
 
 ```bash
-# Requires secure-storage feature
-cargo install redisctl --features secure-storage
-
-# Store in keyring
-redisctl profile set prod \
-  --cloud-api-key "$KEY" \
-  --cloud-secret-key "$SECRET" \
+redisctl profile set prod --type cloud \
+  --api-key "$KEY" \
+  --api-secret "$SECRET" \
   --use-keyring
 ```
 
@@ -102,9 +127,9 @@ redisctl profile set prod \
 Reference environment variables instead of storing values:
 
 ```bash
-redisctl profile set prod \
-  --cloud-api-key '${REDIS_CLOUD_API_KEY}' \
-  --cloud-secret-key '${REDIS_CLOUD_SECRET_KEY}'
+redisctl profile set prod --type cloud \
+  --api-key '${REDIS_CLOUD_API_KEY}' \
+  --api-secret '${REDIS_CLOUD_SECRET_KEY}'
 ```
 
 The variables are resolved at runtime.
@@ -121,19 +146,23 @@ Profiles are stored in:
 Example:
 
 ```toml
-default_profile = "prod"
+default_cloud = "prod-cloud"
+default_enterprise = "prod-enterprise"
 
-[profiles.prod]
-cloud_api_key = "your-api-key"
-cloud_secret_key = "your-secret-key"
+[profiles.prod-cloud]
+deployment_type = "cloud"
+api_key = "your-api-key"
+api_secret = "your-secret-key"
 
-[profiles.dev]
-enterprise_url = "https://dev-cluster:9443"
-enterprise_user = "admin@cluster.local"
-enterprise_password = "dev-password"
+[profiles.prod-enterprise]
+deployment_type = "enterprise"
+url = "https://cluster.example.com:9443"
+username = "admin@cluster.local"
+password = "${PROD_PASSWORD}"
 ```
 
 ## Next Steps
 
+- [Profiles](../common/profiles.md) - Full profile management guide
 - [Output Formats](../common/output-formats.md) - JSON, YAML, and table output
 - [JMESPath Queries](../common/jmespath.md) - Filter and transform output

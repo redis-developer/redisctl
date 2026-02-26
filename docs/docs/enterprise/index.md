@@ -76,15 +76,15 @@ Databases run across the cluster. Each database has:
 === "Profile"
 
     ```bash
-    redisctl profile set enterprise \
-      --enterprise-url "https://cluster.example.com:9443" \
-      --enterprise-user "admin@cluster.local" \
-      --enterprise-password "your-password" \
-      --enterprise-insecure
+    redisctl profile set enterprise --type enterprise \
+      --url "https://cluster.example.com:9443" \
+      --username "admin@cluster.local" \
+      --password "your-password" \
+      --insecure
     ```
 
 !!! warning "Self-Signed Certificates"
-    Most Enterprise clusters use self-signed certificates. Set `REDIS_ENTERPRISE_INSECURE=true` or use `--enterprise-insecure` in profiles.
+    Most Enterprise clusters use self-signed certificates. Set `REDIS_ENTERPRISE_INSECURE=true` or use `--insecure` in profiles.
 
 ## Quick Examples
 

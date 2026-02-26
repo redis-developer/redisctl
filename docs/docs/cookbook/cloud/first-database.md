@@ -21,9 +21,9 @@ export REDIS_CLOUD_SECRET_KEY="your-secret-key"
 Or save to a profile for repeated use:
 
 ```bash
-redisctl profile set mycloud \
-  --cloud-api-key "$REDIS_CLOUD_API_KEY" \
-  --cloud-secret-key "$REDIS_CLOUD_SECRET_KEY"
+redisctl profile set mycloud --type cloud \
+  --api-key "$REDIS_CLOUD_API_KEY" \
+  --api-secret "$REDIS_CLOUD_SECRET_KEY"
 ```
 
 ## Step 2: Find Your Subscription

@@ -17,13 +17,9 @@ export REDIS_CLOUD_SECRET_KEY="your-secret"
 ### 2. OS Keyring (Recommended for Workstations)
 
 ```bash
-# Requires secure-storage feature
-cargo install redisctl --features secure-storage
-
-# Store in keyring
-redisctl profile set prod \
-  --cloud-api-key "$KEY" \
-  --cloud-secret-key "$SECRET" \
+redisctl profile set prod --type cloud \
+  --api-key "$KEY" \
+  --api-secret "$SECRET" \
   --use-keyring
 ```
 
@@ -38,15 +34,16 @@ Credentials are stored in:
 ### 3. Environment Variable References
 
 ```bash
-redisctl profile set prod \
-  --cloud-api-key '${REDIS_CLOUD_API_KEY}' \
-  --cloud-secret-key '${REDIS_CLOUD_SECRET_KEY}'
+redisctl profile set prod --type cloud \
+  --api-key '${REDIS_CLOUD_API_KEY}' \
+  --api-secret '${REDIS_CLOUD_SECRET_KEY}'
 ```
 
 Config file stores the reference, not the value:
 ```toml
 [profiles.prod]
-cloud_api_key = "${REDIS_CLOUD_API_KEY}"
+deployment_type = "cloud"
+api_key = "${REDIS_CLOUD_API_KEY}"
 ```
 
 **Pros:** Credentials not in config file, flexible
@@ -55,8 +52,9 @@ cloud_api_key = "${REDIS_CLOUD_API_KEY}"
 ### 4. Plaintext (Not Recommended)
 
 ```bash
-redisctl profile set dev \
-  --cloud-api-key "actual-key"
+redisctl profile set dev --type cloud \
+  --api-key "actual-key" \
+  --api-secret "actual-secret"
 ```
 
 **Pros:** Simple
@@ -71,7 +69,9 @@ redisctl profile set dev \
 
 ```bash
 # Use environment variables or plaintext profiles
-redisctl profile set dev --cloud-api-key "dev-key"
+redisctl profile set dev --type cloud \
+  --api-key "dev-key" \
+  --api-secret "dev-secret"
 ```
 
 ### CI/CD
@@ -90,9 +90,9 @@ steps:
 
 ```bash
 # Use OS keyring
-redisctl profile set prod \
-  --cloud-api-key "$KEY" \
-  --cloud-secret-key "$SECRET" \
+redisctl profile set prod --type cloud \
+  --api-key "$KEY" \
+  --api-secret "$SECRET" \
   --use-keyring
 ```
 
@@ -118,6 +118,9 @@ redisctl profile list
 
 # Show profile details
 redisctl profile show prod
+
+# Validate all profiles
+redisctl profile validate
 ```
 
 ### Config File Location
@@ -131,13 +134,20 @@ cat ~/.config/redisctl/config.toml
 
 ### Kubernetes Deployments
 
-Redis Enterprise clusters deployed on Kubernetes typically use self-signed certificates. Instead of disabling TLS verification with `REDIS_ENTERPRISE_INSECURE=true`, you can provide the cluster's CA certificate for secure connections:
+Redis Enterprise clusters deployed on Kubernetes typically use self-signed certificates. Instead of disabling TLS verification with `--insecure`, you can provide the cluster's CA certificate for secure connections:
 
 ```bash
 # Extract CA cert from Kubernetes secret
 kubectl get secret rec-proxy-cert -o jsonpath='{.data.ca\.crt}' | base64 -d > ca.crt
 
-# Use the CA cert for verification
+# Use the CA cert with a profile
+redisctl profile set k8s-cluster --type enterprise \
+  --url "https://rec-api.redis.svc:9443" \
+  --username "admin@cluster.local" \
+  --password "$PASSWORD" \
+  --ca-cert "./ca.crt"
+
+# Or use environment variables
 export REDIS_ENTERPRISE_CA_CERT="./ca.crt"
 export REDIS_ENTERPRISE_URL="https://rec-api.redis.svc:9443"
 export REDIS_ENTERPRISE_USER="admin@cluster.local"
@@ -150,18 +160,18 @@ redisctl enterprise cluster get
 
 | Option | Use Case |
 |--------|----------|
-| `REDIS_ENTERPRISE_CA_CERT` | Kubernetes, self-signed certs where you have the CA |
-| `REDIS_ENTERPRISE_INSECURE=true` | Local development, testing only |
+| `--ca-cert` / `REDIS_ENTERPRISE_CA_CERT` | Kubernetes, self-signed certs where you have the CA |
+| `--insecure` / `REDIS_ENTERPRISE_INSECURE=true` | Local development, testing only |
 | Neither | Production clusters with trusted certificates |
 
 !!! warning "Avoid Insecure Mode in Production"
-    Using `REDIS_ENTERPRISE_INSECURE=true` disables all certificate verification and should only be used for local development. For Kubernetes deployments, always use `REDIS_ENTERPRISE_CA_CERT` with the cluster's CA certificate.
+    Using `--insecure` disables all certificate verification and should only be used for local development. For Kubernetes deployments, always use `--ca-cert` with the cluster's CA certificate.
 
 ## Revoking Credentials
 
 ### Redis Cloud
 
-1. Go to [Redis Cloud Console](https://app.redislabs.com/)
+1. Go to [Redis Cloud Console](https://cloud.redis.io)
 2. Navigate to Access Management > API Keys
 3. Delete the compromised key
 4. Generate a new key
@@ -173,5 +183,6 @@ redisctl enterprise cluster get
 2. Update all profiles using that password
 
 ```bash
-redisctl profile set prod --enterprise-password "$NEW_PASSWORD"
+redisctl profile set prod --type enterprise \
+  --password "$NEW_PASSWORD"
 ```
