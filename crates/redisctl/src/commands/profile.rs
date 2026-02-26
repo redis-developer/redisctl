@@ -24,6 +24,7 @@ pub async fn handle_profile_command(
     match profile_cmd {
         List => handle_list(conn_mgr, output_format).await,
         Path => handle_path(output_format).await,
+        Current { r#type } => handle_current(conn_mgr, r#type).await,
         Show { name } => handle_show(conn_mgr, name, output_format).await,
         Set {
             name,
@@ -288,6 +289,23 @@ async fn handle_path(output_format: OutputFormat) -> Result<(), RedisCtlError> {
             println!("{}", config_path.display());
         }
     }
+    Ok(())
+}
+
+async fn handle_current(
+    conn_mgr: &ConnectionManager,
+    deployment_type: &redisctl_core::DeploymentType,
+) -> Result<(), RedisCtlError> {
+    let resolved = match deployment_type {
+        redisctl_core::DeploymentType::Cloud => conn_mgr.config.resolve_cloud_profile(None)?,
+        redisctl_core::DeploymentType::Enterprise => {
+            conn_mgr.config.resolve_enterprise_profile(None)?
+        }
+        redisctl_core::DeploymentType::Database => {
+            conn_mgr.config.resolve_database_profile(None)?
+        }
+    };
+    println!("{}", resolved);
     Ok(())
 }
 

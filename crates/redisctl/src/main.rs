@@ -539,6 +539,7 @@ fn format_command(command: &Commands) -> String {
             match cmd {
                 List => "profile list".to_string(),
                 Path => "profile path".to_string(),
+                Current { r#type } => format!("profile current --type {}", r#type),
                 Show { name } => format!("profile show {}", name),
                 Set { name, .. } => format!("profile set {} [credentials redacted]", name),
                 Remove { name } => format!("profile remove {}", name),
