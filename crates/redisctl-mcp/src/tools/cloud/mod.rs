@@ -1,11 +1,14 @@
 //! Redis Cloud API tools
 
 mod account;
+mod fixed;
 mod networking;
 mod subscriptions;
 
 #[allow(unused_imports)]
 pub use account::*;
+#[allow(unused_imports)]
+pub use fixed::*;
 #[allow(unused_imports)]
 pub use networking::*;
 #[allow(unused_imports)]
@@ -22,6 +25,7 @@ static INSTRUCTIONS: LazyLock<String> = LazyLock::new(|| {
         subscriptions::INSTRUCTIONS,
         account::INSTRUCTIONS,
         networking::INSTRUCTIONS,
+        fixed::INSTRUCTIONS,
     ]
     .concat()
 });
@@ -36,5 +40,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
         .merge(subscriptions::router(state.clone()))
         .merge(account::router(state.clone()))
-        .merge(networking::router(state))
+        .merge(networking::router(state.clone()))
+        .merge(fixed::router(state))
 }
