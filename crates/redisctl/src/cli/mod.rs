@@ -322,6 +322,28 @@ pub enum ProfileCommands {
     /// Show the path to the configuration file
     Path,
 
+    /// Print the active profile name (for shell prompt integration)
+    #[command(visible_alias = "active")]
+    #[command(
+        after_help = "Prints the profile that would be used for the given deployment type.
+Useful for embedding in your shell prompt (PS1).
+
+EXAMPLES:
+    # Show active cloud profile
+    redisctl profile current --type cloud
+
+    # Show active enterprise profile
+    redisctl profile current --type enterprise
+
+    # Use in shell prompt (bash)
+    PS1='[\\$(redisctl profile current --type cloud 2>/dev/null)]\\$ '"
+    )]
+    Current {
+        /// Deployment type to show the active profile for
+        #[arg(long, value_enum)]
+        r#type: DeploymentType,
+    },
+
     /// Show details of a specific profile
     #[command(visible_alias = "sh", visible_alias = "get")]
     Show {
