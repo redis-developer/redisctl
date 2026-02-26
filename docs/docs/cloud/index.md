@@ -70,13 +70,13 @@ Most operations are async and return task IDs. Use `--wait` to block until compl
 === "Profile"
 
     ```bash
-    redisctl profile set cloud \
-      --cloud-api-key "your-key" \
-      --cloud-secret-key "your-secret"
+    redisctl profile set cloud --type cloud \
+      --api-key "your-key" \
+      --api-secret "your-secret"
     ```
 
 !!! tip "Getting API Keys"
-    Get your API keys from [app.redislabs.com](https://app.redislabs.com) under **Access Management > API Keys**.
+    Get your API keys from [cloud.redis.io](https://cloud.redis.io) under **Access Management > API Keys**.
 
 ## Quick Examples
 

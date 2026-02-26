@@ -13,62 +13,103 @@ Profile and settings file format reference.
 ## File Format
 
 ```toml
-# Default profile to use when --profile is not specified
-default_profile = "prod"
+# Default profiles for each deployment type
+default_cloud = "cloud-prod"
+default_enterprise = "enterprise-prod"
+default_database = "my-cache"
 
 # Redis Cloud profile
 [profiles.cloud-prod]
-cloud_api_key = "your-api-key"
-cloud_secret_key = "your-secret-key"
+deployment_type = "cloud"
+api_key = "your-api-key"
+api_secret = "your-secret-key"
+tags = ["prod", "us-east"]
 
 # Redis Enterprise profile
 [profiles.enterprise-prod]
-enterprise_url = "https://cluster.example.com:9443"
-enterprise_user = "admin@cluster.local"
-enterprise_password = "your-password"
-enterprise_insecure = true
+deployment_type = "enterprise"
+url = "https://cluster.example.com:9443"
+username = "admin@cluster.local"
+password = "your-password"
+insecure = true
+tags = ["prod"]
 
-# Combined profile (both Cloud and Enterprise)
-[profiles.all-prod]
-cloud_api_key = "your-api-key"
-cloud_secret_key = "your-secret-key"
-enterprise_url = "https://cluster.example.com:9443"
-enterprise_user = "admin@cluster.local"
-enterprise_password = "your-password"
+# Database profile
+[profiles.my-cache]
+deployment_type = "database"
+host = "redis-12345.cloud.redislabs.com"
+port = 12345
+password = "your-password"
+tls = true
+username = "default"
 
 # Profile with environment variable references
 [profiles.ci]
-cloud_api_key = "${REDIS_CLOUD_API_KEY}"
-cloud_secret_key = "${REDIS_CLOUD_SECRET_KEY}"
+deployment_type = "cloud"
+api_key = "${REDIS_CLOUD_API_KEY}"
+api_secret = "${REDIS_CLOUD_SECRET_KEY}"
 
-# Profile with keyring storage (requires secure-storage feature)
+# Profile with keyring storage
 [profiles.secure]
-cloud_api_key = "keyring:prod-api-key"
-cloud_secret_key = "keyring:prod-secret-key"
+deployment_type = "cloud"
+api_key = "keyring:prod-api-key"
+api_secret = "keyring:prod-secret-key"
 
 # Files.com API key for support package uploads
 [global]
 files_api_key = "your-files-api-key"
 ```
 
+## Top-Level Fields
+
+| Field | Description |
+|-------|-------------|
+| `default_cloud` | Default profile for Cloud commands |
+| `default_enterprise` | Default profile for Enterprise commands |
+| `default_database` | Default profile for Database commands |
+
 ## Profile Fields
+
+Every profile requires a `deployment_type` field (`cloud`, `enterprise`, or `database`).
+
+### Common Fields (All Types)
+
+| Field | Description |
+|-------|-------------|
+| `deployment_type` | Profile type: `"cloud"`, `"enterprise"`, or `"database"` (required) |
+| `tags` | Array of strings for organizing profiles (optional) |
 
 ### Redis Cloud
 
 | Field | Description |
 |-------|-------------|
-| `cloud_api_key` | API account key |
-| `cloud_secret_key` | API secret key |
-| `cloud_api_url` | Custom API URL (optional) |
+| `deployment_type` | Must be `"cloud"` |
+| `api_key` | API account key |
+| `api_secret` | API secret key |
+| `api_url` | Custom API URL (optional) |
 
 ### Redis Enterprise
 
 | Field | Description |
 |-------|-------------|
-| `enterprise_url` | Cluster API URL (e.g., `https://cluster:9443`) |
-| `enterprise_user` | Username |
-| `enterprise_password` | Password |
-| `enterprise_insecure` | Skip TLS verification (`true`/`false`) |
+| `deployment_type` | Must be `"enterprise"` |
+| `url` | Cluster API URL (e.g., `https://cluster:9443`) |
+| `username` | Admin username |
+| `password` | Admin password |
+| `insecure` | Skip TLS verification (`true`/`false`) |
+| `ca_cert` | Path to custom CA certificate |
+
+### Database
+
+| Field | Description |
+|-------|-------------|
+| `deployment_type` | Must be `"database"` |
+| `host` | Redis server hostname |
+| `port` | Redis server port |
+| `password` | Redis password (optional) |
+| `username` | Redis ACL username (optional, default: `default`) |
+| `tls` | Enable TLS (`true`/`false`, default: `true`) |
+| `db` | Redis database number (optional, default: `0`) |
 
 ### Global Settings
 
@@ -82,7 +123,9 @@ files_api_key = "your-files-api-key"
 
 ```toml
 [profiles.dev]
-cloud_api_key = "actual-key-value"
+deployment_type = "cloud"
+api_key = "actual-key-value"
+api_secret = "actual-secret-value"
 ```
 
 !!! warning
@@ -92,8 +135,9 @@ cloud_api_key = "actual-key-value"
 
 ```toml
 [profiles.ci]
-cloud_api_key = "${REDIS_CLOUD_API_KEY}"
-cloud_secret_key = "${REDIS_CLOUD_SECRET_KEY}"
+deployment_type = "cloud"
+api_key = "${REDIS_CLOUD_API_KEY}"
+api_secret = "${REDIS_CLOUD_SECRET_KEY}"
 ```
 
 Variables are resolved at runtime.
@@ -102,11 +146,12 @@ Variables are resolved at runtime.
 
 ```toml
 [profiles.prod]
-cloud_api_key = "keyring:prod-api-key"
-cloud_secret_key = "keyring:prod-secret-key"
+deployment_type = "cloud"
+api_key = "keyring:prod-api-key"
+api_secret = "keyring:prod-secret-key"
 ```
 
-Requires `secure-storage` feature. Credentials stored in:
+Credentials stored in:
 - macOS: Keychain
 - Windows: Credential Manager
 - Linux: Secret Service
@@ -116,9 +161,9 @@ Requires `secure-storage` feature. Credentials stored in:
 ### Create Profile
 
 ```bash
-redisctl profile set myprofile \
-  --cloud-api-key "$KEY" \
-  --cloud-secret-key "$SECRET"
+redisctl profile set myprofile --type cloud \
+  --api-key "$KEY" \
+  --api-secret "$SECRET"
 ```
 
 ### List Profiles
@@ -130,13 +175,15 @@ redisctl profile list
 ### Set Default
 
 ```bash
-redisctl profile set-default myprofile
+redisctl profile default-cloud myprofile
+redisctl profile default-enterprise myprofile
+redisctl profile default-database myprofile
 ```
 
 ### Delete Profile
 
 ```bash
-redisctl profile delete myprofile
+redisctl profile remove myprofile
 ```
 
 ## Example Configurations
@@ -144,36 +191,53 @@ redisctl profile delete myprofile
 ### Multi-Environment Setup
 
 ```toml
-default_profile = "dev"
+default_enterprise = "dev"
 
 [profiles.dev]
-enterprise_url = "https://dev-cluster:9443"
-enterprise_user = "admin@dev.local"
-enterprise_password = "${DEV_PASSWORD}"
-enterprise_insecure = true
+deployment_type = "enterprise"
+url = "https://dev-cluster:9443"
+username = "admin@dev.local"
+password = "${DEV_PASSWORD}"
+insecure = true
+tags = ["dev"]
 
 [profiles.staging]
-enterprise_url = "https://staging-cluster:9443"
-enterprise_user = "admin@staging.local"
-enterprise_password = "${STAGING_PASSWORD}"
+deployment_type = "enterprise"
+url = "https://staging-cluster:9443"
+username = "admin@staging.local"
+password = "${STAGING_PASSWORD}"
+tags = ["staging"]
 
 [profiles.prod]
-enterprise_url = "https://prod-cluster:9443"
-enterprise_user = "admin@prod.local"
-enterprise_password = "keyring:prod-password"
+deployment_type = "enterprise"
+url = "https://prod-cluster:9443"
+username = "admin@prod.local"
+password = "keyring:prod-password"
+tags = ["prod"]
 ```
 
-### Cloud + Enterprise Combined
+### Mixed Deployment Types
 
 ```toml
-[profiles.full]
-# Cloud credentials
-cloud_api_key = "${REDIS_CLOUD_API_KEY}"
-cloud_secret_key = "${REDIS_CLOUD_SECRET_KEY}"
+default_cloud = "cloud-prod"
+default_enterprise = "ent-prod"
+default_database = "cache-prod"
 
-# Enterprise credentials
-enterprise_url = "https://cluster:9443"
-enterprise_user = "admin@cluster.local"
-enterprise_password = "${ENTERPRISE_PASSWORD}"
-enterprise_insecure = true
+[profiles.cloud-prod]
+deployment_type = "cloud"
+api_key = "${REDIS_CLOUD_API_KEY}"
+api_secret = "${REDIS_CLOUD_SECRET_KEY}"
+
+[profiles.ent-prod]
+deployment_type = "enterprise"
+url = "https://cluster:9443"
+username = "admin@cluster.local"
+password = "${ENTERPRISE_PASSWORD}"
+
+[profiles.cache-prod]
+deployment_type = "database"
+host = "redis-12345.cloud.redislabs.com"
+port = 12345
+password = "keyring:cache-password"
+tls = true
 ```

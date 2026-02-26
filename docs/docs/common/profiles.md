@@ -21,9 +21,28 @@ redisctl supports three profile types:
 | **Enterprise** | Redis Enterprise REST API access (cluster management) |
 | **Database** | Direct Redis database connections |
 
+## Interactive Setup
+
+The quickest way to create a profile is with the interactive wizard:
+
+```bash
+redisctl profile init
+```
+
+The wizard walks you through:
+
+1. Choosing a profile name
+2. Selecting the deployment type (Cloud, Enterprise, or Database)
+3. Entering credentials with guided prompts
+4. Optionally storing credentials in the OS keyring
+
+This is the recommended approach for first-time setup. You can also use `redisctl profile setup` (alias).
+
 ## Creating Profiles
 
 ### Redis Cloud
+
+You'll need an API key and secret from the [Redis Cloud console](https://cloud.redis.io) under **Access Management > API Keys**.
 
 ```bash
 redisctl profile set my-cloud --type cloud \
@@ -32,6 +51,8 @@ redisctl profile set my-cloud --type cloud \
 ```
 
 ### Redis Enterprise
+
+You'll need the cluster management URL (`https://<host>:9443`) and admin credentials from your Redis Enterprise admin console.
 
 ```bash
 redisctl profile set my-enterprise --type enterprise \
@@ -161,6 +182,33 @@ export REDIS_CLOUD_API_KEY="override-key"
 redisctl --profile prod cloud subscription list  # Uses override-key
 ```
 
+## Tags
+
+Organize profiles with tags when managing many deployments:
+
+```bash
+# Add tags when creating a profile
+redisctl profile set prod-cloud --type cloud \
+  --api-key "$KEY" \
+  --api-secret "$SECRET" \
+  --tag prod --tag us-east
+
+# Add tags to an existing profile
+redisctl profile set prod-cloud --tag prod --tag us-east
+```
+
+Tags are repeatable -- pass `--tag` multiple times for multiple tags. When updating a profile, existing tags are preserved unless you provide new ones.
+
+### Filter by Tag
+
+```bash
+# Show only profiles tagged "prod"
+redisctl profile list --tag prod
+
+# Show profiles tagged "us-east" or "us-west" (matches any)
+redisctl profile list --tag us-east --tag us-west
+```
+
 ## Managing Profiles
 
 ### List All Profiles
@@ -172,11 +220,11 @@ redisctl profile list
 ```
 Profiles:
   Cloud:
-    * prod-cloud (default)
+    * prod-cloud (default) [prod, us-east]
       dev-cloud
   Enterprise:
-    * prod-cluster (default)
-      staging-cluster
+    * prod-cluster (default) [prod]
+      staging-cluster [staging]
   Database:
     * my-cache (default)
       local-redis
@@ -197,8 +245,36 @@ redisctl profile remove dev-cloud
 ### Validate Configuration
 
 ```bash
+# Check profile config for errors
 redisctl profile validate
+
+# Also test actual API/database connectivity
+redisctl profile validate --connect
 ```
+
+## Shell Prompt Integration
+
+Display the active profile name in your shell prompt:
+
+```bash
+redisctl profile current --type cloud
+```
+
+Example shell integration (bash/zsh):
+
+```bash
+# Add to .bashrc or .zshrc
+redis_profile() {
+  local profile
+  profile=$(redisctl profile current --type cloud 2>/dev/null)
+  if [ -n "$profile" ]; then
+    echo " [redis:${profile}]"
+  fi
+}
+PS1='$(redis_profile)\$ '
+```
+
+The `--type` flag is required and accepts `cloud`, `enterprise`, or `database`. You can also use the alias `redisctl profile active`.
 
 ## Secure Storage
 
@@ -257,12 +333,14 @@ default_database = "my-cache"
 deployment_type = "cloud"
 api_key = "keyring:prod-api-key"
 api_secret = "keyring:prod-api-secret"
+tags = ["prod", "us-east"]
 
 [profiles.prod-cluster]
 deployment_type = "enterprise"
 url = "https://prod-cluster:9443"
 username = "admin@cluster.local"
 password = "${PROD_PASSWORD}"
+tags = ["prod"]
 
 [profiles.dev-cluster]
 deployment_type = "enterprise"
@@ -270,6 +348,7 @@ url = "https://dev-cluster:9443"
 username = "admin@cluster.local"
 password = "${DEV_PASSWORD}"
 insecure = true
+tags = ["dev"]
 
 [profiles.my-cache]
 deployment_type = "database"
