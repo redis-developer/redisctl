@@ -85,6 +85,7 @@ pub enum RedisCtlError {
         name: String,
         actual_type: String,
         expected_type: String,
+        available_profiles: Vec<String>,
     },
 
     #[error("No profile configured. Use 'redisctl profile set' to configure a profile.")]
@@ -160,11 +161,31 @@ impl RedisCtlError {
                 "List available resources to find the correct ID".to_string(),
                 "Check that you're using the correct profile".to_string(),
             ],
-            RedisCtlError::ProfileTypeMismatch { expected_type, .. } => vec![
-                format!("Use a {} profile for this command", expected_type),
-                format!("List profiles: redisctl profile list"),
-                format!("Create a {} profile: redisctl profile set <name> {}", expected_type, expected_type.to_lowercase()),
-            ],
+            RedisCtlError::ProfileTypeMismatch {
+                expected_type,
+                available_profiles,
+                ..
+            } => {
+                let mut suggestions = Vec::new();
+                if available_profiles.is_empty() {
+                    suggestions.push(format!(
+                        "No {} profiles found. Create one with: redisctl profile set <name> --type {}",
+                        expected_type, expected_type
+                    ));
+                } else {
+                    suggestions.push(format!(
+                        "Available {} profiles: {}",
+                        expected_type,
+                        available_profiles.join(", ")
+                    ));
+                    suggestions.push(format!(
+                        "Use one with: redisctl --profile {} <command>",
+                        available_profiles[0]
+                    ));
+                }
+                suggestions.push("List all profiles: redisctl profile list".to_string());
+                suggestions
+            }
             RedisCtlError::UnsupportedDeploymentType { .. } => vec![
                 "Check the command documentation: redisctl <command> --help".to_string(),
                 "Use the appropriate command for your deployment type".to_string(),

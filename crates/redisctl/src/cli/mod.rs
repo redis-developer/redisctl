@@ -33,12 +33,32 @@ Or be explicit:
     redisctl cloud database list
     redisctl enterprise database list
 
+PROFILE TYPES:
+    redisctl uses profiles to store connection credentials. Each profile has a
+    type that determines which commands it can be used with:
+
+    cloud       Redis Cloud API credentials (api-key + api-secret).
+                Unlocks: cloud, subscription, database list, task, acl, ...
+
+    enterprise  Redis Enterprise cluster credentials (url + username).
+                Unlocks: enterprise, cluster, node, database list, shard, ...
+
+    database    Direct Redis connection (host + port).
+                Unlocks: db open (launches redis-cli with saved credentials)
+
+    Create a profile with:  redisctl profile set <name> --type <type> ...
+    See all profiles:       redisctl profile list
+    Full setup help:        redisctl profile set --help
+
 EXAMPLES:
     # Set up a Cloud profile
     redisctl profile set mycloud --type cloud --api-key KEY --api-secret SECRET
 
     # Set up an Enterprise profile
     redisctl profile set myenterprise --type enterprise --url https://cluster:9443 --username admin
+
+    # Set up a Database profile (direct Redis connection)
+    redisctl profile set mycache --type database --host localhost --port 6379
 
     # Get JSON output for scripting
     redisctl subscription list -o json
@@ -186,6 +206,11 @@ COMMAND GROUPS:
   Billing:    account, payment-method, cost-report
   Networking: connectivity, provider-account
   Operations: task, workflow")]
+    #[command(after_help = "\
+PROFILE REQUIREMENT:
+  These commands require a 'cloud' profile. Set one up with:
+    redisctl profile set <name> --type cloud --api-key <KEY> --api-secret <SECRET>
+  List existing profiles: redisctl profile list")]
     Cloud(CloudCommands),
 
     /// Enterprise-specific operations
@@ -199,6 +224,11 @@ COMMAND GROUPS:
   Advanced:      crdb, crdb-task, bdb-group, migration, bootstrap, job-scheduler
   Troubleshoot:  support-package, ocsp, usage-report, local
   Other:         action, jsonschema, workflow")]
+    #[command(after_help = "\
+PROFILE REQUIREMENT:
+  These commands require an 'enterprise' profile. Set one up with:
+    redisctl profile set <name> --type enterprise --url <URL> --username <USER>
+  List existing profiles: redisctl profile list")]
     Enterprise(EnterpriseCommands),
 
     /// Files.com API key management (for support package uploads)
@@ -207,6 +237,11 @@ COMMAND GROUPS:
 
     /// Database operations (direct Redis connections)
     #[command(subcommand)]
+    #[command(after_help = "\
+PROFILE REQUIREMENT:
+  These commands require a 'database' profile. Set one up with:
+    redisctl profile set <name> --type database --host <HOST> --port <PORT>
+  List existing profiles: redisctl profile list")]
     Db(DbCommands),
 
     /// Version information
@@ -296,7 +331,15 @@ pub enum ProfileCommands {
 
     /// Set or create a profile
     #[command(visible_alias = "add", visible_alias = "create")]
-    #[command(after_help = "EXAMPLES:
+    #[command(after_help = "CHOOSING A PROFILE TYPE:
+    cloud       -- You manage databases through the Redis Cloud console/API.
+                   Requires an API key and secret from cloud.redis.io.
+    enterprise  -- You run Redis Enterprise Software on your own infrastructure.
+                   Requires the cluster URL and admin credentials.
+    database    -- You want to connect directly to a Redis instance (any provider).
+                   Requires host, port, and optionally a password.
+
+EXAMPLES:
     # Create a Cloud profile
     redisctl profile set mycloud --type cloud \\
         --api-key A3qcymrvqpn9rrgdt40sv5f9yfxob26vx64hwddh8vminqnkgfq \\
