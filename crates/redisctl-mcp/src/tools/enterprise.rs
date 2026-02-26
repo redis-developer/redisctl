@@ -6,16 +6,18 @@ use std::time::Duration;
 use redis_enterprise::alerts::AlertHandler;
 use redis_enterprise::bdb::{CreateDatabaseRequest, DatabaseHandler};
 use redis_enterprise::cluster::ClusterHandler;
+use redis_enterprise::crdb::CrdbHandler;
 use redis_enterprise::debuginfo::DebugInfoHandler;
+use redis_enterprise::ldap_mappings::LdapMappingHandler;
 use redis_enterprise::license::{LicenseHandler, LicenseUpdateRequest};
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::modules::ModuleHandler;
 use redis_enterprise::nodes::NodeHandler;
-use redis_enterprise::redis_acls::RedisAclHandler;
-use redis_enterprise::roles::RolesHandler;
+use redis_enterprise::redis_acls::{CreateRedisAclRequest, RedisAclHandler};
+use redis_enterprise::roles::{CreateRoleRequest, RolesHandler};
 use redis_enterprise::shards::ShardHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
-use redis_enterprise::users::UserHandler;
+use redis_enterprise::users::{CreateUserRequest, UpdateUserRequest, UserHandler};
 use redisctl_core::enterprise::{
     backup_database_and_wait, flush_database_and_wait, import_database_and_wait,
 };
@@ -468,6 +470,201 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
                     .map_err(|e| ToolError::new(format!("Failed to get user: {}", e)))?;
 
                 CallToolResult::from_serialize(&user)
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// User Write Operations
+// ============================================================================
+
+/// Input for creating a user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateEnterpriseUserInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// User email address (used as login)
+    pub email: String,
+    /// User password
+    pub password: String,
+    /// Role name: "admin", "cluster_member", "cluster_viewer", "db_member", "db_viewer", or "none"
+    pub role: String,
+    /// Display name
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether the user receives email alerts
+    #[serde(default)]
+    pub email_alerts: Option<bool>,
+    /// Role UIDs to assign (for custom role-based access)
+    #[serde(default)]
+    pub role_uids: Option<Vec<u32>>,
+}
+
+/// Build the create_enterprise_user tool
+pub fn create_enterprise_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_enterprise_user")
+        .description(
+            "Create a new user in the Redis Enterprise cluster. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateEnterpriseUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateEnterpriseUserInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let request = CreateUserRequest {
+                    email: input.email,
+                    password: input.password,
+                    role: input.role,
+                    name: input.name,
+                    email_alerts: input.email_alerts,
+                    bdbs_email_alerts: None,
+                    role_uids: input.role_uids,
+                    auth_method: None,
+                };
+
+                let handler = UserHandler::new(client);
+                let user = handler
+                    .create(request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to create user: {}", e)))?;
+
+                CallToolResult::from_serialize(&user)
+            },
+        )
+        .build()
+}
+
+/// Input for updating a user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateEnterpriseUserInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// User UID to update
+    pub uid: u32,
+    /// New password
+    #[serde(default)]
+    pub password: Option<String>,
+    /// New role: "admin", "cluster_member", "cluster_viewer", "db_member", "db_viewer", or "none"
+    #[serde(default)]
+    pub role: Option<String>,
+    /// New email address
+    #[serde(default)]
+    pub email: Option<String>,
+    /// New display name
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Whether the user receives email alerts
+    #[serde(default)]
+    pub email_alerts: Option<bool>,
+    /// Role UIDs to assign (for custom role-based access)
+    #[serde(default)]
+    pub role_uids: Option<Vec<u32>>,
+}
+
+/// Build the update_enterprise_user tool
+pub fn update_enterprise_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_user")
+        .description(
+            "Update an existing user in the Redis Enterprise cluster. \
+             Only specified fields will be modified. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateEnterpriseUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateEnterpriseUserInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let request = UpdateUserRequest {
+                    password: input.password,
+                    role: input.role,
+                    email: input.email,
+                    name: input.name,
+                    email_alerts: input.email_alerts,
+                    bdbs_email_alerts: None,
+                    role_uids: input.role_uids,
+                    auth_method: None,
+                };
+
+                let handler = UserHandler::new(client);
+                let user = handler
+                    .update(input.uid, request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update user: {}", e)))?;
+
+                CallToolResult::from_serialize(&user)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting a user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteEnterpriseUserInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// User UID to delete
+    pub uid: u32,
+}
+
+/// Build the delete_enterprise_user tool
+pub fn delete_enterprise_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_enterprise_user")
+        .description(
+            "Delete a user from the Redis Enterprise cluster. \
+             WARNING: This permanently removes the user! Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteEnterpriseUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteEnterpriseUserInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = UserHandler::new(client);
+                handler
+                    .delete(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to delete user: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "User deleted successfully",
+                    "uid": input.uid
+                }))
             },
         )
         .build()
@@ -1619,6 +1816,178 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
 }
 
 // ============================================================================
+// Role Write Operations
+// ============================================================================
+
+/// Input for creating a role
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateEnterpriseRoleInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Role name
+    pub name: String,
+    /// Management permission level: "admin", "db_member", "db_viewer", "cluster_member", "cluster_viewer", or "none"
+    #[serde(default)]
+    pub management: Option<String>,
+    /// Data access permission level: "redis_acl" or "none"
+    #[serde(default)]
+    pub data_access: Option<String>,
+}
+
+/// Build the create_enterprise_role tool
+pub fn create_enterprise_role(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_enterprise_role")
+        .description(
+            "Create a new role in the Redis Enterprise cluster. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateEnterpriseRoleInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateEnterpriseRoleInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let request = CreateRoleRequest {
+                    name: input.name,
+                    management: input.management,
+                    data_access: input.data_access,
+                    bdb_roles: None,
+                    cluster_roles: None,
+                };
+
+                let handler = RolesHandler::new(client);
+                let role = handler
+                    .create(request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to create role: {}", e)))?;
+
+                CallToolResult::from_serialize(&role)
+            },
+        )
+        .build()
+}
+
+/// Input for updating a role
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateEnterpriseRoleInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Role UID to update
+    pub uid: u32,
+    /// Role name
+    pub name: String,
+    /// Management permission level: "admin", "db_member", "db_viewer", "cluster_member", "cluster_viewer", or "none"
+    #[serde(default)]
+    pub management: Option<String>,
+    /// Data access permission level: "redis_acl" or "none"
+    #[serde(default)]
+    pub data_access: Option<String>,
+}
+
+/// Build the update_enterprise_role tool
+pub fn update_enterprise_role(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_role")
+        .description(
+            "Update an existing role in the Redis Enterprise cluster. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateEnterpriseRoleInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateEnterpriseRoleInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let request = CreateRoleRequest {
+                    name: input.name,
+                    management: input.management,
+                    data_access: input.data_access,
+                    bdb_roles: None,
+                    cluster_roles: None,
+                };
+
+                let handler = RolesHandler::new(client);
+                let role = handler
+                    .update(input.uid, request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update role: {}", e)))?;
+
+                CallToolResult::from_serialize(&role)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting a role
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteEnterpriseRoleInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Role UID to delete
+    pub uid: u32,
+}
+
+/// Build the delete_enterprise_role tool
+pub fn delete_enterprise_role(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_enterprise_role")
+        .description(
+            "Delete a role from the Redis Enterprise cluster. \
+             WARNING: This permanently removes the role! Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteEnterpriseRoleInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteEnterpriseRoleInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = RolesHandler::new(client);
+                handler
+                    .delete(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to delete role: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Role deleted successfully",
+                    "uid": input.uid
+                }))
+            },
+        )
+        .build()
+}
+
+// ============================================================================
 // Redis ACL tools
 // ============================================================================
 
@@ -1693,6 +2062,173 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
                     .map_err(|e| ToolError::new(format!("Failed to get ACL: {}", e)))?;
 
                 CallToolResult::from_serialize(&acl)
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// ACL Write Operations
+// ============================================================================
+
+/// Input for creating a Redis ACL
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateEnterpriseAclInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// ACL name
+    pub name: String,
+    /// ACL rule string (e.g., "+@all ~*" or "+get +set ~cache:*")
+    pub acl: String,
+    /// Description of the ACL
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Build the create_enterprise_acl tool
+pub fn create_enterprise_acl(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_enterprise_acl")
+        .description(
+            "Create a new Redis ACL in the Redis Enterprise cluster. \
+             The ACL rule string follows Redis ACL syntax (e.g., \"+@all ~*\"). \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateEnterpriseAclInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateEnterpriseAclInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let request = CreateRedisAclRequest {
+                    name: input.name,
+                    acl: input.acl,
+                    description: input.description,
+                };
+
+                let handler = RedisAclHandler::new(client);
+                let acl = handler
+                    .create(request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to create ACL: {}", e)))?;
+
+                CallToolResult::from_serialize(&acl)
+            },
+        )
+        .build()
+}
+
+/// Input for updating a Redis ACL
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateEnterpriseAclInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// ACL UID to update
+    pub uid: u32,
+    /// ACL name
+    pub name: String,
+    /// ACL rule string (e.g., "+@all ~*" or "+get +set ~cache:*")
+    pub acl: String,
+    /// Description of the ACL
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Build the update_enterprise_acl tool
+pub fn update_enterprise_acl(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_acl")
+        .description(
+            "Update an existing Redis ACL in the Redis Enterprise cluster. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateEnterpriseAclInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateEnterpriseAclInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let request = CreateRedisAclRequest {
+                    name: input.name,
+                    acl: input.acl,
+                    description: input.description,
+                };
+
+                let handler = RedisAclHandler::new(client);
+                let acl = handler
+                    .update(input.uid, request)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to update ACL: {}", e)))?;
+
+                CallToolResult::from_serialize(&acl)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting a Redis ACL
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteEnterpriseAclInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// ACL UID to delete
+    pub uid: u32,
+}
+
+/// Build the delete_enterprise_acl tool
+pub fn delete_enterprise_acl(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_enterprise_acl")
+        .description(
+            "Delete a Redis ACL from the Redis Enterprise cluster. \
+             WARNING: This permanently removes the ACL! Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteEnterpriseAclInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteEnterpriseAclInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = RedisAclHandler::new(client);
+                handler
+                    .delete(input.uid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to delete ACL: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "ACL deleted successfully",
+                    "uid": input.uid
+                }))
             },
         )
         .build()
@@ -2030,6 +2566,184 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
 }
 
 // ============================================================================
+// Node Action Operations
+// ============================================================================
+
+/// Input for a node action (maintenance, rebalance, drain)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct NodeActionInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Node UID
+    pub uid: u32,
+}
+
+/// Build the enable_node_maintenance tool
+pub fn enable_node_maintenance(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("enable_enterprise_node_maintenance")
+        .description(
+            "Enable maintenance mode on a specific node in the Redis Enterprise cluster. \
+             Shards will be migrated off the node before maintenance begins. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = NodeHandler::new(client);
+                let result = handler
+                    .execute_action(input.uid, "maintenance_on")
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to enable node maintenance: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Node maintenance mode enabled",
+                    "node_uid": input.uid,
+                    "action_uid": result.action_uid,
+                    "description": result.description
+                }))
+            },
+        )
+        .build()
+}
+
+/// Build the disable_node_maintenance tool
+pub fn disable_node_maintenance(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("disable_enterprise_node_maintenance")
+        .description(
+            "Disable maintenance mode on a specific node in the Redis Enterprise cluster. \
+             The node will rejoin the cluster and accept shards again. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = NodeHandler::new(client);
+                let result = handler
+                    .execute_action(input.uid, "maintenance_off")
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to disable node maintenance: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Node maintenance mode disabled",
+                    "node_uid": input.uid,
+                    "action_uid": result.action_uid,
+                    "description": result.description
+                }))
+            },
+        )
+        .build()
+}
+
+/// Build the rebalance_node tool
+pub fn rebalance_node(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("rebalance_enterprise_node")
+        .description(
+            "Rebalance shards on a specific node in the Redis Enterprise cluster. \
+             Redistributes shards across nodes for optimal performance. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = NodeHandler::new(client);
+                let result = handler
+                    .execute_action(input.uid, "rebalance")
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to rebalance node: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Node rebalance initiated",
+                    "node_uid": input.uid,
+                    "action_uid": result.action_uid,
+                    "description": result.description
+                }))
+            },
+        )
+        .build()
+}
+
+/// Build the drain_node tool
+pub fn drain_node(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("drain_enterprise_node")
+        .description(
+            "Drain all shards from a specific node in the Redis Enterprise cluster. \
+             All shards will be migrated to other available nodes. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = NodeHandler::new(client);
+                let result = handler
+                    .execute_action(input.uid, "drain")
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to drain node: {}", e)))?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Node drain initiated",
+                    "node_uid": input.uid,
+                    "action_uid": result.action_uid,
+                    "description": result.description
+                }))
+            },
+        )
+        .build()
+}
+
+// ============================================================================
 // Certificate Operations
 // ============================================================================
 
@@ -2177,6 +2891,218 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+// ============================================================================
+// CRDB (Active-Active) tools
+// ============================================================================
+
+/// Input for listing CRDBs (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListCrdbsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the list_enterprise_crdbs tool
+pub fn list_enterprise_crdbs(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_enterprise_crdbs")
+        .description(
+            "List all Active-Active (CRDB) databases in the Redis Enterprise cluster. \
+             Returns database names, GUIDs, status, and instance information.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ListCrdbsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ListCrdbsInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = CrdbHandler::new(client);
+                let crdbs = handler
+                    .list()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to list CRDBs: {}", e)))?;
+
+                wrap_list("crdbs", &crdbs)
+            },
+        )
+        .build()
+}
+
+/// Input for getting a specific CRDB
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetCrdbInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// CRDB GUID (globally unique identifier)
+    pub guid: String,
+}
+
+/// Build the get_enterprise_crdb tool
+pub fn get_enterprise_crdb(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_crdb")
+        .description(
+            "Get detailed information about a specific Active-Active (CRDB) database \
+             including instances, replication status, and configuration.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetCrdbInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = CrdbHandler::new(client);
+                let crdb = handler
+                    .get(&input.guid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get CRDB: {}", e)))?;
+
+                CallToolResult::from_serialize(&crdb)
+            },
+        )
+        .build()
+}
+
+/// Input for getting CRDB tasks
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetCrdbTasksInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// CRDB GUID (globally unique identifier)
+    pub guid: String,
+}
+
+/// Build the get_enterprise_crdb_tasks tool
+pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_crdb_tasks")
+        .description(
+            "Get tasks for a specific Active-Active (CRDB) database. \
+             Returns pending and completed tasks related to CRDB operations.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetCrdbTasksInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbTasksInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = CrdbHandler::new(client);
+                let tasks = handler
+                    .tasks(&input.guid)
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get CRDB tasks: {}", e)))?;
+
+                CallToolResult::from_serialize(&tasks)
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// LDAP tools
+// ============================================================================
+
+/// Input for getting LDAP config (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetLdapConfigInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_enterprise_ldap_config tool
+pub fn get_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_ldap_config")
+        .description(
+            "Get the LDAP configuration for the Redis Enterprise cluster including \
+             server settings, bind DN, and query suffixes.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetLdapConfigInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetLdapConfigInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let handler = LdapMappingHandler::new(client);
+                let config = handler
+                    .get_config()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Failed to get LDAP config: {}", e)))?;
+
+                CallToolResult::from_serialize(&config)
+            },
+        )
+        .build()
+}
+
+/// Input for updating LDAP config
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateLdapConfigInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// LDAP configuration as a JSON object. Fields: enabled (bool), servers (array of {host, port, use_tls, starttls}),
+    /// cache_refresh_interval, authentication_query_suffix, authorization_query_suffix, bind_dn, bind_pass
+    pub config: Value,
+}
+
+/// Build the update_enterprise_ldap_config tool
+pub fn update_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_ldap_config")
+        .description(
+            "Update the LDAP configuration for the Redis Enterprise cluster. \
+             Accepts a JSON object with LDAP settings. Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateLdapConfigInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateLdapConfigInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| super::credential_error("enterprise", e))?;
+
+                let config = serde_json::from_value(input.config).map_err(|e| {
+                    ToolError::new(format!("Invalid LDAP config: {}", e))
+                })?;
+
+                let handler = LdapMappingHandler::new(client);
+                let result = handler
+                    .update_config(config)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to update LDAP config: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
 /// Instructions text describing all Enterprise tools
 pub fn instructions() -> &'static str {
     r#"
@@ -2212,10 +3138,17 @@ pub fn instructions() -> &'static str {
 - list_nodes: List cluster nodes
 - get_node: Get node details
 - get_node_stats: Get node statistics
+- enable_enterprise_node_maintenance: Enable maintenance on a node (write)
+- disable_enterprise_node_maintenance: Disable maintenance on a node (write)
+- rebalance_enterprise_node: Rebalance shards on a node (write)
+- drain_enterprise_node: Drain all shards from a node (write)
 
 ### Redis Enterprise - Users & Alerts
 - list_enterprise_users: List cluster users
 - get_enterprise_user: Get user details
+- create_enterprise_user: Create a new user (write)
+- update_enterprise_user: Update user settings (write)
+- delete_enterprise_user: Delete a user (write)
 - list_alerts: List all active alerts
 
 ### Redis Enterprise - Shards
@@ -2239,12 +3172,27 @@ pub fn instructions() -> &'static str {
 ### Redis Enterprise - Roles
 - list_enterprise_roles: List all roles in the cluster
 - get_enterprise_role: Get role details and permissions
+- create_enterprise_role: Create a new role (write)
+- update_enterprise_role: Update role settings (write)
+- delete_enterprise_role: Delete a role (write)
 
 ### Redis Enterprise - ACLs
 - list_enterprise_acls: List all Redis ACLs
 - get_enterprise_acl: Get ACL details and rules
+- create_enterprise_acl: Create a new ACL (write)
+- update_enterprise_acl: Update ACL rules (write)
+- delete_enterprise_acl: Delete an ACL (write)
 
-### Redis Enterprise - Write Operations (require --read-only=false)
+### Redis Enterprise - Active-Active (CRDB)
+- list_enterprise_crdbs: List all Active-Active databases
+- get_enterprise_crdb: Get Active-Active database details by GUID
+- get_enterprise_crdb_tasks: Get tasks for an Active-Active database
+
+### Redis Enterprise - LDAP
+- get_enterprise_ldap_config: Get LDAP configuration
+- update_enterprise_ldap_config: Update LDAP configuration (write)
+
+### Redis Enterprise - Database Write Operations (require --read-only=false)
 - backup_enterprise_database: Trigger a database backup and wait for completion
 - import_enterprise_database: Import data into a database and wait for completion
 - create_enterprise_database: Create a new database
@@ -2285,9 +3233,16 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(list_nodes(state.clone()))
         .tool(get_node(state.clone()))
         .tool(get_node_stats(state.clone()))
+        .tool(enable_node_maintenance(state.clone()))
+        .tool(disable_node_maintenance(state.clone()))
+        .tool(rebalance_node(state.clone()))
+        .tool(drain_node(state.clone()))
         // Users & Alerts
         .tool(list_users(state.clone()))
         .tool(get_user(state.clone()))
+        .tool(create_enterprise_user(state.clone()))
+        .tool(update_enterprise_user(state.clone()))
+        .tool(delete_enterprise_user(state.clone()))
         .tool(list_alerts(state.clone()))
         // Shards
         .tool(list_shards(state.clone()))
@@ -2306,10 +3261,23 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         // Roles
         .tool(list_roles(state.clone()))
         .tool(get_role(state.clone()))
+        .tool(create_enterprise_role(state.clone()))
+        .tool(update_enterprise_role(state.clone()))
+        .tool(delete_enterprise_role(state.clone()))
         // ACLs
         .tool(list_redis_acls(state.clone()))
         .tool(get_redis_acl(state.clone()))
-        // Write Operations
+        .tool(create_enterprise_acl(state.clone()))
+        .tool(update_enterprise_acl(state.clone()))
+        .tool(delete_enterprise_acl(state.clone()))
+        // CRDBs (Active-Active)
+        .tool(list_enterprise_crdbs(state.clone()))
+        .tool(get_enterprise_crdb(state.clone()))
+        .tool(get_enterprise_crdb_tasks(state.clone()))
+        // LDAP
+        .tool(get_enterprise_ldap_config(state.clone()))
+        .tool(update_enterprise_ldap_config(state.clone()))
+        // Database Write Operations
         .tool(backup_enterprise_database(state.clone()))
         .tool(import_enterprise_database(state.clone()))
         .tool(create_enterprise_database(state.clone()))
