@@ -1,4 +1,4 @@
-//! Account, ACL, task, and user tools for Redis Cloud
+//! Account, ACL, task, cloud account (BYOC), and user tools for Redis Cloud
 
 use std::sync::Arc;
 
@@ -7,9 +7,10 @@ use redis_cloud::acl::{
     AclRoleDatabaseSpec, AclRoleRedisRuleSpec, AclRoleUpdateRequest, AclUserCreateRequest,
     AclUserUpdateRequest,
 };
+use redis_cloud::cloud_accounts::{CloudAccountCreateRequest, CloudAccountUpdateRequest};
 use redis_cloud::{
-    AccountHandler, AclHandler, CostReportCreateRequest, CostReportHandler, TaskHandler,
-    UserHandler,
+    AccountHandler, AclHandler, CloudAccountHandler, CostReportCreateRequest, CostReportHandler,
+    TaskHandler, UserHandler,
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -1200,6 +1201,281 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+// ============================================================================
+// Cloud Account (BYOC) tools
+// ============================================================================
+
+/// Input for listing cloud accounts
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListCloudAccountsInput {
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the list_cloud_accounts tool
+pub fn list_cloud_accounts(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_cloud_accounts")
+        .description(
+            "List all configured cloud provider accounts (BYOC). Returns cloud accounts \
+             for AWS, GCP, or Azure that are integrated with Redis Cloud.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ListCloudAccountsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ListCloudAccountsInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = CloudAccountHandler::new(client);
+                let result = handler
+                    .get_cloud_accounts()
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to list cloud accounts: {}", e))
+                    })?;
+
+                let accounts = result.cloud_accounts.unwrap_or_default();
+                wrap_list("cloud_accounts", &accounts)
+            },
+        )
+        .build()
+}
+
+/// Input for getting a cloud account by ID
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetCloudAccountInput {
+    /// Cloud account ID
+    pub cloud_account_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_cloud_account tool
+pub fn get_cloud_account(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_cloud_account")
+        .description(
+            "Get details for a specific cloud provider account (BYOC) by ID, \
+             including provider type, access credentials, and status.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, GetCloudAccountInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetCloudAccountInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = CloudAccountHandler::new(client);
+                let account = handler
+                    .get_cloud_account_by_id(input.cloud_account_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to get cloud account: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&account)
+            },
+        )
+        .build()
+}
+
+/// Input for creating a cloud account
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateCloudAccountInput {
+    /// Cloud account display name
+    pub name: String,
+    /// Cloud provider (e.g., "AWS", "GCP", "Azure"). Defaults to "AWS" if not specified.
+    #[serde(default)]
+    pub provider: Option<String>,
+    /// Cloud provider access key
+    pub access_key_id: String,
+    /// Cloud provider secret key
+    pub access_secret_key: String,
+    /// Cloud provider management console username
+    pub console_username: String,
+    /// Cloud provider management console password
+    pub console_password: String,
+    /// Cloud provider management console login URL
+    pub sign_in_login_url: String,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the create_cloud_account tool
+pub fn create_cloud_account(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_cloud_account")
+        .description(
+            "Create a new cloud provider account (BYOC) for AWS, GCP, or Azure. \
+             Registers cloud credentials with Redis Cloud for resource provisioning. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, CreateCloudAccountInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateCloudAccountInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = CloudAccountHandler::new(client);
+                let request = CloudAccountCreateRequest {
+                    name: input.name,
+                    provider: input.provider,
+                    access_key_id: input.access_key_id,
+                    access_secret_key: input.access_secret_key,
+                    console_username: input.console_username,
+                    console_password: input.console_password,
+                    sign_in_login_url: input.sign_in_login_url,
+                    command_type: None,
+                };
+                let result = handler
+                    .create_cloud_account(&request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to create cloud account: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for updating a cloud account
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateCloudAccountInput {
+    /// Cloud account ID to update
+    pub cloud_account_id: i32,
+    /// New display name (optional)
+    #[serde(default)]
+    pub name: Option<String>,
+    /// Cloud provider access key
+    pub access_key_id: String,
+    /// Cloud provider secret key
+    pub access_secret_key: String,
+    /// Cloud provider management console username
+    pub console_username: String,
+    /// Cloud provider management console password
+    pub console_password: String,
+    /// Cloud provider management console login URL (optional)
+    #[serde(default)]
+    pub sign_in_login_url: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_cloud_account tool
+pub fn update_cloud_account(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_cloud_account")
+        .description(
+            "Update an existing cloud provider account (BYOC) configuration, \
+             including credentials and console access details. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, UpdateCloudAccountInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateCloudAccountInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = CloudAccountHandler::new(client);
+                let request = CloudAccountUpdateRequest {
+                    name: input.name,
+                    cloud_account_id: None,
+                    access_key_id: input.access_key_id,
+                    access_secret_key: input.access_secret_key,
+                    console_username: input.console_username,
+                    console_password: input.console_password,
+                    sign_in_login_url: input.sign_in_login_url,
+                    command_type: None,
+                };
+                let result = handler
+                    .update_cloud_account(input.cloud_account_id, &request)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to update cloud account: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting a cloud account
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteCloudAccountInput {
+    /// Cloud account ID to delete
+    pub cloud_account_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the delete_cloud_account tool
+pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_cloud_account")
+        .description(
+            "Delete a cloud provider account (BYOC). This is a destructive operation \
+             that removes the cloud account integration. \
+             Requires write permission.",
+        )
+        .extractor_handler_typed::<_, _, _, DeleteCloudAccountInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteCloudAccountInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = CloudAccountHandler::new(client);
+                let result = handler
+                    .delete_cloud_account(input.cloud_account_id)
+                    .await
+                    .map_err(|e| {
+                        ToolError::new(format!("Failed to delete cloud account: {}", e))
+                    })?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
 pub(super) const INSTRUCTIONS: &str = r#"
 ### Redis Cloud - Account & Configuration
 - get_account: Get current account information
@@ -1224,6 +1500,13 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - update_redis_rule: Update a Redis ACL rule's name or pattern
 - delete_redis_rule: Delete a Redis ACL rule
 
+### Redis Cloud - Cloud Accounts (BYOC)
+- list_cloud_accounts: List configured cloud provider accounts (AWS, GCP, Azure)
+- get_cloud_account: Get cloud account details by ID
+- create_cloud_account: Create a new cloud provider account (require --read-only=false)
+- update_cloud_account: Update cloud account configuration (require --read-only=false)
+- delete_cloud_account: Delete a cloud provider account (require --read-only=false)
+
 ### Redis Cloud - Cost Reports
 - generate_cost_report: Generate a FOCUS cost report (require --read-only=false)
 - download_cost_report: Download a generated cost report
@@ -1237,7 +1520,7 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - get_task: Get task status
 "#;
 
-/// Build an MCP sub-router containing account, ACL, and task tools
+/// Build an MCP sub-router containing account, ACL, cloud account, and task tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
         // Account & Configuration
@@ -1261,6 +1544,12 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(create_redis_rule(state.clone()))
         .tool(update_redis_rule(state.clone()))
         .tool(delete_redis_rule(state.clone()))
+        // Cloud Accounts (BYOC)
+        .tool(list_cloud_accounts(state.clone()))
+        .tool(get_cloud_account(state.clone()))
+        .tool(create_cloud_account(state.clone()))
+        .tool(update_cloud_account(state.clone()))
+        .tool(delete_cloud_account(state.clone()))
         // Cost Reports
         .tool(generate_cost_report(state.clone()))
         .tool(download_cost_report(state.clone()))
