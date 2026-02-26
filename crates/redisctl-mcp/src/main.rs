@@ -391,6 +391,7 @@ mod tests {
             },
             files_api_key: None,
             resilience: None,
+            tags: vec![],
         }
     }
 
@@ -406,6 +407,7 @@ mod tests {
             },
             files_api_key: None,
             resilience: None,
+            tags: vec![],
         }
     }
 
@@ -422,6 +424,7 @@ mod tests {
             },
             files_api_key: None,
             resilience: None,
+            tags: vec![],
         }
     }
 

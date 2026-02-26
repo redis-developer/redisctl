@@ -22,7 +22,7 @@ pub async fn handle_profile_command(
     use ProfileCommands::*;
 
     match profile_cmd {
-        List => handle_list(conn_mgr, output_format).await,
+        List { tags } => handle_list(conn_mgr, output_format, tags).await,
         Path => handle_path(output_format).await,
         Current { r#type } => handle_current(conn_mgr, r#type).await,
         Show { name } => handle_show(conn_mgr, name, output_format).await,
@@ -43,6 +43,7 @@ pub async fn handle_profile_command(
             db,
             #[cfg(feature = "secure-storage")]
             use_keyring,
+            tags,
         } => {
             handle_set(
                 conn_mgr,
@@ -62,6 +63,7 @@ pub async fn handle_profile_command(
                 db,
                 #[cfg(feature = "secure-storage")]
                 use_keyring,
+                tags,
             )
             .await
         }
@@ -77,9 +79,18 @@ pub async fn handle_profile_command(
 async fn handle_list(
     conn_mgr: &ConnectionManager,
     output_format: OutputFormat,
+    tag_filter: &[String],
 ) -> Result<(), RedisCtlError> {
     debug!("Listing all configured profiles");
-    let profiles = conn_mgr.config.list_profiles();
+    let all_profiles = conn_mgr.config.list_profiles();
+    let profiles: Vec<_> = if tag_filter.is_empty() {
+        all_profiles
+    } else {
+        all_profiles
+            .into_iter()
+            .filter(|(_, profile)| profile.tags.iter().any(|t| tag_filter.contains(t)))
+            .collect()
+    };
     trace!("Found {} profiles", profiles.len());
 
     match output_format {
@@ -107,6 +118,10 @@ async fn handle_list(
                         "is_default_enterprise": is_default_enterprise,
                         "is_default_cloud": is_default_cloud,
                     });
+
+                    if !profile.tags.is_empty() {
+                        obj["tags"] = serde_json::json!(&profile.tags);
+                    }
 
                     match profile.deployment_type {
                         redisctl_core::DeploymentType::Cloud => {
@@ -204,10 +219,22 @@ async fn handle_list(
                 *first = false;
                 println!("{}", header.bold());
                 for (name, profile) in group {
-                    if default_name == Some(name.as_str()) {
-                        println!("  {} {}", name.bold().cyan(), "(default)".green());
+                    let tag_suffix = if profile.tags.is_empty() {
+                        String::new()
                     } else {
-                        println!("  {}", name.bold().cyan());
+                        format!(" [{}]", profile.tags.join(", "))
+                            .dimmed()
+                            .to_string()
+                    };
+                    if default_name == Some(name.as_str()) {
+                        println!(
+                            "  {} {}{}",
+                            name.bold().cyan(),
+                            "(default)".green(),
+                            tag_suffix
+                        );
+                    } else {
+                        println!("  {}{}", name.bold().cyan(), tag_suffix);
                     }
                     match profile.deployment_type {
                         redisctl_core::DeploymentType::Cloud => {
@@ -329,6 +356,10 @@ async fn handle_show(
                         "is_default_cloud": is_default_cloud,
                     });
 
+                    if !profile.tags.is_empty() {
+                        output_data["tags"] = serde_json::json!(&profile.tags);
+                    }
+
                     match profile.deployment_type {
                         redisctl_core::DeploymentType::Cloud => {
                             if let Some((api_key, _, api_url)) = profile.cloud_credentials() {
@@ -379,6 +410,9 @@ async fn handle_show(
                 _ => {
                     println!("Profile: {}", name);
                     println!("Type: {}", profile.deployment_type);
+                    if !profile.tags.is_empty() {
+                        println!("Tags: {}", profile.tags.join(", "));
+                    }
 
                     match profile.deployment_type {
                         redisctl_core::DeploymentType::Cloud => {
@@ -467,6 +501,7 @@ async fn handle_set(
     no_tls: &bool,
     db: &Option<u8>,
     #[cfg(feature = "secure-storage")] use_keyring: &bool,
+    tags: &[String],
 ) -> Result<(), RedisCtlError> {
     debug!("Setting profile: {}", name);
 
@@ -487,6 +522,18 @@ async fn handle_set(
             return Ok(());
         }
     }
+
+    // Determine effective tags: use provided tags, or preserve existing if none given
+    let effective_tags = if tags.is_empty() {
+        conn_mgr
+            .config
+            .profiles
+            .get(name)
+            .map(|p| p.tags.clone())
+            .unwrap_or_default()
+    } else {
+        tags.to_vec()
+    };
 
     // Create the profile based on deployment type
     let profile = match deployment {
@@ -530,6 +577,7 @@ async fn handle_set(
                 },
                 files_api_key: None,
                 resilience: None,
+                tags: effective_tags.clone(),
             }
         }
         redisctl_core::DeploymentType::Enterprise => {
@@ -591,6 +639,7 @@ async fn handle_set(
                 },
                 files_api_key: None,
                 resilience: None,
+                tags: effective_tags.clone(),
             }
         }
         redisctl_core::DeploymentType::Database => {
@@ -648,6 +697,7 @@ async fn handle_set(
                 },
                 files_api_key: None,
                 resilience: None,
+                tags: effective_tags,
             }
         }
     };
@@ -794,6 +844,7 @@ async fn handle_init(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlError> 
                 },
                 files_api_key: None,
                 resilience: None,
+                tags: vec![],
             }
         }
         redisctl_core::DeploymentType::Enterprise => {
@@ -836,6 +887,7 @@ async fn handle_init(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlError> 
                 },
                 files_api_key: None,
                 resilience: None,
+                tags: vec![],
             }
         }
         redisctl_core::DeploymentType::Database => {
@@ -887,6 +939,7 @@ async fn handle_init(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlError> 
                 },
                 files_api_key: None,
                 resilience: None,
+                tags: vec![],
             }
         }
     };

@@ -197,3 +197,96 @@ fn save_to_readonly_directory_returns_clear_error() {
     // Restore permissions so TempDir cleanup can remove the directory
     fs::set_permissions(&readonly_dir, fs::Permissions::from_mode(0o755)).unwrap();
 }
+
+// ---------------------------------------------------------------------------
+// 8. Tags backward compatibility (TOML without tags loads as empty vec)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn load_profile_without_tags_defaults_to_empty_vec() {
+    let dir = TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+
+    let content = r#"
+[profiles.mycloud]
+deployment_type = "cloud"
+api_key = "key"
+api_secret = "secret"
+api_url = "https://api.redislabs.com/v1"
+"#;
+    fs::write(&config_path, content).unwrap();
+
+    let config = Config::load_from_path(&config_path).expect("should load without tags field");
+    let profile = config.profiles.get("mycloud").unwrap();
+    assert!(profile.tags.is_empty(), "tags should default to empty vec");
+}
+
+// ---------------------------------------------------------------------------
+// 9. Tags round-trip (save and reload with tags)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn tags_round_trip_save_and_reload() {
+    use redisctl_core::{DeploymentType, Profile, ProfileCredentials};
+
+    let dir = TempDir::new().unwrap();
+    let config_path = dir.path().join("config.toml");
+
+    let mut config = Config::default();
+    config.set_profile(
+        "tagged".to_string(),
+        Profile {
+            deployment_type: DeploymentType::Cloud,
+            credentials: ProfileCredentials::Cloud {
+                api_key: "k".to_string(),
+                api_secret: "s".to_string(),
+                api_url: "https://api.redislabs.com/v1".to_string(),
+            },
+            files_api_key: None,
+            resilience: None,
+            tags: vec!["prod".to_string(), "us-east".to_string()],
+        },
+    );
+
+    config
+        .save_to_path(&config_path)
+        .expect("save should succeed");
+
+    let reloaded = Config::load_from_path(&config_path).expect("reload should succeed");
+    let profile = reloaded.profiles.get("tagged").unwrap();
+    assert_eq!(profile.tags, vec!["prod", "us-east"]);
+}
+
+// ---------------------------------------------------------------------------
+// 10. Empty tags are not serialized
+// ---------------------------------------------------------------------------
+
+#[test]
+fn empty_tags_not_serialized() {
+    use redisctl_core::{DeploymentType, Profile, ProfileCredentials};
+
+    let mut config = Config::default();
+    config.set_profile(
+        "plain".to_string(),
+        Profile {
+            deployment_type: DeploymentType::Database,
+            credentials: ProfileCredentials::Database {
+                host: "localhost".to_string(),
+                port: 6379,
+                password: None,
+                tls: false,
+                username: "default".to_string(),
+                database: 0,
+            },
+            files_api_key: None,
+            resilience: None,
+            tags: vec![],
+        },
+    );
+
+    let serialized = toml::to_string(&config).unwrap();
+    assert!(
+        !serialized.contains("tags"),
+        "empty tags should not appear in serialized output: {serialized}"
+    );
+}

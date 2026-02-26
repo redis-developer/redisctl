@@ -317,7 +317,11 @@ impl std::fmt::Display for HttpMethod {
 pub enum ProfileCommands {
     /// List all configured profiles
     #[command(visible_alias = "ls", visible_alias = "l")]
-    List,
+    List {
+        /// Filter profiles by tag (repeatable, matches any)
+        #[arg(long = "tag", action = clap::ArgAction::Append)]
+        tags: Vec<String>,
+    },
 
     /// Show the path to the configuration file
     Path,
@@ -395,6 +399,11 @@ EXAMPLES:
         --host localhost \\
         --port 6379 \\
         --no-tls
+
+    # Tag a profile for organization
+    redisctl profile set prod-cloud --type cloud \\
+        --api-key KEY --api-secret SECRET \\
+        --tag prod --tag us-east
 ")]
     Set {
         /// Profile name
@@ -456,6 +465,10 @@ EXAMPLES:
         #[cfg(feature = "secure-storage")]
         #[arg(long)]
         use_keyring: bool,
+
+        /// Tags for organizing profiles (repeatable)
+        #[arg(long = "tag", action = clap::ArgAction::Append)]
+        tags: Vec<String>,
     },
 
     /// Remove a profile

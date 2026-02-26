@@ -537,7 +537,7 @@ fn format_command(command: &Commands) -> String {
         Commands::Profile(cmd) => {
             use cli::ProfileCommands::*;
             match cmd {
-                List => "profile list".to_string(),
+                List { .. } => "profile list".to_string(),
                 Path => "profile path".to_string(),
                 Current { r#type } => format!("profile current --type {}", r#type),
                 Show { name } => format!("profile show {}", name),
