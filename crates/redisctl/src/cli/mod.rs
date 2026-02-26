@@ -494,6 +494,13 @@ EXAMPLES:
         #[arg(long, short = 'c')]
         connect: bool,
     },
+
+    /// Interactive wizard to create a new profile
+    #[command(visible_alias = "setup")]
+    #[command(after_help = "Walks you through creating a profile step by step.
+Prompts for the profile type, name, and required credentials.
+Optionally tests connectivity before saving.")]
+    Init,
 }
 
 /// Files.com API key management commands

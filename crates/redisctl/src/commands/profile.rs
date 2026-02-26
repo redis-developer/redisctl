@@ -69,6 +69,7 @@ pub async fn handle_profile_command(
         DefaultCloud { name } => handle_default_cloud(conn_mgr, name).await,
         DefaultDatabase { name } => handle_default_database(conn_mgr, name).await,
         Validate { connect } => handle_validate(conn_mgr, *connect, output_format).await,
+        Init => handle_init(conn_mgr).await,
     }
 }
 
@@ -672,6 +673,308 @@ async fn handle_set(
                 println!("  redisctl profile default-database {}", name);
             }
         }
+    }
+
+    Ok(())
+}
+
+async fn handle_init(conn_mgr: &ConnectionManager) -> Result<(), RedisCtlError> {
+    use dialoguer::{Input, Select};
+
+    println!("Welcome to redisctl profile setup!");
+    println!();
+
+    // Step 1: Choose profile type
+    let type_options = &["cloud", "enterprise", "database"];
+    let type_descriptions = &[
+        "cloud       - Redis Cloud API (requires api-key + api-secret from cloud.redis.io)",
+        "enterprise  - Redis Enterprise Software cluster (requires URL + admin credentials)",
+        "database    - Direct Redis connection (requires host + port)",
+    ];
+
+    let type_index = Select::new()
+        .with_prompt("What type of profile do you want to create?")
+        .items(type_descriptions)
+        .default(0)
+        .interact()
+        .map_err(|e| RedisCtlError::InvalidInput {
+            message: format!("Selection cancelled: {}", e),
+        })?;
+
+    let deployment_type = match type_options[type_index] {
+        "cloud" => redisctl_core::DeploymentType::Cloud,
+        "enterprise" => redisctl_core::DeploymentType::Enterprise,
+        "database" => redisctl_core::DeploymentType::Database,
+        _ => unreachable!(),
+    };
+
+    println!();
+
+    // Step 2: Choose profile name
+    let default_name = match deployment_type {
+        redisctl_core::DeploymentType::Cloud => "mycloud",
+        redisctl_core::DeploymentType::Enterprise => "myenterprise",
+        redisctl_core::DeploymentType::Database => "mydb",
+    };
+
+    let name: String = Input::new()
+        .with_prompt("Profile name")
+        .default(default_name.to_string())
+        .interact_text()
+        .map_err(|e| RedisCtlError::InvalidInput {
+            message: format!("Input cancelled: {}", e),
+        })?;
+
+    // Check if profile already exists
+    if conn_mgr.config.profiles.contains_key(&name) {
+        println!("Profile '{}' already exists.", name);
+        let overwrite = dialoguer::Confirm::new()
+            .with_prompt("Overwrite?")
+            .default(false)
+            .interact()
+            .map_err(|e| RedisCtlError::InvalidInput {
+                message: format!("Input cancelled: {}", e),
+            })?;
+        if !overwrite {
+            println!("Setup cancelled.");
+            return Ok(());
+        }
+    }
+
+    println!();
+
+    // Step 3: Collect credentials based on type
+    let profile = match deployment_type {
+        redisctl_core::DeploymentType::Cloud => {
+            let api_key: String = Input::new()
+                .with_prompt("API key")
+                .interact_text()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            let api_secret: String = rpassword::prompt_password("API secret: ").map_err(|e| {
+                RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                }
+            })?;
+
+            let api_url: String = Input::new()
+                .with_prompt("API URL")
+                .default("https://api.redislabs.com/v1".to_string())
+                .interact_text()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            redisctl_core::Profile {
+                deployment_type: redisctl_core::DeploymentType::Cloud,
+                credentials: redisctl_core::ProfileCredentials::Cloud {
+                    api_key,
+                    api_secret,
+                    api_url,
+                },
+                files_api_key: None,
+                resilience: None,
+            }
+        }
+        redisctl_core::DeploymentType::Enterprise => {
+            let url: String = Input::new()
+                .with_prompt("Cluster URL (e.g., https://cluster:9443)")
+                .interact_text()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            let username: String = Input::new()
+                .with_prompt("Username")
+                .interact_text()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            let password = rpassword::prompt_password("Password: ").map_err(|e| {
+                RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                }
+            })?;
+
+            let insecure = dialoguer::Confirm::new()
+                .with_prompt("Allow insecure TLS (self-signed certificates)?")
+                .default(false)
+                .interact()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            redisctl_core::Profile {
+                deployment_type: redisctl_core::DeploymentType::Enterprise,
+                credentials: redisctl_core::ProfileCredentials::Enterprise {
+                    url,
+                    username,
+                    password: Some(password),
+                    insecure,
+                    ca_cert: None,
+                },
+                files_api_key: None,
+                resilience: None,
+            }
+        }
+        redisctl_core::DeploymentType::Database => {
+            let host: String = Input::new()
+                .with_prompt("Redis host")
+                .default("localhost".to_string())
+                .interact_text()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            let port: u16 = Input::new()
+                .with_prompt("Redis port")
+                .default(6379)
+                .interact_text()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            let password =
+                rpassword::prompt_password("Password (Enter for none): ").map_err(|e| {
+                    RedisCtlError::InvalidInput {
+                        message: format!("Input cancelled: {}", e),
+                    }
+                })?;
+            let password = if password.is_empty() {
+                None
+            } else {
+                Some(password)
+            };
+
+            let tls = dialoguer::Confirm::new()
+                .with_prompt("Use TLS?")
+                .default(true)
+                .interact()
+                .map_err(|e| RedisCtlError::InvalidInput {
+                    message: format!("Input cancelled: {}", e),
+                })?;
+
+            redisctl_core::Profile {
+                deployment_type: redisctl_core::DeploymentType::Database,
+                credentials: redisctl_core::ProfileCredentials::Database {
+                    host,
+                    port,
+                    password,
+                    tls,
+                    username: "default".to_string(),
+                    database: 0,
+                },
+                files_api_key: None,
+                resilience: None,
+            }
+        }
+    };
+
+    // Step 4: Optionally test connectivity
+    let test_connect = dialoguer::Confirm::new()
+        .with_prompt("Test connectivity before saving?")
+        .default(true)
+        .interact()
+        .map_err(|e| RedisCtlError::InvalidInput {
+            message: format!("Input cancelled: {}", e),
+        })?;
+
+    if test_connect {
+        print!("Testing connectivity... ");
+        use std::io::{self, Write};
+        io::stdout().flush().unwrap();
+
+        // Build a temporary config with the new profile so we can reuse the
+        // existing connectivity test functions.
+        let mut temp_config = conn_mgr.config.clone();
+        temp_config.profiles.insert(name.clone(), profile.clone());
+        let temp_mgr = ConnectionManager::new(temp_config);
+
+        let result = match deployment_type {
+            redisctl_core::DeploymentType::Cloud => test_cloud_connectivity(&temp_mgr, &name).await,
+            redisctl_core::DeploymentType::Enterprise => {
+                test_enterprise_connectivity(&temp_mgr, &name).await
+            }
+            redisctl_core::DeploymentType::Database => test_database_connectivity(&profile).await,
+        };
+
+        match result.status {
+            ConnectStatus::Ok => {
+                println!(
+                    "{}{}",
+                    "ok".green(),
+                    result
+                        .latency_ms
+                        .map(|ms| format!(" ({}ms)", ms))
+                        .unwrap_or_default()
+                );
+            }
+            _ => {
+                println!("{}", "failed".red());
+                println!("  {}", result.detail);
+                println!();
+                let save_anyway = dialoguer::Confirm::new()
+                    .with_prompt("Save profile anyway?")
+                    .default(false)
+                    .interact()
+                    .map_err(|e| RedisCtlError::InvalidInput {
+                        message: format!("Input cancelled: {}", e),
+                    })?;
+                if !save_anyway {
+                    println!("Setup cancelled.");
+                    return Ok(());
+                }
+            }
+        }
+    }
+
+    // Step 5: Save
+    let mut config = conn_mgr.config.clone();
+    config.profiles.insert(name.clone(), profile);
+
+    // Auto-set as default if first profile of this type
+    let is_first = config.get_profiles_of_type(deployment_type).len() == 1;
+    if is_first {
+        match deployment_type {
+            redisctl_core::DeploymentType::Cloud => {
+                config.default_cloud = Some(name.clone());
+            }
+            redisctl_core::DeploymentType::Enterprise => {
+                config.default_enterprise = Some(name.clone());
+            }
+            redisctl_core::DeploymentType::Database => {
+                config.default_database = Some(name.clone());
+            }
+        }
+    }
+
+    if let Some(ref path) = conn_mgr.config_path {
+        config
+            .save_to_path(path)
+            .context("Failed to save configuration")?;
+        println!();
+        println!("Profile '{}' saved to: {}", name, path.display());
+    } else {
+        config.save().context("Failed to save configuration")?;
+        if let Ok(config_path) = Config::config_path() {
+            println!();
+            println!("Profile '{}' saved to: {}", name, config_path.display());
+        } else {
+            println!();
+            println!("Profile '{}' saved.", name);
+        }
+    }
+
+    if is_first {
+        let type_name = match deployment_type {
+            redisctl_core::DeploymentType::Cloud => "cloud",
+            redisctl_core::DeploymentType::Enterprise => "enterprise",
+            redisctl_core::DeploymentType::Database => "database",
+        };
+        println!("Set as default {} profile.", type_name);
     }
 
     Ok(())

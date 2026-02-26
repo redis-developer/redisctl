@@ -552,6 +552,7 @@ fn format_command(command: &Commands) -> String {
                         "profile validate".to_string()
                     }
                 }
+                Init => "profile init".to_string(),
             }
         }
         Commands::Api {
