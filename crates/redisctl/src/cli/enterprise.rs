@@ -73,6 +73,10 @@ pub enum EnterpriseCommands {
         /// Show only shards information
         #[arg(long)]
         shards: bool,
+
+        /// Show compact pass/fail health summary
+        #[arg(long)]
+        brief: bool,
     },
 
     /// Alert management operations

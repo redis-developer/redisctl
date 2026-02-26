@@ -3,10 +3,14 @@
 //! Provides a single command to view cluster, nodes, databases, and shards status,
 //! similar to `rladmin status extra all`.
 
+#![allow(dead_code)]
+
 use crate::cli::OutputFormat;
 use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use anyhow::Context;
+use colored::Colorize;
+use comfy_table::{Cell, Color, Table};
 use redis_enterprise::bdb::BdbHandler;
 use redis_enterprise::cluster::ClusterHandler;
 use redis_enterprise::nodes::NodeHandler;
@@ -18,7 +22,6 @@ use super::utils::*;
 
 /// Comprehensive cluster status information
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
 pub struct ClusterStatus {
     /// Cluster information
     pub cluster: Value,
@@ -34,7 +37,6 @@ pub struct ClusterStatus {
 
 /// Summary statistics for cluster health
 #[derive(Debug, Clone, Serialize, Deserialize)]
-#[allow(dead_code)]
 pub struct StatusSummary {
     /// Total number of nodes
     pub total_nodes: usize,
@@ -52,7 +54,6 @@ pub struct StatusSummary {
 
 /// Sections to display in status output
 #[derive(Debug, Clone, Default)]
-#[allow(dead_code)]
 pub struct StatusSections {
     /// Show cluster information
     pub cluster: bool,
@@ -66,7 +67,6 @@ pub struct StatusSections {
 
 impl StatusSections {
     /// Create sections showing all information
-    #[allow(dead_code)]
     pub fn all() -> Self {
         Self {
             cluster: true,
@@ -77,18 +77,17 @@ impl StatusSections {
     }
 
     /// Check if any section is enabled
-    #[allow(dead_code)]
     pub fn any_enabled(&self) -> bool {
         self.cluster || self.nodes || self.databases || self.shards
     }
 }
 
 /// Get comprehensive cluster status
-#[allow(dead_code)]
 pub async fn get_status(
     conn_mgr: &ConnectionManager,
     profile_name: Option<&str>,
     sections: StatusSections,
+    brief: bool,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
@@ -148,7 +147,27 @@ pub async fn get_status(
     // Calculate summary statistics
     let summary = calculate_summary(&nodes_result, &databases_result, &shards_result);
 
-    // Build comprehensive status
+    // Brief mode: print compact health summary and return
+    if brief {
+        let warnings = collect_warnings(&cluster_result, &nodes_result, &databases_result);
+        print_brief_summary(&summary, &warnings);
+        return Ok(());
+    }
+
+    // Table/Auto format without query: print colored tables
+    if matches!(output_format, OutputFormat::Table | OutputFormat::Auto) && query.is_none() {
+        print_status_tables(
+            &sections,
+            &cluster_result,
+            &nodes_result,
+            &databases_result,
+            &shards_result,
+            &summary,
+        );
+        return Ok(());
+    }
+
+    // Build comprehensive status for JSON/YAML/query output
     let status = ClusterStatus {
         cluster: cluster_result,
         nodes: nodes_result,
@@ -168,8 +187,364 @@ pub async fn get_status(
     Ok(())
 }
 
+// ---------------------------------------------------------------------------
+// Brief summary
+// ---------------------------------------------------------------------------
+
+/// Print a compact one-line health summary with counts and warnings
+fn print_brief_summary(summary: &StatusSummary, warnings: &[String]) {
+    let health_label = match summary.cluster_health.as_str() {
+        "healthy" => "HEALTHY".green().bold(),
+        "degraded" => "DEGRADED".yellow().bold(),
+        _ => "CRITICAL".red().bold(),
+    };
+
+    println!(
+        "Cluster: {}  |  Nodes: {}/{}  |  Databases: {}/{}  |  Shards: {}",
+        health_label,
+        summary.healthy_nodes,
+        summary.total_nodes,
+        summary.active_databases,
+        summary.total_databases,
+        summary.total_shards,
+    );
+
+    if !warnings.is_empty() {
+        println!();
+        for w in warnings {
+            println!("  {} {}", "!".yellow().bold(), w);
+        }
+    }
+}
+
+/// Collect actionable warnings from cluster data
+fn collect_warnings(cluster: &Value, nodes: &Value, databases: &Value) -> Vec<String> {
+    let mut warnings = Vec::new();
+    let empty_vec = vec![];
+
+    // License expiry
+    if let Some(exp) = cluster.get("license_expire_time").and_then(|v| v.as_str())
+        && exp != "N/A"
+        && !exp.is_empty()
+    {
+        warnings.push(format!("License expires: {exp}"));
+    }
+
+    // Unhealthy nodes
+    let nodes_array = nodes.as_array().unwrap_or(&empty_vec);
+    let unhealthy: Vec<String> = nodes_array
+        .iter()
+        .filter(|n| {
+            n.get("status")
+                .and_then(|s| s.as_str())
+                .is_some_and(|s| s != "active" && s != "ok")
+        })
+        .map(|n| {
+            let uid = n.get("uid").and_then(|v| v.as_u64()).unwrap_or(0);
+            let status = n
+                .get("status")
+                .and_then(|v| v.as_str())
+                .unwrap_or("unknown");
+            format!("Node {uid} is {status}")
+        })
+        .collect();
+    warnings.extend(unhealthy);
+
+    // High memory usage on databases
+    let databases_array = databases.as_array().unwrap_or(&empty_vec);
+    for db in databases_array {
+        let name = db.get("name").and_then(|v| v.as_str()).unwrap_or("?");
+        let used = db
+            .get("memory_size")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let limit = db
+            .get("memory_limit")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        if limit > 0.0 {
+            let pct = used / limit * 100.0;
+            if pct > 90.0 {
+                warnings.push(format!("Database '{name}' memory at {pct:.0}% (critical)"));
+            } else if pct > 75.0 {
+                warnings.push(format!("Database '{name}' memory at {pct:.0}%"));
+            }
+        }
+    }
+
+    warnings
+}
+
+// ---------------------------------------------------------------------------
+// Table output
+// ---------------------------------------------------------------------------
+
+/// Print status as colored, sectioned tables
+fn print_status_tables(
+    sections: &StatusSections,
+    cluster: &Value,
+    nodes: &Value,
+    databases: &Value,
+    shards: &Value,
+    summary: &StatusSummary,
+) {
+    if sections.cluster {
+        print_cluster_table(cluster);
+    }
+    if sections.nodes {
+        print_nodes_table(nodes);
+    }
+    if sections.databases {
+        print_databases_table(databases);
+    }
+    if sections.shards {
+        print_shards_table(shards);
+    }
+    print_summary_line(summary);
+}
+
+fn print_cluster_table(cluster: &Value) {
+    println!("{}", "CLUSTER".bold());
+    let mut table = Table::new();
+    table.set_header(vec!["Field", "Value"]);
+
+    let name = cluster.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+    table.add_row(vec![Cell::new("Name"), Cell::new(name)]);
+
+    if let Some(status) = cluster.get("status").and_then(|v| v.as_str()) {
+        table.add_row(vec![Cell::new("Status"), status_cell(status)]);
+    }
+
+    if let Some(rack_aware) = cluster.get("rack_aware").and_then(|v| v.as_bool()) {
+        let label = if rack_aware { "Yes" } else { "No" };
+        table.add_row(vec![Cell::new("Rack Aware"), Cell::new(label)]);
+    }
+
+    if let Some(exp) = cluster.get("license_expire_time").and_then(|v| v.as_str()) {
+        table.add_row(vec![Cell::new("License Expires"), Cell::new(exp)]);
+    }
+
+    println!("{table}");
+    println!();
+}
+
+fn print_nodes_table(nodes: &Value) {
+    let empty_vec = vec![];
+    let nodes_array = nodes.as_array().unwrap_or(&empty_vec);
+    println!("{}", "NODES".bold());
+    let mut table = Table::new();
+    table.set_header(vec![
+        "UID", "Address", "Status", "Shards", "Memory", "Rack ID",
+    ]);
+
+    for node in nodes_array {
+        let uid = node
+            .get("uid")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let addr = node.get("addr").and_then(|v| v.as_str()).unwrap_or("-");
+        let status = node
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let shard_count = node
+            .get("shard_count")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.to_string())
+            .unwrap_or("-".to_string());
+        let total_memory = node
+            .get("total_memory")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let rack_id = node.get("rack_id").and_then(|v| v.as_str()).unwrap_or("-");
+
+        table.add_row(vec![
+            Cell::new(&uid),
+            Cell::new(addr),
+            status_cell(status),
+            Cell::new(&shard_count),
+            Cell::new(format_bytes(total_memory)),
+            Cell::new(rack_id),
+        ]);
+    }
+
+    println!("{table}");
+    println!();
+}
+
+fn print_databases_table(databases: &Value) {
+    let empty_vec = vec![];
+    let databases_array = databases.as_array().unwrap_or(&empty_vec);
+    println!("{}", "DATABASES".bold());
+    let mut table = Table::new();
+    table.set_header(vec![
+        "UID",
+        "Name",
+        "Status",
+        "Memory (used/limit)",
+        "Shards",
+        "Replication",
+        "Endpoint",
+    ]);
+
+    for db in databases_array {
+        let uid = db
+            .get("uid")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let name = db.get("name").and_then(|v| v.as_str()).unwrap_or("-");
+        let status = db
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+        let mem_used = db
+            .get("memory_size")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let mem_limit = db
+            .get("memory_limit")
+            .and_then(|v| v.as_f64())
+            .unwrap_or(0.0);
+        let memory = format!("{} / {}", format_bytes(mem_used), format_bytes(mem_limit));
+        let shard_count = db
+            .get("shards_count")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.to_string())
+            .unwrap_or("-".to_string());
+        let replication = db
+            .get("replication")
+            .and_then(|v| v.as_bool())
+            .map(|v| if v { "Yes" } else { "No" })
+            .unwrap_or("-");
+
+        // Try common endpoint field patterns
+        let endpoint = db
+            .get("endpoints")
+            .and_then(|v| v.as_array())
+            .and_then(|eps| eps.first())
+            .and_then(|ep| {
+                let host = ep.get("dns_name").and_then(|v| v.as_str()).or_else(|| {
+                    ep.get("addr")
+                        .and_then(|addrs| addrs.as_array())
+                        .and_then(|a| a.first())
+                        .and_then(|v| v.as_str())
+                });
+                let port = ep.get("port").and_then(|v| v.as_u64());
+                match (host, port) {
+                    (Some(h), Some(p)) => Some(format!("{h}:{p}")),
+                    (Some(h), None) => Some(h.to_string()),
+                    _ => None,
+                }
+            })
+            .unwrap_or_else(|| "-".to_string());
+
+        table.add_row(vec![
+            Cell::new(&uid),
+            Cell::new(name),
+            status_cell(status),
+            Cell::new(&memory),
+            Cell::new(&shard_count),
+            Cell::new(replication),
+            Cell::new(&endpoint),
+        ]);
+    }
+
+    println!("{table}");
+    println!();
+}
+
+fn print_shards_table(shards: &Value) {
+    let empty_vec = vec![];
+    let shards_array = shards.as_array().unwrap_or(&empty_vec);
+    println!("{}", "SHARDS".bold());
+    let mut table = Table::new();
+    table.set_header(vec!["UID", "DB", "Node", "Role", "Status"]);
+
+    for shard in shards_array {
+        let uid = shard
+            .get("uid")
+            .and_then(|v| v.as_str())
+            .map(|v| v.to_string())
+            .unwrap_or_default();
+        let bdb_uid = shard
+            .get("bdb_uid")
+            .and_then(|v| v.as_u64())
+            .map(|v| v.to_string())
+            .unwrap_or("-".to_string());
+        let node_uid = shard
+            .get("node_uid")
+            .and_then(|v| v.as_str())
+            .map(|v| v.to_string())
+            .unwrap_or("-".to_string());
+        let role = shard.get("role").and_then(|v| v.as_str()).unwrap_or("-");
+        let status = shard
+            .get("status")
+            .and_then(|v| v.as_str())
+            .unwrap_or("unknown");
+
+        table.add_row(vec![
+            Cell::new(&uid),
+            Cell::new(&bdb_uid),
+            Cell::new(&node_uid),
+            Cell::new(role),
+            status_cell(status),
+        ]);
+    }
+
+    println!("{table}");
+    println!();
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+/// Create a colored cell based on status value
+fn status_cell(status: &str) -> Cell {
+    match status.to_lowercase().as_str() {
+        "active" | "ok" | "healthy" => Cell::new(status).fg(Color::Green),
+        "degraded" | "pending" | "importing" | "recovery" => Cell::new(status).fg(Color::Yellow),
+        "critical" | "failed" | "error" | "inactive" | "down" => Cell::new(status).fg(Color::Red),
+        _ => Cell::new(status),
+    }
+}
+
+/// Format byte count as human-readable string
+fn format_bytes(bytes: f64) -> String {
+    if bytes <= 0.0 {
+        return "-".to_string();
+    }
+    const GB: f64 = 1_073_741_824.0;
+    const MB: f64 = 1_048_576.0;
+    if bytes >= GB {
+        format!("{:.1} GB", bytes / GB)
+    } else {
+        format!("{:.1} MB", bytes / MB)
+    }
+}
+
+/// Print a colored one-line summary footer
+fn print_summary_line(summary: &StatusSummary) {
+    let health_label = match summary.cluster_health.as_str() {
+        "healthy" => "HEALTHY".green().bold(),
+        "degraded" => "DEGRADED".yellow().bold(),
+        _ => "CRITICAL".red().bold(),
+    };
+
+    println!(
+        "Status: {}  |  Nodes: {}/{}  |  Databases: {}/{}  |  Shards: {}",
+        health_label,
+        summary.healthy_nodes,
+        summary.total_nodes,
+        summary.active_databases,
+        summary.total_databases,
+        summary.total_shards,
+    );
+}
+
 /// Calculate summary statistics from collected data
-#[allow(dead_code)]
 fn calculate_summary(nodes: &Value, databases: &Value, shards: &Value) -> StatusSummary {
     let empty_vec = vec![];
     let nodes_array = nodes.as_array().unwrap_or(&empty_vec);
@@ -182,8 +557,7 @@ fn calculate_summary(nodes: &Value, databases: &Value, shards: &Value) -> Status
         .filter(|n| {
             n.get("status")
                 .and_then(|s| s.as_str())
-                .map(|s| s == "active" || s == "ok")
-                .unwrap_or(false)
+                .is_some_and(|s| s == "active" || s == "ok")
         })
         .count();
 
@@ -193,8 +567,7 @@ fn calculate_summary(nodes: &Value, databases: &Value, shards: &Value) -> Status
         .filter(|db| {
             db.get("status")
                 .and_then(|s| s.as_str())
-                .map(|s| s == "active")
-                .unwrap_or(false)
+                .is_some_and(|s| s == "active")
         })
         .count();
 
@@ -216,5 +589,109 @@ fn calculate_summary(nodes: &Value, databases: &Value, shards: &Value) -> Status
         active_databases,
         total_shards,
         cluster_health,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_format_bytes() {
+        assert_eq!(format_bytes(0.0), "-");
+        assert_eq!(format_bytes(-1.0), "-");
+        assert_eq!(format_bytes(1_048_576.0), "1.0 MB");
+        assert_eq!(format_bytes(536_870_912.0), "512.0 MB");
+        assert_eq!(format_bytes(1_073_741_824.0), "1.0 GB");
+        assert_eq!(format_bytes(2_684_354_560.0), "2.5 GB");
+    }
+
+    #[test]
+    fn test_status_cell_colors() {
+        // Just verify these don't panic
+        let _ = status_cell("active");
+        let _ = status_cell("degraded");
+        let _ = status_cell("critical");
+        let _ = status_cell("something-else");
+    }
+
+    #[test]
+    fn test_calculate_summary_healthy() {
+        let nodes = json!([
+            {"status": "active", "uid": 1},
+            {"status": "active", "uid": 2},
+        ]);
+        let dbs = json!([
+            {"status": "active", "uid": 1},
+        ]);
+        let shards = json!([
+            {"uid": "1:1"},
+            {"uid": "1:2"},
+        ]);
+
+        let summary = calculate_summary(&nodes, &dbs, &shards);
+        assert_eq!(summary.cluster_health, "healthy");
+        assert_eq!(summary.total_nodes, 2);
+        assert_eq!(summary.healthy_nodes, 2);
+        assert_eq!(summary.total_databases, 1);
+        assert_eq!(summary.active_databases, 1);
+        assert_eq!(summary.total_shards, 2);
+    }
+
+    #[test]
+    fn test_calculate_summary_degraded() {
+        let nodes = json!([
+            {"status": "active", "uid": 1},
+            {"status": "down", "uid": 2},
+        ]);
+        let dbs = json!([{"status": "active", "uid": 1}]);
+        let shards = json!([]);
+
+        let summary = calculate_summary(&nodes, &dbs, &shards);
+        assert_eq!(summary.cluster_health, "degraded");
+        assert_eq!(summary.healthy_nodes, 1);
+    }
+
+    #[test]
+    fn test_calculate_summary_critical() {
+        let nodes = json!([
+            {"status": "down", "uid": 1},
+        ]);
+        let dbs = json!([{"status": "active", "uid": 1}]);
+        let shards = json!([]);
+
+        let summary = calculate_summary(&nodes, &dbs, &shards);
+        assert_eq!(summary.cluster_health, "critical");
+    }
+
+    #[test]
+    fn test_collect_warnings_memory() {
+        let cluster = json!({});
+        let nodes = json!([]);
+        let dbs = json!([
+            {"name": "db1", "memory_size": 910.0, "memory_limit": 1000.0},
+            {"name": "db2", "memory_size": 800.0, "memory_limit": 1000.0},
+            {"name": "db3", "memory_size": 500.0, "memory_limit": 1000.0},
+        ]);
+
+        let warnings = collect_warnings(&cluster, &nodes, &dbs);
+        assert_eq!(warnings.len(), 2);
+        assert!(warnings[0].contains("db1"));
+        assert!(warnings[0].contains("critical"));
+        assert!(warnings[1].contains("db2"));
+    }
+
+    #[test]
+    fn test_collect_warnings_unhealthy_node() {
+        let cluster = json!({});
+        let nodes = json!([
+            {"uid": 1, "status": "active"},
+            {"uid": 2, "status": "down"},
+        ]);
+        let dbs = json!([]);
+
+        let warnings = collect_warnings(&cluster, &nodes, &dbs);
+        assert_eq!(warnings.len(), 1);
+        assert!(warnings[0].contains("Node 2"));
     }
 }

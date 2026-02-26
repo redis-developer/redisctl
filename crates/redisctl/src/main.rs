@@ -859,6 +859,7 @@ async fn execute_enterprise_command(
             nodes,
             databases,
             shards,
+            brief,
         } => {
             let sections = commands::enterprise::status::StatusSections {
                 cluster: *cluster,
@@ -866,8 +867,10 @@ async fn execute_enterprise_command(
                 databases: *databases,
                 shards: *shards,
             };
-            commands::enterprise::status::get_status(conn_mgr, profile, sections, output, query)
-                .await
+            commands::enterprise::status::get_status(
+                conn_mgr, profile, sections, *brief, output, query,
+            )
+            .await
         }
         SupportPackage(support_cmd) => {
             commands::enterprise::support_package::handle_support_package_command(
