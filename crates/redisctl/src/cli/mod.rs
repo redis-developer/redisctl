@@ -427,6 +427,12 @@ pub enum ProfileCommands {
     # Validate all profiles and configuration
     redisctl profile validate
 
+    # Validate and test connectivity to all profiles
+    redisctl profile validate --connect
+
+    # Machine-readable validation output
+    redisctl profile validate --connect -o json
+
     # Example output:
     # Configuration file: /Users/user/.config/redisctl/config.toml
     # ✓ Configuration file exists and is readable
@@ -440,7 +446,11 @@ pub enum ProfileCommands {
     #
     # ✓ Configuration is valid
 ")]
-    Validate,
+    Validate {
+        /// Test actual API/database connectivity for each profile
+        #[arg(long, short = 'c')]
+        connect: bool,
+    },
 }
 
 /// Files.com API key management commands

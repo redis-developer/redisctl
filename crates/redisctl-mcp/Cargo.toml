@@ -29,6 +29,7 @@ redis-enterprise = { workspace = true, optional = true }
 
 # Redis client for direct database connections (optional, gated by features)
 redis = { workspace = true, optional = true }
+urlencoding = { workspace = true, optional = true }
 
 # Core dependencies
 anyhow = { workspace = true }
@@ -51,7 +52,7 @@ default = ["http", "cloud", "enterprise", "database"]
 http = []
 cloud = ["dep:redis-cloud"]
 enterprise = ["dep:redis-enterprise"]
-database = ["dep:redis"]
+database = ["dep:redis", "dep:urlencoding"]
 test-support = []
 
 [dev-dependencies]

@@ -545,7 +545,13 @@ fn format_command(command: &Commands) -> String {
                 DefaultEnterprise { name } => format!("profile default-enterprise {}", name),
                 DefaultCloud { name } => format!("profile default-cloud {}", name),
                 DefaultDatabase { name } => format!("profile default-database {}", name),
-                Validate => "profile validate".to_string(),
+                Validate { connect } => {
+                    if *connect {
+                        "profile validate --connect".to_string()
+                    } else {
+                        "profile validate".to_string()
+                    }
+                }
             }
         }
         Commands::Api {

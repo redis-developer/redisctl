@@ -284,17 +284,23 @@ pub fn config_path(_state: Arc<AppState>) -> Tool {
         .build()
 }
 
-/// Input for validating config (no required parameters)
+/// Input for validating config
 #[derive(Debug, Deserialize, JsonSchema)]
-pub struct ValidateConfigInput {}
+pub struct ValidateConfigInput {
+    /// When true, test actual API/database connectivity for each profile in addition to structural checks
+    #[serde(default)]
+    pub connect: bool,
+}
 
 /// Build the profile_validate tool
-pub fn validate_config(_state: Arc<AppState>) -> Tool {
+pub fn validate_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_validate")
-        .description("Validate the redisctl configuration file and check for common issues")
+        .description("Validate the redisctl configuration file and check for common issues. Set connect=true to also test actual API/database connectivity for each profile.")
         .read_only()
         .idempotent()
-        .handler(|_input: ValidateConfigInput| async move {
+        .extractor_handler_typed::<_, _, _, ValidateConfigInput>(
+            state,
+            |State(_state): State<Arc<AppState>>, Json(input): Json<ValidateConfigInput>| async move {
             let path = Config::config_path()
                 .map_err(|e| ToolError::new(format!("Failed to get config path: {}", e)))?;
 
@@ -317,7 +323,7 @@ pub fn validate_config(_state: Arc<AppState>) -> Tool {
                 }
             };
 
-            // Check for issues
+            // Check for structural issues
             let mut issues: Vec<String> = Vec::new();
             let mut warnings: Vec<String> = Vec::new();
 
@@ -347,30 +353,64 @@ pub fn validate_config(_state: Arc<AppState>) -> Tool {
                 ));
             }
 
-            // Check for profiles without passwords (warning only)
+            // Check individual profiles
             for (name, profile) in &config.profiles {
-                if !profile.has_password() {
-                    match profile.deployment_type {
-                        DeploymentType::Enterprise => {
-                            warnings.push(format!(
-                                "Profile '{}' has no password set (will prompt interactively)",
-                                name
-                            ));
+                match profile.deployment_type {
+                    DeploymentType::Cloud => {
+                        if let Some((api_key, api_secret, api_url)) = profile.cloud_credentials() {
+                            if api_key.is_empty() || api_secret.is_empty() {
+                                issues.push(format!("Profile '{}': missing API key or secret", name));
+                            }
+                            if !api_url.starts_with("http://") && !api_url.starts_with("https://") {
+                                warnings.push(format!("Profile '{}': API URL should start with http:// or https://", name));
+                            }
+                            if !api_url.contains("api.redislabs.com") && api_url.starts_with("https://") {
+                                warnings.push(format!("Profile '{}': non-standard Cloud API URL: {}", name, api_url));
+                            }
+                        } else {
+                            issues.push(format!("Profile '{}': missing Cloud credentials", name));
                         }
-                        DeploymentType::Database => {
-                            // Database without password might be intentional
+                    }
+                    DeploymentType::Enterprise => {
+                        if let Some((url, username, password, _insecure, ca_cert)) = profile.enterprise_credentials() {
+                            if username.is_empty() {
+                                issues.push(format!("Profile '{}': missing username", name));
+                            }
+                            if password.is_none() || password.as_ref().is_none_or(|p: &&str| p.is_empty()) {
+                                warnings.push(format!("Profile '{}': no password set (will prompt interactively)", name));
+                            }
+                            if url.starts_with("http://") && !url.contains("localhost") {
+                                warnings.push(format!("Profile '{}': using HTTP for non-localhost Enterprise URL", name));
+                            }
+                            if let Some(cert_path) = ca_cert
+                                && !std::path::Path::new(cert_path).exists()
+                            {
+                                warnings.push(format!("Profile '{}': CA certificate path does not exist: {}", name, cert_path));
+                            }
+                        } else {
+                            issues.push(format!("Profile '{}': missing Enterprise credentials", name));
                         }
-                        DeploymentType::Cloud => {
-                            // Cloud uses API key/secret, not password
+                    }
+                    DeploymentType::Database => {
+                        if let Some((host, port, _password, _tls, _username, _database)) = profile.database_credentials() {
+                            if host.is_empty() {
+                                issues.push(format!("Profile '{}': missing host", name));
+                            }
+                            if port == 0 {
+                                issues.push(format!("Profile '{}': invalid port (0)", name));
+                            }
+                        } else {
+                            issues.push(format!("Profile '{}': missing Database credentials", name));
                         }
                     }
                 }
             }
 
-            // Build output
+            // Build structural output
             let mut output = format!(
-                "Configuration file: {}\nStatus: VALID\n\nProfiles: {}\n",
+                "Configuration file: {}\nStatus: {}\n\nProfiles: {}\n",
                 path.display(),
+                if issues.is_empty() { "VALID" } else { "HAS ISSUES" },
                 config.profiles.len()
             );
 
@@ -389,11 +429,130 @@ pub fn validate_config(_state: Arc<AppState>) -> Tool {
             }
 
             if issues.is_empty() && warnings.is_empty() {
-                output.push_str("\nNo issues found.");
+                output.push_str("\nNo structural issues found.");
+            }
+
+            // Connectivity testing
+            if input.connect {
+                output.push_str("\n\nConnectivity Tests:\n");
+                #[allow(unused_variables)]
+                let timeout = std::time::Duration::from_secs(10);
+
+                for (name, profile) in &config.profiles {
+                    match profile.deployment_type {
+                        #[cfg(feature = "cloud")]
+                        DeploymentType::Cloud => {
+                            output.push_str(&format!("  {}: ", name));
+                            match _state.cloud_client_for_profile(Some(name)).await {
+                                Ok(client) => {
+                                    use redis_cloud::flexible::SubscriptionHandler;
+                                    let handler = SubscriptionHandler::new(client);
+                                    let start = std::time::Instant::now();
+                                    match tokio::time::timeout(timeout, handler.get_all_subscriptions()).await {
+                                        Ok(Ok(_)) => {
+                                            output.push_str(&format!("OK ({}ms)\n", start.elapsed().as_millis()));
+                                        }
+                                        Ok(Err(e)) => {
+                                            output.push_str(&format!("FAILED - {}\n", e));
+                                        }
+                                        Err(_) => {
+                                            output.push_str("TIMEOUT\n");
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    output.push_str(&format!("FAILED - {}\n", e));
+                                }
+                            }
+                        }
+                        #[cfg(feature = "enterprise")]
+                        DeploymentType::Enterprise => {
+                            output.push_str(&format!("  {}: ", name));
+                            match _state.enterprise_client_for_profile(Some(name)).await {
+                                Ok(client) => {
+                                    use redis_enterprise::cluster::ClusterHandler;
+                                    let handler = ClusterHandler::new(client);
+                                    let start = std::time::Instant::now();
+                                    match tokio::time::timeout(timeout, handler.info()).await {
+                                        Ok(Ok(cluster)) => {
+                                            output.push_str(&format!(
+                                                "OK - cluster '{}' ({}ms)\n",
+                                                cluster.name,
+                                                start.elapsed().as_millis()
+                                            ));
+                                        }
+                                        Ok(Err(e)) => {
+                                            output.push_str(&format!("FAILED - {}\n", e));
+                                        }
+                                        Err(_) => {
+                                            output.push_str("TIMEOUT\n");
+                                        }
+                                    }
+                                }
+                                Err(e) => {
+                                    output.push_str(&format!("FAILED - {}\n", e));
+                                }
+                            }
+                        }
+                        #[cfg(feature = "database")]
+                        DeploymentType::Database => {
+                            output.push_str(&format!("  {}: ", name));
+                            match profile.resolve_database_credentials() {
+                                Ok(Some((host, port, password, tls, username, database))) => {
+                                    let scheme = if tls { "rediss" } else { "redis" };
+                                    let auth = match (&password, username.as_str()) {
+                                        (Some(pwd), "default") => format!(":{}@", urlencoding::encode(pwd)),
+                                        (Some(pwd), user) => format!("{}:{}@", urlencoding::encode(user), urlencoding::encode(pwd)),
+                                        (None, "default") => String::new(),
+                                        (None, user) => format!("{}@", urlencoding::encode(user)),
+                                    };
+                                    let url = format!("{}://{}{}:{}/{}", scheme, auth, host, port, database);
+                                    match redis::Client::open(url.as_str()) {
+                                        Ok(client) => {
+                                            let start = std::time::Instant::now();
+                                            match tokio::time::timeout(timeout, client.get_multiplexed_async_connection()).await {
+                                                Ok(Ok(mut conn)) => {
+                                                    match redis::cmd("PING").query_async::<String>(&mut conn).await {
+                                                        Ok(resp) => {
+                                                            output.push_str(&format!("OK - {} ({}ms)\n", resp, start.elapsed().as_millis()));
+                                                        }
+                                                        Err(e) => {
+                                                            output.push_str(&format!("FAILED - PING: {}\n", e));
+                                                        }
+                                                    }
+                                                }
+                                                Ok(Err(e)) => {
+                                                    output.push_str(&format!("FAILED - {}\n", e));
+                                                }
+                                                Err(_) => {
+                                                    output.push_str("TIMEOUT\n");
+                                                }
+                                            }
+                                        }
+                                        Err(e) => {
+                                            output.push_str(&format!("FAILED - invalid URL: {}\n", e));
+                                        }
+                                    }
+                                }
+                                Ok(None) => {
+                                    output.push_str("FAILED - no database credentials\n");
+                                }
+                                Err(e) => {
+                                    output.push_str(&format!("FAILED - {}\n", e));
+                                }
+                            }
+                        }
+                        #[allow(unreachable_patterns)]
+                        _ => {
+                            output.push_str(&format!("  {}: SKIPPED (feature not enabled)\n", name));
+                        }
+                    }
+                }
             }
 
             Ok(CallToolResult::text(output))
-        })
+        },
+        )
         .build()
 }
 
@@ -554,7 +713,7 @@ pub fn instructions() -> &'static str {
 - profile_list: List all configured profiles
 - profile_show: Show profile details (credentials masked)
 - profile_path: Show configuration file path
-- profile_validate: Validate configuration file
+- profile_validate: Validate configuration file (set connect=true to test connectivity)
 
 ### Profile Management - Write (requires --read-only=false)
 - profile_set_default_cloud: Set default Cloud profile

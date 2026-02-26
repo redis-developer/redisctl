@@ -63,6 +63,7 @@ tower-resilience = { version = "0.1", features = ["circuitbreaker", "retry", "ra
 regex = "1.12.2"
 zip = "6.0.0"
 which = "7"
+redis = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 pager = "0.16"
