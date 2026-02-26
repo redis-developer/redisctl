@@ -53,9 +53,7 @@ pub fn print_formatted_output(data: Value, output_format: OutputFormat) -> CliRe
             })?;
         }
         OutputFormat::Table | OutputFormat::Auto => {
-            // For now, output as JSON for table format
-            // TODO: Implement proper table formatting for enterprise commands
-            print_output(data, crate::output::OutputFormat::Json, None).map_err(|e| {
+            print_output(data, crate::output::OutputFormat::Table, None).map_err(|e| {
                 RedisCtlError::OutputError {
                     message: e.to_string(),
                 }
