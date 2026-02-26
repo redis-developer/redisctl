@@ -50,9 +50,7 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let cluster = handler
@@ -93,9 +91,7 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = LicenseHandler::new(client);
                 let license = handler
@@ -132,7 +128,7 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = LicenseHandler::new(client);
                 let usage = handler
@@ -189,9 +185,7 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let query = if input.start_time.is_some()
                     || input.end_time.is_some()
@@ -255,9 +249,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let databases = handler
@@ -315,9 +307,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let database = handler
@@ -351,9 +341,7 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = NodeHandler::new(client);
                 let nodes = handler
@@ -395,9 +383,7 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = NodeHandler::new(client);
                 let node = handler
@@ -435,9 +421,7 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = UserHandler::new(client);
                 let users = handler
@@ -475,9 +459,7 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = UserHandler::new(client);
                 let user = handler
@@ -515,9 +497,7 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = AlertHandler::new(client);
                 let alerts = handler
@@ -553,7 +533,7 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = AlertHandler::new(client);
                 let alerts = handler
@@ -603,7 +583,7 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
 
@@ -666,7 +646,7 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
 
@@ -728,9 +708,7 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
 
@@ -784,7 +762,7 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
                 let stats = handler
@@ -822,7 +800,7 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
                 let stats = handler.databases_last().await.map_err(|e| {
@@ -857,9 +835,7 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
                 let stats = handler
@@ -896,7 +872,7 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
                 let stats = handler
@@ -939,9 +915,7 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ShardHandler::new(client);
                 let shards = if let Some(db_uid) = input.database_uid {
@@ -987,9 +961,7 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ShardHandler::new(client);
                 let shard = handler
@@ -1031,7 +1003,7 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let endpoints = handler
@@ -1073,7 +1045,7 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DebugInfoHandler::new(client);
                 let tasks = handler
@@ -1113,7 +1085,7 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DebugInfoHandler::new(client);
                 let status = handler
@@ -1155,9 +1127,7 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ModuleHandler::new(client);
                 let modules = handler
@@ -1196,9 +1166,7 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ModuleHandler::new(client);
                 let module = handler
@@ -1254,7 +1222,7 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 // Use Layer 2 workflow
                 backup_database_and_wait(
@@ -1315,7 +1283,7 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 // Use Layer 2 workflow
                 import_database_and_wait(
@@ -1386,9 +1354,7 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 // Build the request using struct construction (all Option fields have defaults)
                 let request = CreateDatabaseRequest {
@@ -1453,9 +1419,7 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 let database = handler
@@ -1501,9 +1465,7 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = DatabaseHandler::new(client);
                 handler
@@ -1555,9 +1517,7 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 // Use Layer 2 workflow
                 flush_database_and_wait(
@@ -1605,9 +1565,7 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = RolesHandler::new(client);
                 let roles = handler
@@ -1646,9 +1604,7 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = RolesHandler::new(client);
                 let role = handler
@@ -1689,9 +1645,7 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = RedisAclHandler::new(client);
                 let acls = handler
@@ -1730,9 +1684,7 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = RedisAclHandler::new(client);
                 let acl = handler
@@ -1780,9 +1732,7 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = LicenseHandler::new(client);
                 let request = LicenseUpdateRequest {
@@ -1826,7 +1776,7 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = LicenseHandler::new(client);
                 let license = handler
@@ -1875,9 +1825,7 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let result = handler
@@ -1915,7 +1863,7 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let policy = handler
@@ -1963,7 +1911,7 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let result = handler
@@ -2011,7 +1959,7 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 // Enable maintenance mode by setting block_cluster_changes to true
@@ -2061,7 +2009,7 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 // Disable maintenance mode by setting block_cluster_changes to false
@@ -2109,7 +2057,7 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get Enterprise client: {}", e)))?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let certificates = handler
@@ -2153,9 +2101,7 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let result = handler
@@ -2208,9 +2154,7 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
                 let client = state
                     .enterprise_client_for_profile(input.profile.as_deref())
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Enterprise client: {}", e))
-                    })?;
+                    .map_err(|e| super::credential_error("enterprise", e))?;
 
                 let handler = ClusterHandler::new(client);
                 let body = serde_json::json!({
