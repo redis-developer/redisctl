@@ -12,7 +12,9 @@ use redis_enterprise::bootstrap::BootstrapHandler;
 use redis_enterprise::cluster::ClusterHandler;
 use redis_enterprise::debuginfo::DebugInfoHandler;
 use redis_enterprise::license::LicenseHandler;
+use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::ocsp::OcspHandler;
+use redis_enterprise::shards::ShardHandler;
 
 use super::utils::*;
 
@@ -624,6 +626,406 @@ pub async fn check_cluster_status(
     });
 
     let data = handle_output(status, output_format, query)?;
+    print_formatted_output(data, output_format)?;
+    Ok(())
+}
+
+// ============================================================================
+// Cluster Health Verification Commands
+// ============================================================================
+
+/// Parse node_uid from JSON which may be a number or string.
+fn parse_node_uid(value: &serde_json::Value) -> Option<u64> {
+    value
+        .as_u64()
+        .or_else(|| value.as_str().and_then(|s| s.parse().ok()))
+}
+
+/// Verify shard distribution balance across nodes.
+///
+/// Fetches all shards and nodes, groups shards by node, and flags nodes
+/// that deviate more than 25% from the mean shard count.
+pub async fn verify_balance(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
+    let client = conn_mgr.create_enterprise_client(profile_name).await?;
+
+    let nodes = NodeHandler::new(client.clone())
+        .list()
+        .await
+        .map(|v| serde_json::to_value(v).unwrap_or(serde_json::json!([])))
+        .context("Failed to list nodes")?;
+    let shards = ShardHandler::new(client)
+        .list()
+        .await
+        .map(|v| serde_json::to_value(v).unwrap_or(serde_json::json!([])))
+        .context("Failed to list shards")?;
+
+    let result = build_balance_report(&nodes, &shards);
+    let data = handle_output(result, output_format, query)?;
+    print_formatted_output(data, output_format)?;
+    Ok(())
+}
+
+fn build_balance_report(
+    nodes: &serde_json::Value,
+    shards: &serde_json::Value,
+) -> serde_json::Value {
+    let nodes_arr = nodes.as_array();
+    let shards_arr = shards.as_array();
+
+    let (Some(nodes_arr), Some(shards_arr)) = (nodes_arr, shards_arr) else {
+        return serde_json::json!({
+            "balanced": false,
+            "total_shards": 0,
+            "total_nodes": 0,
+            "nodes": [],
+            "error": "Failed to retrieve nodes or shards data"
+        });
+    };
+
+    // Build a set of active node UIDs
+    let node_uids: std::collections::HashMap<u64, &serde_json::Value> = nodes_arr
+        .iter()
+        .filter_map(|n| n["uid"].as_u64().map(|uid| (uid, n)))
+        .collect();
+
+    // Group shards by node
+    let mut per_node: std::collections::HashMap<u64, (u64, u64)> =
+        node_uids.keys().map(|uid| (*uid, (0u64, 0u64))).collect();
+
+    let total_shards = shards_arr.len();
+    for shard in shards_arr {
+        // node_uid may be serialized as a string or number depending on API version
+        let node_id = shard["node_uid"]
+            .as_u64()
+            .or_else(|| shard["node_uid"].as_str().and_then(|s| s.parse().ok()));
+        let Some(node_id) = node_id else {
+            continue;
+        };
+        let role = shard["role"].as_str().unwrap_or("");
+        let entry = per_node.entry(node_id).or_insert((0, 0));
+        match role {
+            "master" => entry.0 += 1,
+            "slave" => entry.1 += 1,
+            _ => entry.1 += 1,
+        }
+    }
+
+    let total_nodes = per_node.len();
+    let mean = if total_nodes > 0 {
+        total_shards as f64 / total_nodes as f64
+    } else {
+        0.0
+    };
+    let threshold = mean * 0.25;
+
+    let mut balanced = true;
+    let mut node_reports = Vec::new();
+
+    let mut node_ids: Vec<u64> = per_node.keys().copied().collect();
+    node_ids.sort();
+
+    for node_id in node_ids {
+        let (masters, replicas) = per_node[&node_id];
+        let shard_count = masters + replicas;
+        let deviation = (shard_count as f64 - mean).abs();
+        let status = if deviation > threshold && mean > 0.0 {
+            balanced = false;
+            "IMBALANCED"
+        } else {
+            "OK"
+        };
+
+        node_reports.push(serde_json::json!({
+            "node_id": node_id,
+            "shard_count": shard_count,
+            "master_count": masters,
+            "replica_count": replicas,
+            "status": status
+        }));
+    }
+
+    serde_json::json!({
+        "balanced": balanced,
+        "total_shards": total_shards,
+        "total_nodes": total_nodes,
+        "mean_shards_per_node": (mean * 100.0).round() / 100.0,
+        "nodes": node_reports
+    })
+}
+
+/// Verify rack-aware placement of master/replica shard pairs.
+///
+/// Checks that each master/replica pair in a database lives on different racks.
+/// Reports violations per database.
+pub async fn verify_rack_awareness(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
+    let client = conn_mgr.create_enterprise_client(profile_name).await?;
+
+    let cluster_info = ClusterHandler::new(client.clone()).info().await?;
+    let rack_aware = cluster_info.rack_aware.unwrap_or(false);
+
+    if !rack_aware {
+        let result = serde_json::json!({
+            "rack_aware_enabled": false,
+            "total_databases": 0,
+            "violations": 0,
+            "databases": [],
+            "message": "Rack awareness is not enabled on this cluster"
+        });
+        let data = handle_output(result, output_format, query)?;
+        print_formatted_output(data, output_format)?;
+        return Ok(());
+    }
+
+    let nodes = NodeHandler::new(client.clone())
+        .list()
+        .await
+        .map(|v| serde_json::to_value(v).unwrap_or(serde_json::json!([])))
+        .context("Failed to list nodes")?;
+    let shards = ShardHandler::new(client)
+        .list()
+        .await
+        .map(|v| serde_json::to_value(v).unwrap_or(serde_json::json!([])))
+        .context("Failed to list shards")?;
+
+    let result = build_rack_awareness_report(&nodes, &shards);
+    let data = handle_output(result, output_format, query)?;
+    print_formatted_output(data, output_format)?;
+    Ok(())
+}
+
+fn build_rack_awareness_report(
+    nodes: &serde_json::Value,
+    shards: &serde_json::Value,
+) -> serde_json::Value {
+    let nodes_arr = nodes.as_array();
+    let shards_arr = shards.as_array();
+
+    let (Some(nodes_arr), Some(shards_arr)) = (nodes_arr, shards_arr) else {
+        return serde_json::json!({
+            "rack_aware_enabled": true,
+            "total_databases": 0,
+            "violations": 0,
+            "databases": [],
+            "error": "Failed to retrieve nodes or shards data"
+        });
+    };
+
+    // Build node_uid -> rack_id mapping
+    let node_rack: std::collections::HashMap<u64, String> = nodes_arr
+        .iter()
+        .filter_map(|n| {
+            let uid = n["uid"].as_u64()?;
+            let rack = n["rack_id"].as_str().unwrap_or("").to_string();
+            Some((uid, rack))
+        })
+        .collect();
+
+    // Group shards by bdb_uid
+    let mut by_db: std::collections::HashMap<u64, Vec<&serde_json::Value>> =
+        std::collections::HashMap::new();
+    for shard in shards_arr {
+        if let Some(bdb_uid) = shard["bdb_uid"].as_u64() {
+            by_db.entry(bdb_uid).or_default().push(shard);
+        }
+    }
+
+    let total_databases = by_db.len();
+    let mut violations = 0u64;
+    let mut db_reports = Vec::new();
+
+    let mut db_ids: Vec<u64> = by_db.keys().copied().collect();
+    db_ids.sort();
+
+    for bdb_uid in db_ids {
+        let db_shards = &by_db[&bdb_uid];
+
+        // Separate masters and replicas
+        let masters: Vec<&&serde_json::Value> = db_shards
+            .iter()
+            .filter(|s| s["role"].as_str() == Some("master"))
+            .collect();
+        let replicas: Vec<&&serde_json::Value> = db_shards
+            .iter()
+            .filter(|s| s["role"].as_str() == Some("slave"))
+            .collect();
+
+        let mut db_violations = Vec::new();
+
+        // For each master, find replicas and check rack placement
+        for master in &masters {
+            let master_node = parse_node_uid(&master["node_uid"]).unwrap_or(0);
+            let master_rack = node_rack.get(&master_node).cloned().unwrap_or_default();
+
+            for replica in &replicas {
+                let replica_node = parse_node_uid(&replica["node_uid"]).unwrap_or(0);
+                let replica_rack = node_rack.get(&replica_node).cloned().unwrap_or_default();
+
+                if !master_rack.is_empty()
+                    && !replica_rack.is_empty()
+                    && master_rack == replica_rack
+                {
+                    db_violations.push(format!(
+                        "master (node {}) and replica (node {}) on same rack: {}",
+                        master_node, replica_node, master_rack
+                    ));
+                }
+            }
+        }
+
+        let status = if db_violations.is_empty() {
+            "OK"
+        } else {
+            violations += 1;
+            "VIOLATION"
+        };
+
+        let mut report = serde_json::json!({
+            "bdb_uid": bdb_uid,
+            "name": format!("db:{}", bdb_uid),
+            "status": status,
+            "master_count": masters.len(),
+            "replica_count": replicas.len()
+        });
+
+        if !db_violations.is_empty() {
+            report["details"] = serde_json::json!(db_violations.join("; "));
+        }
+
+        db_reports.push(report);
+    }
+
+    serde_json::json!({
+        "rack_aware_enabled": true,
+        "total_databases": total_databases,
+        "violations": violations,
+        "databases": db_reports
+    })
+}
+
+/// Combined cluster health check.
+///
+/// Runs cluster status, balance verification, and rack-awareness verification,
+/// producing a unified report with overall PASS/WARN/FAIL status.
+pub async fn cluster_health(
+    conn_mgr: &ConnectionManager,
+    profile_name: Option<&str>,
+    output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<()> {
+    let client = conn_mgr.create_enterprise_client(profile_name).await?;
+
+    // Fetch all data
+    let cluster_info = ClusterHandler::new(client.clone()).info().await?;
+    let nodes = NodeHandler::new(client.clone())
+        .list()
+        .await
+        .map(|v| serde_json::to_value(v).unwrap_or(serde_json::json!([])))
+        .context("Failed to list nodes")?;
+    let shards = ShardHandler::new(client)
+        .list()
+        .await
+        .map(|v| serde_json::to_value(v).unwrap_or(serde_json::json!([])))
+        .context("Failed to list shards")?;
+
+    // Cluster status check
+    let cluster_status_str = cluster_info
+        .status
+        .as_deref()
+        .unwrap_or("unknown")
+        .to_string();
+    let license_expired = cluster_info.license_expired.unwrap_or(false);
+    let cluster_status_pass = cluster_status_str == "active" && !license_expired;
+
+    let cluster_status_check = serde_json::json!({
+        "status": if cluster_status_pass { "PASS" } else { "FAIL" },
+        "name": cluster_info.name,
+        "cluster_status": cluster_status_str,
+        "license_expired": license_expired
+    });
+
+    // Memory check
+    let total_memory = cluster_info.total_memory.unwrap_or(0);
+    let used_memory = cluster_info.used_memory.unwrap_or(0);
+    let usage_percent = if total_memory > 0 {
+        (used_memory as f64 / total_memory as f64) * 100.0
+    } else {
+        0.0
+    };
+    let usage_percent_rounded = (usage_percent * 100.0).round() / 100.0;
+    let memory_status = if usage_percent > 90.0 {
+        "FAIL"
+    } else if usage_percent > 75.0 {
+        "WARN"
+    } else {
+        "PASS"
+    };
+
+    let memory_check = serde_json::json!({
+        "status": memory_status,
+        "total_memory": total_memory,
+        "used_memory": used_memory,
+        "usage_percent": usage_percent_rounded
+    });
+
+    // Balance check
+    let balance_report = build_balance_report(&nodes, &shards);
+    let balance_ok = balance_report["balanced"].as_bool().unwrap_or(false);
+    let mut balance_check = balance_report.clone();
+    balance_check["status"] = serde_json::json!(if balance_ok { "PASS" } else { "WARN" });
+
+    // Rack-awareness check
+    let rack_aware = cluster_info.rack_aware.unwrap_or(false);
+
+    let rack_check = if rack_aware {
+        let mut report = build_rack_awareness_report(&nodes, &shards);
+        let rack_violations = report["violations"].as_u64().unwrap_or(0);
+        report["status"] = serde_json::json!(if rack_violations == 0 { "PASS" } else { "WARN" });
+        report
+    } else {
+        serde_json::json!({
+            "status": "PASS",
+            "rack_aware_enabled": false,
+            "message": "Rack awareness not enabled, skipping check"
+        })
+    };
+
+    // Determine overall status
+    let statuses = [
+        cluster_status_check["status"].as_str().unwrap_or("FAIL"),
+        memory_check["status"].as_str().unwrap_or("FAIL"),
+        balance_check["status"].as_str().unwrap_or("FAIL"),
+        rack_check["status"].as_str().unwrap_or("FAIL"),
+    ];
+
+    let overall = if statuses.contains(&"FAIL") {
+        "FAIL"
+    } else if statuses.contains(&"WARN") {
+        "WARN"
+    } else {
+        "PASS"
+    };
+
+    let result = serde_json::json!({
+        "overall": overall,
+        "checks": {
+            "cluster_status": cluster_status_check,
+            "memory": memory_check,
+            "balance": balance_check,
+            "rack_awareness": rack_check
+        }
+    });
+
+    let data = handle_output(result, output_format, query)?;
     print_formatted_output(data, output_format)?;
     Ok(())
 }
