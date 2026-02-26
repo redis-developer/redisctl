@@ -91,11 +91,17 @@ pub enum RedisCtlError {
     #[error("No profile configured. Use 'redisctl profile set' to configure a profile.")]
     NoProfileConfigured,
 
-    #[error("Missing credentials for profile '{name}'")]
-    MissingCredentials { name: String },
+    #[error("Missing credentials for profile '{name}': {missing_fields}")]
+    MissingCredentials {
+        name: String,
+        missing_fields: String,
+    },
 
-    #[error("Authentication failed: {message}")]
-    AuthenticationFailed { message: String },
+    #[error("Authentication failed for profile '{profile_name}': {message}")]
+    AuthenticationFailed {
+        message: String,
+        profile_name: String,
+    },
 
     #[error("API error: {message}")]
     ApiError { message: String },
@@ -131,30 +137,51 @@ impl RedisCtlError {
                 format!("Check profile name spelling"),
             ],
             RedisCtlError::NoProfileConfigured => vec![
-                "Create a Cloud profile: redisctl profile set mycloud cloud --api-key <key> --api-secret <secret>".to_string(),
-                "Create an Enterprise profile: redisctl profile set myenterprise enterprise --url <url> --username <user>".to_string(),
-                "View profile documentation: redisctl profile --help".to_string(),
+                "Run the setup wizard: redisctl profile init".to_string(),
+                "Or create manually: redisctl profile set <name> --type <cloud|enterprise|database> ...".to_string(),
+                "View profile help: redisctl profile set --help".to_string(),
             ],
-            RedisCtlError::MissingCredentials { name } => vec![
-                format!("Update profile credentials: redisctl profile set {}", name),
-                format!("Check profile details: redisctl profile show {}", name),
-                "Verify environment variables are set correctly".to_string(),
+            RedisCtlError::MissingCredentials { name, .. } => vec![
+                format!(
+                    "Update the profile: redisctl profile set {} --type <type> ...",
+                    name
+                ),
+                format!("Check current values: redisctl profile show {}", name),
+                "If using environment variables, check they are exported in your shell".to_string(),
             ],
-            RedisCtlError::AuthenticationFailed { .. } => vec![
-                "Check your credentials: redisctl profile show <profile>".to_string(),
-                "For Cloud: Verify API key and secret are correct".to_string(),
-                "For Enterprise: Verify username and password are correct".to_string(),
-                "Ensure the API endpoint URL is correct".to_string(),
+            RedisCtlError::AuthenticationFailed { profile_name, .. } => {
+                let mut suggestions = vec![format!(
+                    "Check credentials: redisctl profile show {}",
+                    profile_name,
+                )];
+                suggestions.push(format!(
+                    "Re-enter credentials: redisctl profile set {} --type <type> ...",
+                    profile_name,
+                ));
+                suggestions.push(
+                    "Test connectivity: redisctl profile validate --connect".to_string(),
+                );
+                suggestions
+            }
+            RedisCtlError::ConnectionError { message } if message.contains("certificate") || message.contains("SSL") || message.contains("tls") => vec![
+                "For self-signed certificates, recreate profile with --insecure".to_string(),
+                "Or provide a CA cert: --ca-cert /path/to/ca.pem".to_string(),
+                "Verify the URL uses the correct port (9443 for Enterprise admin)".to_string(),
             ],
-            RedisCtlError::ConnectionError { message } if message.contains("certificate") || message.contains("SSL") => vec![
-                "For Enterprise: Try with --insecure flag for self-signed certificates".to_string(),
-                "Update profile with insecure option: redisctl profile set <name> enterprise --insecure".to_string(),
-                "Check that the server URL is correct and reachable".to_string(),
+            RedisCtlError::ConnectionError { message } if message.contains("Connection refused") => vec![
+                "The server is not accepting connections on this address/port".to_string(),
+                "Verify the URL: redisctl profile show <profile>".to_string(),
+                "Check that the server is running and the port is correct".to_string(),
+            ],
+            RedisCtlError::ConnectionError { message } if message.contains("timed out") => vec![
+                "The server did not respond in time".to_string(),
+                "Check network connectivity and firewall rules".to_string(),
+                "Verify the URL: redisctl profile show <profile>".to_string(),
             ],
             RedisCtlError::ConnectionError { .. } => vec![
-                "Check network connectivity".to_string(),
-                "Verify the server URL is correct: redisctl profile show <profile>".to_string(),
-                "Ensure firewall allows connections to the API endpoint".to_string(),
+                "Check network connectivity to the server".to_string(),
+                "Verify the URL: redisctl profile show <profile>".to_string(),
+                "Test connectivity: redisctl profile validate --connect".to_string(),
             ],
             RedisCtlError::ApiError { message } if message.contains("404") => vec![
                 "Verify the resource ID is correct".to_string(),
@@ -219,7 +246,10 @@ impl From<redis_cloud::CloudError> for RedisCtlError {
     fn from(err: redis_cloud::CloudError) -> Self {
         match err {
             redis_cloud::CloudError::AuthenticationFailed { message } => {
-                RedisCtlError::AuthenticationFailed { message }
+                RedisCtlError::AuthenticationFailed {
+                    message,
+                    profile_name: "<unknown>".to_string(),
+                }
             }
             redis_cloud::CloudError::ConnectionError(message) => {
                 RedisCtlError::ConnectionError { message }
@@ -237,11 +267,13 @@ impl From<redis_enterprise::RestError> for RedisCtlError {
             redis_enterprise::RestError::AuthenticationFailed => {
                 RedisCtlError::AuthenticationFailed {
                     message: "Authentication failed".to_string(),
+                    profile_name: "<unknown>".to_string(),
                 }
             }
             redis_enterprise::RestError::Unauthorized => RedisCtlError::AuthenticationFailed {
                 message: "401 Unauthorized: Invalid username or password. Check your credentials."
                     .to_string(),
+                profile_name: "<unknown>".to_string(),
             },
             redis_enterprise::RestError::NotFound => RedisCtlError::ApiError {
                 message: "404 Not Found: The requested resource does not exist".to_string(),
