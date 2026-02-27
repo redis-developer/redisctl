@@ -1,9 +1,12 @@
 //! Direct Redis database tools
 
+mod diagnostics;
 mod keys;
 mod server;
 mod structures;
 
+#[allow(unused_imports)]
+pub use diagnostics::*;
 #[allow(unused_imports)]
 pub use keys::*;
 #[allow(unused_imports)]
@@ -22,6 +25,7 @@ static INSTRUCTIONS: LazyLock<String> = LazyLock::new(|| {
         server::INSTRUCTIONS,
         keys::INSTRUCTIONS,
         structures::INSTRUCTIONS,
+        diagnostics::INSTRUCTIONS,
     ]
     .concat()
 });
@@ -88,5 +92,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
         .merge(server::router(state.clone()))
         .merge(keys::router(state.clone()))
-        .merge(structures::router(state))
+        .merge(structures::router(state.clone()))
+        .merge(diagnostics::router(state))
 }
