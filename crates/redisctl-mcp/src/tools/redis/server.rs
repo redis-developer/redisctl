@@ -1,12 +1,13 @@
 //! Server-level Redis tools (ping, info, dbsize, client_list, cluster_info, slowlog,
-//! config_get, memory_stats, latency_history, acl_list, acl_whoami, module_list)
+//! config_get, memory_stats, latency_history, acl_list, acl_whoami, module_list,
+//! config_set, flushdb)
 
 use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -26,6 +27,8 @@ or a `url` parameter for direct connections. If neither is provided, the default
 - redis_acl_list: List ACL rules\n\
 - redis_acl_whoami: Get current authenticated username\n\
 - redis_module_list: List loaded modules\n\
+- redis_config_set: Set configuration parameter at runtime [write]\n\
+- redis_flushdb: Flush current database (DANGEROUS) [write]\n\
 ";
 
 /// Build a sub-router containing all server-level Redis tools
@@ -43,6 +46,8 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(acl_list(state.clone()))
         .tool(acl_whoami(state.clone()))
         .tool(module_list(state.clone()))
+        .tool(config_set(state.clone()))
+        .tool(flushdb(state))
 }
 
 /// Input for ping command
@@ -667,6 +672,126 @@ pub fn module_list(state: Arc<AppState>) -> Tool {
                 Ok(CallToolResult::text(format!(
                     "Loaded modules:\n{}",
                     formatted
+                )))
+            },
+        )
+        .build()
+}
+
+// --- Write tools ---
+
+/// Input for CONFIG SET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ConfigSetInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Configuration parameter name
+    pub parameter: String,
+    /// Configuration parameter value
+    pub value: String,
+}
+
+/// Build the config_set tool
+pub fn config_set(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_config_set")
+        .description(
+            "Set a Redis configuration parameter at runtime using CONFIG SET. \
+             Changes may not persist across restarts unless CONFIG REWRITE is called.",
+        )
+        .extractor_handler_typed::<_, _, _, ConfigSetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ConfigSetInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let _: () = redis::cmd("CONFIG")
+                    .arg("SET")
+                    .arg(&input.parameter)
+                    .arg(&input.value)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("CONFIG SET failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - set {} = {}",
+                    input.parameter, input.value
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for FLUSHDB command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct FlushdbInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Use asynchronous flush (non-blocking, default: false)
+    #[serde(default)]
+    pub async_flush: bool,
+}
+
+/// Build the flushdb tool
+pub fn flushdb(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_flushdb")
+        .description(
+            "DANGEROUS: Flush all keys from the current database. This permanently deletes \
+             all data. Use with extreme caution. Set async_flush=true for non-blocking operation.",
+        )
+        .extractor_handler_typed::<_, _, _, FlushdbInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<FlushdbInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("FLUSHDB");
+                if input.async_flush {
+                    cmd.arg("ASYNC");
+                }
+
+                let _: () = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("FLUSHDB failed: {}", e)))?;
+
+                let mode = if input.async_flush { " (async)" } else { "" };
+                Ok(CallToolResult::text(format!(
+                    "OK - database flushed{}",
+                    mode
                 )))
             },
         )

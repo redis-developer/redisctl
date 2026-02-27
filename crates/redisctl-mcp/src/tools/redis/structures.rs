@@ -1,12 +1,14 @@
 //! Data structure Redis tools (hgetall, lrange, smembers, zrange, xinfo_stream, xrange, xlen,
-//! pubsub_channels, pubsub_numsub)
+//! pubsub_channels, pubsub_numsub, hset, hdel, lpush, rpush, lpop, rpop, sadd, srem, zadd,
+//! zrem, xadd, xtrim)
 
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -21,6 +23,18 @@ pub(super) const INSTRUCTIONS: &str = "\
 - redis_xlen: Get stream length\n\
 - redis_pubsub_channels: List active pub/sub channels\n\
 - redis_pubsub_numsub: Get subscriber counts for channels\n\
+- redis_hset: Set hash fields [write]\n\
+- redis_hdel: Delete hash fields [write]\n\
+- redis_lpush: Push elements to head of list [write]\n\
+- redis_rpush: Push elements to tail of list [write]\n\
+- redis_lpop: Pop elements from head of list [write]\n\
+- redis_rpop: Pop elements from tail of list [write]\n\
+- redis_sadd: Add members to set [write]\n\
+- redis_srem: Remove members from set [write]\n\
+- redis_zadd: Add members to sorted set with scores [write]\n\
+- redis_zrem: Remove members from sorted set [write]\n\
+- redis_xadd: Append entry to stream [write]\n\
+- redis_xtrim: Trim stream by length or ID [write]\n\
 ";
 
 /// Build a sub-router containing all data structure Redis tools
@@ -35,6 +49,18 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(xlen(state.clone()))
         .tool(pubsub_channels(state.clone()))
         .tool(pubsub_numsub(state.clone()))
+        .tool(hset(state.clone()))
+        .tool(hdel(state.clone()))
+        .tool(lpush(state.clone()))
+        .tool(rpush(state.clone()))
+        .tool(lpop(state.clone()))
+        .tool(rpop(state.clone()))
+        .tool(sadd(state.clone()))
+        .tool(srem(state.clone()))
+        .tool(zadd(state.clone()))
+        .tool(zrem(state.clone()))
+        .tool(xadd(state.clone()))
+        .tool(xtrim(state))
 }
 
 /// Input for HGETALL command
@@ -650,6 +676,847 @@ pub fn pubsub_numsub(state: Arc<AppState>) -> Tool {
                 }
 
                 Ok(CallToolResult::text(output))
+            },
+        )
+        .build()
+}
+
+// --- Write tools ---
+
+/// Input for HSET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HsetInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+    /// Field-value pairs to set
+    pub fields: HashMap<String, String>,
+}
+
+/// Build the hset tool
+pub fn hset(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hset")
+        .description(
+            "Set one or more field-value pairs in a hash. Creates the hash if it does not \
+             exist. Returns the number of fields that were added (not updated).",
+        )
+        .extractor_handler_typed::<_, _, _, HsetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HsetInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("HSET");
+                cmd.arg(&input.key);
+                for (field, value) in &input.fields {
+                    cmd.arg(field).arg(value);
+                }
+
+                let added: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("HSET failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - {} field(s) added to hash '{}' ({} field(s) set total)",
+                    added,
+                    input.key,
+                    input.fields.len()
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for HDEL command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HdelInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+    /// Fields to delete
+    pub fields: Vec<String>,
+}
+
+/// Build the hdel tool
+pub fn hdel(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hdel")
+        .description(
+            "Delete one or more fields from a hash. Returns the number of fields that were removed.",
+        )
+        .extractor_handler_typed::<_, _, _, HdelInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HdelInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("HDEL");
+                cmd.arg(&input.key);
+                for field in &input.fields {
+                    cmd.arg(field);
+                }
+
+                let removed: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("HDEL failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "Deleted {} of {} field(s) from hash '{}'",
+                    removed,
+                    input.fields.len(),
+                    input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for LPUSH command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct LpushInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List key
+    pub key: String,
+    /// Elements to push to the head of the list
+    pub elements: Vec<String>,
+}
+
+/// Build the lpush tool
+pub fn lpush(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_lpush")
+        .description(
+            "Push one or more elements to the head (left) of a list. Creates the list \
+             if it does not exist. Returns the new list length.",
+        )
+        .extractor_handler_typed::<_, _, _, LpushInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<LpushInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("LPUSH");
+                cmd.arg(&input.key);
+                for elem in &input.elements {
+                    cmd.arg(elem);
+                }
+
+                let length: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("LPUSH failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - pushed {} element(s) to '{}', new length: {}",
+                    input.elements.len(),
+                    input.key,
+                    length
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for RPUSH command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RpushInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List key
+    pub key: String,
+    /// Elements to push to the tail of the list
+    pub elements: Vec<String>,
+}
+
+/// Build the rpush tool
+pub fn rpush(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_rpush")
+        .description(
+            "Push one or more elements to the tail (right) of a list. Creates the list \
+             if it does not exist. Returns the new list length.",
+        )
+        .extractor_handler_typed::<_, _, _, RpushInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<RpushInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("RPUSH");
+                cmd.arg(&input.key);
+                for elem in &input.elements {
+                    cmd.arg(elem);
+                }
+
+                let length: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("RPUSH failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - pushed {} element(s) to '{}', new length: {}",
+                    input.elements.len(),
+                    input.key,
+                    length
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for LPOP command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct LpopInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List key
+    pub key: String,
+    /// Number of elements to pop (default: 1)
+    #[serde(default)]
+    pub count: Option<u64>,
+}
+
+/// Build the lpop tool
+pub fn lpop(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_lpop")
+        .description(
+            "Pop one or more elements from the head (left) of a list. Returns the \
+             popped element(s), or nil if the list is empty.",
+        )
+        .extractor_handler_typed::<_, _, _, LpopInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<LpopInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("LPOP");
+                cmd.arg(&input.key);
+                if let Some(count) = input.count {
+                    cmd.arg(count);
+                }
+
+                let result: redis::Value = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("LPOP failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "LPOP '{}': {}",
+                    input.key,
+                    super::format_value(&result)
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for RPOP command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RpopInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List key
+    pub key: String,
+    /// Number of elements to pop (default: 1)
+    #[serde(default)]
+    pub count: Option<u64>,
+}
+
+/// Build the rpop tool
+pub fn rpop(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_rpop")
+        .description(
+            "Pop one or more elements from the tail (right) of a list. Returns the \
+             popped element(s), or nil if the list is empty.",
+        )
+        .extractor_handler_typed::<_, _, _, RpopInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<RpopInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("RPOP");
+                cmd.arg(&input.key);
+                if let Some(count) = input.count {
+                    cmd.arg(count);
+                }
+
+                let result: redis::Value = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("RPOP failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "RPOP '{}': {}",
+                    input.key,
+                    super::format_value(&result)
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SADD command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SaddInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set key
+    pub key: String,
+    /// Members to add to the set
+    pub members: Vec<String>,
+}
+
+/// Build the sadd tool
+pub fn sadd(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_sadd")
+        .description(
+            "Add one or more members to a set. Creates the set if it does not exist. \
+             Returns the number of members that were added (not already present).",
+        )
+        .extractor_handler_typed::<_, _, _, SaddInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SaddInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("SADD");
+                cmd.arg(&input.key);
+                for member in &input.members {
+                    cmd.arg(member);
+                }
+
+                let added: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("SADD failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - added {} of {} member(s) to set '{}'",
+                    added,
+                    input.members.len(),
+                    input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SREM command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SremInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set key
+    pub key: String,
+    /// Members to remove from the set
+    pub members: Vec<String>,
+}
+
+/// Build the srem tool
+pub fn srem(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_srem")
+        .description(
+            "Remove one or more members from a set. Returns the number of members \
+             that were removed.",
+        )
+        .extractor_handler_typed::<_, _, _, SremInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SremInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("SREM");
+                cmd.arg(&input.key);
+                for member in &input.members {
+                    cmd.arg(member);
+                }
+
+                let removed: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("SREM failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "Removed {} of {} member(s) from set '{}'",
+                    removed,
+                    input.members.len(),
+                    input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// A score-member pair for sorted set operations
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ScoreMember {
+    /// Score value
+    pub score: f64,
+    /// Member value
+    pub member: String,
+}
+
+/// Input for ZADD command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZaddInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+    /// Score-member pairs to add
+    pub members: Vec<ScoreMember>,
+    /// Only add new elements, do not update existing ones
+    #[serde(default)]
+    pub nx: bool,
+    /// Only update existing elements, do not add new ones
+    #[serde(default)]
+    pub xx: bool,
+    /// Only update elements whose new score is greater than current score
+    #[serde(default)]
+    pub gt: bool,
+    /// Only update elements whose new score is less than current score
+    #[serde(default)]
+    pub lt: bool,
+    /// Return the number of elements changed (added + updated) instead of only added
+    #[serde(default)]
+    pub ch: bool,
+}
+
+/// Build the zadd tool
+pub fn zadd(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zadd")
+        .description(
+            "Add one or more members to a sorted set with scores. Creates the set if it \
+             does not exist. Supports NX (only add new), XX (only update existing), \
+             GT/LT (score comparison), and CH (count changed) flags.",
+        )
+        .extractor_handler_typed::<_, _, _, ZaddInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZaddInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("ZADD");
+                cmd.arg(&input.key);
+
+                if input.nx {
+                    cmd.arg("NX");
+                }
+                if input.xx {
+                    cmd.arg("XX");
+                }
+                if input.gt {
+                    cmd.arg("GT");
+                }
+                if input.lt {
+                    cmd.arg("LT");
+                }
+                if input.ch {
+                    cmd.arg("CH");
+                }
+
+                for sm in &input.members {
+                    cmd.arg(sm.score).arg(&sm.member);
+                }
+
+                let count: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("ZADD failed: {}", e)))?;
+
+                let verb = if input.ch { "changed" } else { "added" };
+                Ok(CallToolResult::text(format!(
+                    "OK - {} {} member(s) in sorted set '{}'",
+                    count, verb, input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for ZREM command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZremInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+    /// Members to remove
+    pub members: Vec<String>,
+}
+
+/// Build the zrem tool
+pub fn zrem(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zrem")
+        .description(
+            "Remove one or more members from a sorted set. Returns the number of \
+             members that were removed.",
+        )
+        .extractor_handler_typed::<_, _, _, ZremInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZremInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("ZREM");
+                cmd.arg(&input.key);
+                for member in &input.members {
+                    cmd.arg(member);
+                }
+
+                let removed: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("ZREM failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "Removed {} of {} member(s) from sorted set '{}'",
+                    removed,
+                    input.members.len(),
+                    input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for XADD command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct XaddInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Stream key
+    pub key: String,
+    /// Entry ID (default: "*" for auto-generated)
+    #[serde(default)]
+    pub id: Option<String>,
+    /// Field-value pairs for the stream entry
+    pub fields: HashMap<String, String>,
+    /// Do not create stream if it does not exist
+    #[serde(default)]
+    pub nomkstream: bool,
+    /// Cap stream to a maximum length
+    #[serde(default)]
+    pub maxlen: Option<u64>,
+    /// Cap stream entries older than this ID
+    #[serde(default)]
+    pub minid: Option<String>,
+    /// Use approximate trimming (~) for better performance
+    #[serde(default)]
+    pub approximate: bool,
+}
+
+/// Build the xadd tool
+pub fn xadd(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_xadd")
+        .description(
+            "Append an entry to a stream. Auto-generates an ID by default (\"*\"). \
+             Supports NOMKSTREAM, MAXLEN, and MINID trimming options. \
+             Returns the ID of the added entry.",
+        )
+        .extractor_handler_typed::<_, _, _, XaddInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<XaddInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("XADD");
+                cmd.arg(&input.key);
+
+                if input.nomkstream {
+                    cmd.arg("NOMKSTREAM");
+                }
+
+                if let Some(maxlen) = input.maxlen {
+                    cmd.arg("MAXLEN");
+                    if input.approximate {
+                        cmd.arg("~");
+                    }
+                    cmd.arg(maxlen);
+                } else if let Some(ref minid) = input.minid {
+                    cmd.arg("MINID");
+                    if input.approximate {
+                        cmd.arg("~");
+                    }
+                    cmd.arg(minid);
+                }
+
+                let id = input.id.as_deref().unwrap_or("*");
+                cmd.arg(id);
+
+                for (field, value) in &input.fields {
+                    cmd.arg(field).arg(value);
+                }
+
+                let entry_id: String = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("XADD failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - added entry {} to stream '{}'",
+                    entry_id, input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for XTRIM command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct XtrimInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Stream key
+    pub key: String,
+    /// Trimming strategy: "MAXLEN" or "MINID"
+    pub strategy: String,
+    /// Threshold value (count for MAXLEN, ID for MINID)
+    pub threshold: String,
+    /// Use approximate trimming (~) for better performance
+    #[serde(default)]
+    pub approximate: bool,
+}
+
+/// Build the xtrim tool
+pub fn xtrim(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_xtrim")
+        .description(
+            "Trim a stream to a given length (MAXLEN) or minimum ID (MINID). \
+             Use approximate=true for better performance with near-exact trimming. \
+             Returns the number of entries removed.",
+        )
+        .extractor_handler_typed::<_, _, _, XtrimInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<XtrimInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("XTRIM");
+                cmd.arg(&input.key);
+                cmd.arg(&input.strategy);
+
+                if input.approximate {
+                    cmd.arg("~");
+                }
+                cmd.arg(&input.threshold);
+
+                let trimmed: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("XTRIM failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - trimmed {} entries from stream '{}'",
+                    trimmed, input.key
+                )))
             },
         )
         .build()

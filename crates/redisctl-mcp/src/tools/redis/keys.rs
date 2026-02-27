@@ -1,12 +1,12 @@
 //! Key-level Redis tools (keys, scan, get, key_type, ttl, exists, memory_usage, object_encoding,
-//! object_freq, object_idletime, object_help)
+//! object_freq, object_idletime, object_help, set, del, expire, rename)
 
 use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
 
 use crate::state::AppState;
 
@@ -23,6 +23,10 @@ pub(super) const INSTRUCTIONS: &str = "\
 - redis_object_freq: Get LFU access frequency counter\n\
 - redis_object_idletime: Get key idle time in seconds\n\
 - redis_object_help: Get available OBJECT subcommands\n\
+- redis_set: Set key to string value with optional expiry and conditional flags [write]\n\
+- redis_del: Delete one or more keys [write]\n\
+- redis_expire: Set TTL on a key in seconds [write]\n\
+- redis_rename: Rename a key [write]\n\
 ";
 
 /// Build a sub-router containing all key-level Redis tools
@@ -39,6 +43,10 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(object_freq(state.clone()))
         .tool(object_idletime(state.clone()))
         .tool(object_help(state.clone()))
+        .tool(set(state.clone()))
+        .tool(del(state.clone()))
+        .tool(expire(state.clone()))
+        .tool(rename(state))
 }
 
 /// Input for keys command
@@ -675,6 +683,280 @@ pub fn object_help(state: Arc<AppState>) -> Tool {
                 Ok(CallToolResult::text(format!(
                     "OBJECT subcommands:\n{}",
                     result.join("\n")
+                )))
+            },
+        )
+        .build()
+}
+
+// --- Write tools ---
+
+/// Input for SET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to set
+    pub key: String,
+    /// Value to set
+    pub value: String,
+    /// Expire time in seconds
+    #[serde(default)]
+    pub ex: Option<u64>,
+    /// Expire time in milliseconds
+    #[serde(default)]
+    pub px: Option<u64>,
+    /// Only set if key does not already exist
+    #[serde(default)]
+    pub nx: bool,
+    /// Only set if key already exists
+    #[serde(default)]
+    pub xx: bool,
+}
+
+/// Build the set tool
+pub fn set(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_set")
+        .description(
+            "Set a key to a string value with optional expiry and conditional flags. \
+             Use EX for seconds, PX for milliseconds expiry. Use NX to only set if \
+             the key does not exist, XX to only set if it exists.",
+        )
+        .extractor_handler_typed::<_, _, _, SetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SetInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("SET");
+                cmd.arg(&input.key).arg(&input.value);
+
+                if let Some(ex) = input.ex {
+                    cmd.arg("EX").arg(ex);
+                }
+                if let Some(px) = input.px {
+                    cmd.arg("PX").arg(px);
+                }
+                if input.nx {
+                    cmd.arg("NX");
+                }
+                if input.xx {
+                    cmd.arg("XX");
+                }
+
+                let result: Option<String> = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("SET failed: {}", e)))?;
+
+                match result {
+                    Some(_) => Ok(CallToolResult::text(format!(
+                        "OK - set '{}' successfully",
+                        input.key
+                    ))),
+                    None => Ok(CallToolResult::text(format!(
+                        "Key '{}' not set (condition not met: {})",
+                        input.key,
+                        if input.nx {
+                            "NX - key already exists"
+                        } else {
+                            "XX - key does not exist"
+                        }
+                    ))),
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for DEL command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DelInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Keys to delete
+    pub keys: Vec<String>,
+}
+
+/// Build the del tool
+pub fn del(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_del")
+        .description("Delete one or more keys. Returns the number of keys that were removed.")
+        .extractor_handler_typed::<_, _, _, DelInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<DelInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let mut cmd = redis::cmd("DEL");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let count: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("DEL failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "Deleted {} of {} key(s)",
+                    count,
+                    input.keys.len()
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for EXPIRE command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ExpireInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to set expiry on
+    pub key: String,
+    /// TTL in seconds
+    pub seconds: i64,
+}
+
+/// Build the expire tool
+pub fn expire(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_expire")
+        .description(
+            "Set a timeout on a key in seconds. The key will be automatically deleted \
+             after the timeout expires. Returns whether the timeout was set.",
+        )
+        .extractor_handler_typed::<_, _, _, ExpireInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ExpireInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let result: bool = redis::cmd("EXPIRE")
+                    .arg(&input.key)
+                    .arg(input.seconds)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("EXPIRE failed: {}", e)))?;
+
+                if result {
+                    Ok(CallToolResult::text(format!(
+                        "OK - TTL set to {} seconds on '{}'",
+                        input.seconds, input.key
+                    )))
+                } else {
+                    Ok(CallToolResult::text(format!(
+                        "Key '{}' does not exist or timeout could not be set",
+                        input.key
+                    )))
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for RENAME command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RenameInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Current key name
+    pub key: String,
+    /// New key name
+    pub newkey: String,
+}
+
+/// Build the rename tool
+pub fn rename(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_rename")
+        .description(
+            "Rename a key. Returns an error if the source key does not exist. \
+             If the destination key already exists, it is overwritten.",
+        )
+        .extractor_handler_typed::<_, _, _, RenameInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<RenameInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let _: () = redis::cmd("RENAME")
+                    .arg(&input.key)
+                    .arg(&input.newkey)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("RENAME failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - renamed '{}' to '{}'",
+                    input.key, input.newkey
                 )))
             },
         )
