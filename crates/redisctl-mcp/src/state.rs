@@ -289,6 +289,54 @@ impl AppState {
         }
     }
 
+    /// Resolve a Redis database URL from a profile
+    ///
+    /// If profile is `None`, uses the first configured profile or default from config
+    #[cfg(feature = "database")]
+    pub fn database_url_for_profile(&self, profile: Option<&str>) -> Result<String> {
+        let config = self
+            .config
+            .as_ref()
+            .context("No redisctl config available")?;
+
+        let profile_to_use = profile
+            .map(|s| s.to_string())
+            .or_else(|| self.profiles.first().cloned());
+
+        let resolved_name = config
+            .resolve_database_profile(profile_to_use.as_deref())
+            .context("Failed to resolve database profile")?;
+
+        let profile_config = config
+            .profiles
+            .get(&resolved_name)
+            .with_context(|| format!("Profile '{}' not found", resolved_name))?;
+
+        let (host, port, password, tls, username, database) = profile_config
+            .resolve_database_credentials()
+            .context("Failed to resolve database credentials")?
+            .context("No database credentials in profile")?;
+
+        // Build Redis URL: redis[s]://[username[:password]@]host:port[/database]
+        let scheme = if tls { "rediss" } else { "redis" };
+        let auth = match (username.as_str(), password) {
+            ("", None) | ("default", None) => String::new(),
+            (user, Some(pass)) => format!(
+                "{}:{}@",
+                urlencoding::encode(user),
+                urlencoding::encode(&pass)
+            ),
+            (user, None) => format!("{}@", urlencoding::encode(user)),
+        };
+        let db_path = if database > 0 {
+            format!("/{}", database)
+        } else {
+            String::new()
+        };
+
+        Ok(format!("{}://{}{}:{}{}", scheme, auth, host, port, db_path))
+    }
+
     /// Get Redis connection for direct database operations
     #[cfg(feature = "database")]
     #[allow(dead_code)]

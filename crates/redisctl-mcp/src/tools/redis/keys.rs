@@ -44,9 +44,12 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
 /// Input for keys command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct KeysInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key pattern to match (default: "*")
     #[serde(default = "default_pattern")]
     pub pattern: String,
@@ -75,10 +78,7 @@ pub fn keys(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, KeysInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeysInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -134,9 +134,12 @@ pub fn keys(state: Arc<AppState>) -> Tool {
 /// Input for GET command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to get
     pub key: String,
 }
@@ -150,10 +153,7 @@ pub fn get(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, GetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -184,9 +184,12 @@ pub fn get(state: Arc<AppState>) -> Tool {
 /// Input for TYPE command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct TypeInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to check type
     pub key: String,
 }
@@ -200,10 +203,7 @@ pub fn key_type(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, TypeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TypeInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -228,9 +228,12 @@ pub fn key_type(state: Arc<AppState>) -> Tool {
 /// Input for TTL command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct TtlInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to check TTL
     pub key: String,
 }
@@ -244,10 +247,7 @@ pub fn ttl(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, TtlInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -278,9 +278,12 @@ pub fn ttl(state: Arc<AppState>) -> Tool {
 /// Input for EXISTS command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ExistsInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Keys to check existence
     pub keys: Vec<String>,
 }
@@ -294,10 +297,7 @@ pub fn exists(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ExistsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ExistsInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -330,9 +330,12 @@ pub fn exists(state: Arc<AppState>) -> Tool {
 /// Input for MEMORY USAGE command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct MemoryUsageInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to check memory usage
     pub key: String,
 }
@@ -346,10 +349,7 @@ pub fn memory_usage(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, MemoryUsageInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryUsageInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -381,9 +381,12 @@ pub fn memory_usage(state: Arc<AppState>) -> Tool {
 /// Input for SCAN with type filter
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ScanInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key pattern to match (default: "*")
     #[serde(default = "default_pattern")]
     pub pattern: String,
@@ -407,10 +410,7 @@ pub fn scan(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ScanInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ScanInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -481,9 +481,12 @@ pub fn scan(state: Arc<AppState>) -> Tool {
 /// Input for OBJECT ENCODING command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ObjectEncodingInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to check encoding
     pub key: String,
 }
@@ -501,10 +504,7 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ObjectEncodingInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -536,9 +536,12 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
 /// Input for OBJECT FREQ command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ObjectFreqInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to get LFU access frequency for
     pub key: String,
 }
@@ -555,10 +558,7 @@ pub fn object_freq(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ObjectFreqInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectFreqInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -587,9 +587,12 @@ pub fn object_freq(state: Arc<AppState>) -> Tool {
 /// Input for OBJECT IDLETIME command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ObjectIdletimeInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
     /// Key to get idle time for
     pub key: String,
 }
@@ -607,10 +610,7 @@ pub fn object_idletime(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ObjectIdletimeInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
@@ -639,9 +639,12 @@ pub fn object_idletime(state: Arc<AppState>) -> Tool {
 /// Input for OBJECT HELP command
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ObjectHelpInput {
-    /// Optional Redis URL (uses configured URL if not provided)
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
     #[serde(default)]
     pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
 }
 
 /// Build the object_help tool
@@ -653,10 +656,7 @@ pub fn object_help(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ObjectHelpInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectHelpInput>| async move {
-                let url = input
-                    .url
-                    .or_else(|| state.database_url.clone())
-                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
                     .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
