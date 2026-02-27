@@ -1,4 +1,5 @@
-//! Key-level Redis tools (keys, scan, get, key_type, ttl, exists, memory_usage, object_encoding)
+//! Key-level Redis tools (keys, scan, get, key_type, ttl, exists, memory_usage, object_encoding,
+//! object_freq, object_idletime, object_help)
 
 use std::sync::Arc;
 
@@ -19,6 +20,9 @@ pub(super) const INSTRUCTIONS: &str = "\
 - redis_exists: Check key existence\n\
 - redis_memory_usage: Get key memory usage\n\
 - redis_object_encoding: Get key internal encoding\n\
+- redis_object_freq: Get LFU access frequency counter\n\
+- redis_object_idletime: Get key idle time in seconds\n\
+- redis_object_help: Get available OBJECT subcommands\n\
 ";
 
 /// Build a sub-router containing all key-level Redis tools
@@ -32,6 +36,9 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(exists(state.clone()))
         .tool(memory_usage(state.clone()))
         .tool(object_encoding(state.clone()))
+        .tool(object_freq(state.clone()))
+        .tool(object_idletime(state.clone()))
+        .tool(object_help(state.clone()))
 }
 
 /// Input for keys command
@@ -521,6 +528,154 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
                         input.key
                     ))),
                 }
+            },
+        )
+        .build()
+}
+
+/// Input for OBJECT FREQ command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ObjectFreqInput {
+    /// Optional Redis URL (uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Key to get LFU access frequency for
+    pub key: String,
+}
+
+/// Build the object_freq tool
+pub fn object_freq(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_object_freq")
+        .description(
+            "Get the LFU access frequency counter for a key using OBJECT FREQ. \
+             Only works when maxmemory-policy is set to allkeys-lfu or volatile-lfu.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ObjectFreqInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ObjectFreqInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let freq: i64 = redis::cmd("OBJECT")
+                    .arg("FREQ")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("OBJECT FREQ failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: LFU frequency counter = {}",
+                    input.key, freq
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for OBJECT IDLETIME command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ObjectIdletimeInput {
+    /// Optional Redis URL (uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Key to get idle time for
+    pub key: String,
+}
+
+/// Build the object_idletime tool
+pub fn object_idletime(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_object_idletime")
+        .description(
+            "Get the idle time of a key in seconds using OBJECT IDLETIME. \
+             Shows how long since the key was last accessed.",
+        )
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ObjectIdletimeInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ObjectIdletimeInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let idle: i64 = redis::cmd("OBJECT")
+                    .arg("IDLETIME")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("OBJECT IDLETIME failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: idle for {} seconds",
+                    input.key, idle
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for OBJECT HELP command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ObjectHelpInput {
+    /// Optional Redis URL (uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+}
+
+/// Build the object_help tool
+pub fn object_help(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_object_help")
+        .description("Get available OBJECT subcommands using OBJECT HELP")
+        .read_only()
+        .idempotent()
+        .extractor_handler_typed::<_, _, _, ObjectHelpInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ObjectHelpInput>| async move {
+                let url = input
+                    .url
+                    .or_else(|| state.database_url.clone())
+                    .ok_or_else(|| ToolError::new("No Redis URL provided or configured"))?;
+
+                let client = redis::Client::open(url.as_str())
+                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+
+                let result: Vec<String> = redis::cmd("OBJECT")
+                    .arg("HELP")
+                    .query_async(&mut conn)
+                    .await
+                    .map_err(|e| ToolError::new(format!("OBJECT HELP failed: {}", e)))?;
+
+                Ok(CallToolResult::text(format!(
+                    "OBJECT subcommands:\n{}",
+                    result.join("\n")
+                )))
             },
         )
         .build()
