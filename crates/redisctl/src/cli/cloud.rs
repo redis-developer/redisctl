@@ -1537,25 +1537,45 @@ pub enum CloudProviderAccountCommands {
 
 /// Cloud-specific commands
 #[derive(Subcommand, Debug)]
+#[command(after_long_help = "\
+COMMAND GROUPS:
+  Core:       database (db), subscription (sub), fixed-database (fixed-db),
+              fixed-subscription (fixed-sub)
+  Access:     user, acl
+  Billing:    account (acct), payment-method, cost-report
+  Networking: connectivity (conn), provider-account
+  Operations: task, workflow
+
+Aliases shown in parentheses (e.g. 'cloud db list' instead of 'cloud database list').")]
 pub enum CloudCommands {
-    // -- Core (display_order 1-9) --
+    // -- Core --
     /// Database operations
-    #[command(subcommand, display_order = 1)]
+    #[command(subcommand, display_order = 1, visible_alias = "db")]
     Database(CloudDatabaseCommands),
 
     /// Subscription operations
-    #[command(subcommand, display_order = 2)]
+    #[command(subcommand, display_order = 2, visible_alias = "sub")]
     Subscription(CloudSubscriptionCommands),
 
     /// Fixed database operations (Essentials)
-    #[command(subcommand, name = "fixed-database", display_order = 3)]
+    #[command(
+        subcommand,
+        name = "fixed-database",
+        display_order = 3,
+        visible_alias = "fixed-db"
+    )]
     FixedDatabase(CloudFixedDatabaseCommands),
 
     /// Fixed subscription operations (Essentials)
-    #[command(subcommand, name = "fixed-subscription", display_order = 4)]
+    #[command(
+        subcommand,
+        name = "fixed-subscription",
+        display_order = 4,
+        visible_alias = "fixed-sub"
+    )]
     FixedSubscription(CloudFixedSubscriptionCommands),
 
-    // -- Access Control (display_order 10-19) --
+    // -- Access Control --
     /// User operations
     #[command(subcommand, display_order = 10)]
     User(CloudUserCommands),
@@ -1564,9 +1584,9 @@ pub enum CloudCommands {
     #[command(subcommand, display_order = 11)]
     Acl(CloudAclCommands),
 
-    // -- Billing (display_order 20-29) --
+    // -- Billing --
     /// Account operations
-    #[command(subcommand, display_order = 20)]
+    #[command(subcommand, display_order = 20, visible_alias = "acct")]
     Account(CloudAccountCommands),
 
     /// Payment method operations
@@ -1577,16 +1597,16 @@ pub enum CloudCommands {
     #[command(subcommand, name = "cost-report", display_order = 22)]
     CostReport(CloudCostReportCommands),
 
-    // -- Networking (display_order 30-39) --
+    // -- Networking --
     /// Network connectivity operations (VPC, PSC, TGW)
-    #[command(subcommand, display_order = 30)]
+    #[command(subcommand, display_order = 30, visible_alias = "conn")]
     Connectivity(CloudConnectivityCommands),
 
     /// Cloud provider account operations
     #[command(subcommand, name = "provider-account", display_order = 31)]
     ProviderAccount(CloudProviderAccountCommands),
 
-    // -- Operations (display_order 40+) --
+    // -- Operations --
     /// Task operations
     #[command(subcommand, display_order = 40)]
     Task(CloudTaskCommands),

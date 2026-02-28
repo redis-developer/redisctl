@@ -201,10 +201,11 @@ pub enum Commands {
     #[command(subcommand, visible_alias = "cl")]
     #[command(before_long_help = "\
 COMMAND GROUPS:
-  Core:       database, subscription, fixed-database, fixed-subscription
+  Core:       database (db), subscription (sub), fixed-database (fixed-db),
+              fixed-subscription (fixed-sub)
   Access:     user, acl
-  Billing:    account, payment-method, cost-report
-  Networking: connectivity, provider-account
+  Billing:    account (acct), payment-method, cost-report
+  Networking: connectivity (conn), provider-account
   Operations: task, workflow")]
     #[command(after_help = "\
 PROFILE REQUIREMENT:
@@ -217,10 +218,11 @@ PROFILE REQUIREMENT:
     #[command(subcommand, visible_alias = "ent", visible_alias = "en")]
     #[command(before_long_help = "\
 COMMAND GROUPS:
-  Core:          database, cluster, node, shard, endpoint
+  Core:          database (db), cluster, node, shard, endpoint
   Access:        user, role, acl, ldap, ldap-mappings, auth
-  Monitoring:    stats, status, alerts, logs, diagnostics, debug-info
-  Admin:         license, module, proxy, services, cm-settings, suffix
+  Monitoring:    stats, status, alerts (alert), logs (log), diagnostics (diag),
+                 debug-info
+  Admin:         license (lic), module, proxy, services (svc), cm-settings, suffix
   Advanced:      crdb, crdb-task, bdb-group, migration, bootstrap, job-scheduler
   Troubleshoot:  support-package, ocsp, usage-report, local
   Other:         action, jsonschema, workflow")]
