@@ -261,92 +261,68 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-/// Footer instructions for authentication
-const AUTH_INSTRUCTIONS: &str = r#"
-## Authentication
-
-In stdio mode, credentials are resolved from redisctl profiles.
-In HTTP mode with OAuth, credentials can be passed via JWT claims.
-"#;
-
 /// Build the MCP router with modular sub-routers based on enabled toolsets
 fn build_router(
     state: Arc<AppState>,
     read_only: bool,
     enabled: &HashSet<Toolset>,
 ) -> Result<McpRouter> {
-    let mut instructions = String::from(
-        "# Redis Cloud and Enterprise MCP Server\n\n\
-         ## Safety Model\n\n\
-         Every tool carries MCP annotation hints that describe its safety characteristics:\n\
-         - `readOnlyHint = true` -- reads data, never modifies state\n\
-         - `destructiveHint = false` -- writes data but is non-destructive (create, update, backup)\n\
-         - `destructiveHint = true` -- irreversible operation (delete, flush)\n\n\
-         In the tool list below, tags indicate the safety tier:\n\
-         - (no tag) = read-only\n\
-         - [write] = non-destructive write\n\
-         - [destructive] = destructive write -- DANGEROUS, irreversible\n\n",
-    );
-
-    // Append active safety tier
-    if read_only {
-        instructions.push_str(
-            "**Active safety tier: READ-ONLY** -- only read-only tools are available. \
-             Write and destructive tools are hidden and will return unauthorized if called directly.\n\n",
-        );
-    } else {
-        instructions.push_str(
-            "**Active safety tier: WRITE-ENABLED** -- all tools including writes are available. \
-             Destructive tools (delete, flush) are enabled. Exercise caution with [destructive] tools.\n\n",
-        );
-    }
-
-    instructions.push_str("## Available Tool Categories\n");
-
     let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
 
     // Conditionally merge each toolset
     #[cfg(feature = "cloud")]
     if enabled.contains(&Toolset::Cloud) {
         router = router.merge(tools::cloud::router(state.clone()));
-        instructions.push_str(tools::cloud::instructions());
     }
 
     #[cfg(feature = "enterprise")]
     if enabled.contains(&Toolset::Enterprise) {
         router = router.merge(tools::enterprise::router(state.clone()));
-        instructions.push_str(tools::enterprise::instructions());
     }
 
     #[cfg(feature = "database")]
     if enabled.contains(&Toolset::Database) {
         router = router.merge(tools::redis::router(state.clone()));
-        instructions.push_str(tools::redis::instructions());
     }
 
     // App toolset includes profile tools, resources, and prompts
     if enabled.contains(&Toolset::App) {
         router = router.merge(tools::profile::router(state.clone()));
-        instructions.push_str(tools::profile::instructions());
     }
 
-    instructions.push_str(AUTH_INSTRUCTIONS);
-    router = router.instructions(&instructions);
+    // Build prefix: safety model + active safety tier
+    let safety_tier = if read_only {
+        "**Active safety tier: READ-ONLY** -- only read-only tools are available. \
+         Write and destructive tools are hidden and will return unauthorized if called directly."
+    } else {
+        "**Active safety tier: WRITE-ENABLED** -- all tools including writes are available. \
+         Destructive tools (delete, flush) are enabled. Exercise caution with destructive tools."
+    };
+
+    let prefix = format!(
+        "# Redis Cloud and Enterprise MCP Server\n\n\
+         ## Safety Model\n\n\
+         Every tool carries MCP annotation hints that describe its safety characteristics:\n\
+         - `readOnlyHint = true` -- reads data, never modifies state\n\
+         - `destructiveHint = false` -- writes data but is non-destructive (create, update, backup)\n\
+         - `destructiveHint = true` -- irreversible operation (delete, flush)\n\n\
+         {safety_tier}\n",
+    );
+
+    let suffix = "\n## Authentication\n\n\
+         In stdio mode, credentials are resolved from redisctl profiles.\n\
+         In HTTP mode with OAuth, credentials can be passed via JWT claims.";
+
+    router = router.auto_instructions_with(Some(prefix), Some(suffix));
 
     // Apply read-only filter if enabled
-    // This hides write tools entirely from tools/list and returns "method not found"
+    // This hides write tools entirely from tools/list and returns "unauthorized"
     // if they're called directly, providing defense in depth beyond handler-level checks
     let router = if read_only {
         info!("Applying read-only filter - write tools will be hidden");
         router.tool_filter(
-            CapabilityFilter::new(|_session, tool: &Tool| {
-                // Only show tools that are marked as read-only
-                tool.annotations
-                    .as_ref()
-                    .map(|a| a.read_only_hint)
-                    .unwrap_or(false)
-            })
-            .denial_behavior(DenialBehavior::Unauthorized),
+            CapabilityFilter::<Tool>::write_guard(|_session| false)
+                .denial_behavior(DenialBehavior::Unauthorized),
         )
     } else {
         router
@@ -561,32 +537,18 @@ mod tests {
         );
     }
 
-    /// Helper: assert a tool is destructive (not read-only, destructive_hint=true by MCP default)
+    /// Helper: assert a tool is destructive (explicit annotations with destructive_hint=true)
     fn assert_destructive(tool: &Tool, name: &str) {
-        // Destructive tools may have no annotations at all (MCP defaults destructive_hint=true)
-        // or may have annotations without non_destructive()
-        //
-        // NOTE: tower-mcp's ToolAnnotations derives Default which sets destructive_hint=false
-        // (Rust bool default), but the MCP spec says the default is true. When annotations
-        // are None, the MCP spec defaults apply, so destructive_hint is effectively true.
-        let destructive_hint = tool
+        let ann = tool
             .annotations
             .as_ref()
-            .map(|a| a.destructive_hint)
-            .unwrap_or(true); // MCP spec default: destructive_hint = true
+            .unwrap_or_else(|| panic!("{name}: missing annotations"));
         assert!(
-            destructive_hint,
+            ann.destructive_hint,
             "{name}: should be destructive (destructive_hint=true)"
         );
-
-        // Should NOT be read-only
-        let read_only = tool
-            .annotations
-            .as_ref()
-            .map(|a| a.read_only_hint)
-            .unwrap_or(false);
         assert!(
-            !read_only,
+            !ann.read_only_hint,
             "{name}: destructive tool should NOT be read_only"
         );
 

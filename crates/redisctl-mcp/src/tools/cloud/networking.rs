@@ -14,7 +14,9 @@ use redis_cloud::{
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{
+    CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder, ToolError,
+};
 
 use crate::state::AppState;
 
@@ -36,9 +38,7 @@ pub struct GetVpcPeeringInput {
 pub fn get_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_vpc_peering")
         .description("Get VPC peering details for a Redis Cloud subscription.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetVpcPeeringInput>| async move {
@@ -51,7 +51,7 @@ pub fn get_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get(input.subscription_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get VPC peering: {}", e)))?;
+                    .tool_context("Failed to get VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -132,7 +132,7 @@ pub fn create_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create(input.subscription_id, &request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create VPC peering: {}", e)))?;
+                    .tool_context("Failed to create VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -215,7 +215,7 @@ pub fn update_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update(input.subscription_id, input.peering_id, &request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update VPC peering: {}", e)))?;
+                    .tool_context("Failed to update VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -242,6 +242,7 @@ pub fn delete_vpc_peering(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a VPC peering connection. \
              Network connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -261,7 +262,7 @@ pub fn delete_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete(input.subscription_id, input.peering_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete VPC peering: {}", e)))?;
+                    .tool_context("Failed to delete VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -289,9 +290,7 @@ pub fn get_aa_vpc_peering(state: Arc<AppState>) -> Tool {
         .description(
             "Get Active-Active VPC peering details for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -305,9 +304,7 @@ pub fn get_aa_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA VPC peering: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -388,9 +385,7 @@ pub fn create_aa_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_active_active(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create AA VPC peering: {}", e))
-                    })?;
+                    .tool_context("Failed to create AA VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -473,9 +468,7 @@ pub fn update_aa_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_active_active(input.subscription_id, input.peering_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update AA VPC peering: {}", e))
-                    })?;
+                    .tool_context("Failed to update AA VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -502,6 +495,7 @@ pub fn delete_aa_vpc_peering(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an Active-Active VPC peering connection. \
              Network connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAaVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -521,9 +515,7 @@ pub fn delete_aa_vpc_peering(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_active_active(input.subscription_id, input.peering_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete AA VPC peering: {}", e))
-                    })?;
+                    .tool_context("Failed to delete AA VPC peering")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -551,9 +543,7 @@ pub fn get_tgw_attachments(state: Arc<AppState>) -> Tool {
         .description(
             "Get Transit Gateway attachments for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetTgwAttachmentsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -567,9 +557,7 @@ pub fn get_tgw_attachments(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_attachments(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get TGW attachments: {}", e))
-                    })?;
+                    .tool_context("Failed to get TGW attachments")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -593,9 +581,7 @@ pub fn get_tgw_invitations(state: Arc<AppState>) -> Tool {
         .description(
             "Get Transit Gateway shared invitations for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetTgwInvitationsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -609,9 +595,7 @@ pub fn get_tgw_invitations(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_shared_invitations(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get TGW invitations: {}", e))
-                    })?;
+                    .tool_context("Failed to get TGW invitations")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -658,9 +642,7 @@ pub fn accept_tgw_invitation(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .accept_resource_share(input.subscription_id, input.invitation_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to accept TGW invitation: {}", e))
-                    })?;
+                    .tool_context("Failed to accept TGW invitation")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -707,9 +689,7 @@ pub fn reject_tgw_invitation(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .reject_resource_share(input.subscription_id, input.invitation_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to reject TGW invitation: {}", e))
-                    })?;
+                    .tool_context("Failed to reject TGW invitation")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -769,9 +749,7 @@ pub fn create_tgw_attachment(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_attachment(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create TGW attachment: {}", e))
-                    })?;
+                    .tool_context("Failed to create TGW attachment")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -833,9 +811,7 @@ pub fn update_tgw_attachment_cidrs(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_attachment_cidrs(input.subscription_id, input.attachment_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update TGW attachment CIDRs: {}", e))
-                    })?;
+                    .tool_context("Failed to update TGW attachment CIDRs")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -862,6 +838,7 @@ pub fn delete_tgw_attachment(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a Transit Gateway attachment. \
              Network connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteTgwAttachmentInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -881,9 +858,7 @@ pub fn delete_tgw_attachment(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_attachment(input.subscription_id, input.attachment_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete TGW attachment: {}", e))
-                    })?;
+                    .tool_context("Failed to delete TGW attachment")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -911,9 +886,7 @@ pub fn get_aa_tgw_attachments(state: Arc<AppState>) -> Tool {
         .description(
             "Get Active-Active Transit Gateway attachments for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaTgwAttachmentsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -927,9 +900,7 @@ pub fn get_aa_tgw_attachments(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_attachments_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA TGW attachments: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA TGW attachments")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -953,9 +924,7 @@ pub fn get_aa_tgw_invitations(state: Arc<AppState>) -> Tool {
         .description(
             "Get Active-Active Transit Gateway shared invitations for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaTgwInvitationsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -969,9 +938,7 @@ pub fn get_aa_tgw_invitations(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_shared_invitations_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA TGW invitations: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA TGW invitations")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1024,9 +991,7 @@ pub fn accept_aa_tgw_invitation(state: Arc<AppState>) -> Tool {
                         input.invitation_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to accept AA TGW invitation: {}", e))
-                    })?;
+                    .tool_context("Failed to accept AA TGW invitation")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1079,9 +1044,7 @@ pub fn reject_aa_tgw_invitation(state: Arc<AppState>) -> Tool {
                         input.invitation_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to reject AA TGW invitation: {}", e))
-                    })?;
+                    .tool_context("Failed to reject AA TGW invitation")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1147,9 +1110,7 @@ pub fn create_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create AA TGW attachment: {}", e))
-                    })?;
+                    .tool_context("Failed to create AA TGW attachment")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1218,9 +1179,7 @@ pub fn update_aa_tgw_attachment_cidrs(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update AA TGW attachment CIDRs: {}", e))
-                    })?;
+                    .tool_context("Failed to update AA TGW attachment CIDRs")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1249,6 +1208,7 @@ pub fn delete_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an Active-Active Transit Gateway attachment. \
              Network connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAaTgwAttachmentInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1272,9 +1232,7 @@ pub fn delete_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
                         input.attachment_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete AA TGW attachment: {}", e))
-                    })?;
+                    .tool_context("Failed to delete AA TGW attachment")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1300,9 +1258,7 @@ pub struct GetPscServiceInput {
 pub fn get_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_psc_service")
         .description("Get Private Service Connect service for a Redis Cloud subscription.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetPscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetPscServiceInput>| async move {
@@ -1315,7 +1271,7 @@ pub fn get_psc_service(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_service(input.subscription_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get PSC service: {}", e)))?;
+                    .tool_context("Failed to get PSC service")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1360,9 +1316,7 @@ pub fn create_psc_service(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_service(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create PSC service: {}", e))
-                    })?;
+                    .tool_context("Failed to create PSC service")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1387,6 +1341,7 @@ pub fn delete_psc_service(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a Private Service Connect service. \
              All endpoints will be disconnected. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeletePscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1406,9 +1361,7 @@ pub fn delete_psc_service(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_service(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete PSC service: {}", e))
-                    })?;
+                    .tool_context("Failed to delete PSC service")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1432,9 +1385,7 @@ pub fn get_psc_endpoints(state: Arc<AppState>) -> Tool {
         .description(
             "Get Private Service Connect endpoints for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetPscEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1448,9 +1399,7 @@ pub fn get_psc_endpoints(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_endpoints(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get PSC endpoints: {}", e))
-                    })?;
+                    .tool_context("Failed to get PSC endpoints")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1521,9 +1470,7 @@ pub fn create_psc_endpoint(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_endpoint(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create PSC endpoint: {}", e))
-                    })?;
+                    .tool_context("Failed to create PSC endpoint")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1594,9 +1541,7 @@ pub fn update_psc_endpoint(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_endpoint(input.subscription_id, input.endpoint_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update PSC endpoint: {}", e))
-                    })?;
+                    .tool_context("Failed to update PSC endpoint")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1623,6 +1568,7 @@ pub fn delete_psc_endpoint(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a Private Service Connect endpoint. \
              Connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeletePscEndpointInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1642,9 +1588,7 @@ pub fn delete_psc_endpoint(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_endpoint(input.subscription_id, input.endpoint_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete PSC endpoint: {}", e))
-                    })?;
+                    .tool_context("Failed to delete PSC endpoint")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1670,9 +1614,7 @@ pub fn get_psc_creation_script(state: Arc<AppState>) -> Tool {
         .description(
             "Get the creation script for a Private Service Connect endpoint.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetPscCreationScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1686,9 +1628,7 @@ pub fn get_psc_creation_script(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_endpoint_creation_script(input.subscription_id, input.endpoint_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get PSC creation script: {}", e))
-                    })?;
+                    .tool_context("Failed to get PSC creation script")?;
 
                 Ok(CallToolResult::text(result))
             },
@@ -1714,9 +1654,7 @@ pub fn get_psc_deletion_script(state: Arc<AppState>) -> Tool {
         .description(
             "Get the deletion script for a Private Service Connect endpoint.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetPscDeletionScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1730,9 +1668,7 @@ pub fn get_psc_deletion_script(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_endpoint_deletion_script(input.subscription_id, input.endpoint_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get PSC deletion script: {}", e))
-                    })?;
+                    .tool_context("Failed to get PSC deletion script")?;
 
                 Ok(CallToolResult::text(result))
             },
@@ -1760,9 +1696,7 @@ pub fn get_aa_psc_service(state: Arc<AppState>) -> Tool {
         .description(
             "Get Active-Active Private Service Connect service for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaPscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1776,9 +1710,7 @@ pub fn get_aa_psc_service(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_service_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA PSC service: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA PSC service")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1823,9 +1755,7 @@ pub fn create_aa_psc_service(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_service_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create AA PSC service: {}", e))
-                    })?;
+                    .tool_context("Failed to create AA PSC service")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1850,6 +1780,7 @@ pub fn delete_aa_psc_service(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an Active-Active Private Service Connect service. \
              All endpoints will be disconnected. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAaPscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1869,9 +1800,7 @@ pub fn delete_aa_psc_service(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_service_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete AA PSC service: {}", e))
-                    })?;
+                    .tool_context("Failed to delete AA PSC service")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1895,9 +1824,7 @@ pub fn get_aa_psc_endpoints(state: Arc<AppState>) -> Tool {
         .description(
             "Get Active-Active Private Service Connect endpoints for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaPscEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1911,9 +1838,7 @@ pub fn get_aa_psc_endpoints(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_endpoints_active_active(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA PSC endpoints: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA PSC endpoints")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1984,9 +1909,7 @@ pub fn create_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_endpoint_active_active(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create AA PSC endpoint: {}", e))
-                    })?;
+                    .tool_context("Failed to create AA PSC endpoint")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2064,9 +1987,7 @@ pub fn update_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update AA PSC endpoint: {}", e))
-                    })?;
+                    .tool_context("Failed to update AA PSC endpoint")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2095,6 +2016,7 @@ pub fn delete_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an Active-Active Private Service Connect endpoint. \
              Connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAaPscEndpointInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2118,9 +2040,7 @@ pub fn delete_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
                         input.endpoint_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete AA PSC endpoint: {}", e))
-                    })?;
+                    .tool_context("Failed to delete AA PSC endpoint")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2150,9 +2070,7 @@ pub fn get_aa_psc_creation_script(state: Arc<AppState>) -> Tool {
         .description(
             "Get the creation script for an Active-Active Private Service Connect endpoint.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaPscCreationScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2171,9 +2089,7 @@ pub fn get_aa_psc_creation_script(state: Arc<AppState>) -> Tool {
                         input.endpoint_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA PSC creation script: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA PSC creation script")?;
 
                 Ok(CallToolResult::text(result))
             },
@@ -2203,9 +2119,7 @@ pub fn get_aa_psc_deletion_script(state: Arc<AppState>) -> Tool {
         .description(
             "Get the deletion script for an Active-Active Private Service Connect endpoint.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaPscDeletionScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2224,9 +2138,7 @@ pub fn get_aa_psc_deletion_script(state: Arc<AppState>) -> Tool {
                         input.endpoint_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA PSC deletion script: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA PSC deletion script")?;
 
                 Ok(CallToolResult::text(result))
             },
@@ -2254,9 +2166,7 @@ pub fn get_private_link(state: Arc<AppState>) -> Tool {
         .description(
             "Get AWS PrivateLink configuration for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetPrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2270,9 +2180,7 @@ pub fn get_private_link(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get PrivateLink: {}", e))
-                    })?;
+                    .tool_context("Failed to get PrivateLink")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2350,9 +2258,7 @@ pub fn create_private_link(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create PrivateLink: {}", e))
-                    })?;
+                    .tool_context("Failed to create PrivateLink")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2377,6 +2283,7 @@ pub fn delete_private_link(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an AWS PrivateLink configuration. \
              Connectivity will be immediately lost. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeletePrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2396,9 +2303,7 @@ pub fn delete_private_link(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete PrivateLink: {}", e))
-                    })?;
+                    .tool_context("Failed to delete PrivateLink")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2462,9 +2367,7 @@ pub fn add_private_link_principals(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .add_principals(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to add PrivateLink principals: {}", e))
-                    })?;
+                    .tool_context("Failed to add PrivateLink principals")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2529,9 +2432,7 @@ pub fn remove_private_link_principals(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .remove_principals(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to remove PrivateLink principals: {}", e))
-                    })?;
+                    .tool_context("Failed to remove PrivateLink principals")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2553,9 +2454,7 @@ pub struct GetPrivateLinkEndpointScriptInput {
 pub fn get_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_private_link_endpoint_script")
         .description("Get the endpoint creation script for an AWS PrivateLink configuration.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetPrivateLinkEndpointScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2569,9 +2468,7 @@ pub fn get_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_endpoint_script(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get PrivateLink endpoint script: {}", e))
-                    })?;
+                    .tool_context("Failed to get PrivateLink endpoint script")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2601,9 +2498,7 @@ pub fn get_aa_private_link(state: Arc<AppState>) -> Tool {
         .description(
             "Get Active-Active AWS PrivateLink configuration for a Redis Cloud subscription region.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaPrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2617,9 +2512,7 @@ pub fn get_aa_private_link(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_active_active(input.subscription_id, input.region_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get AA PrivateLink: {}", e))
-                    })?;
+                    .tool_context("Failed to get AA PrivateLink")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2684,9 +2577,7 @@ pub fn create_aa_private_link(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_active_active(input.subscription_id, input.region_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create AA PrivateLink: {}", e))
-                    })?;
+                    .tool_context("Failed to create AA PrivateLink")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2752,9 +2643,7 @@ pub fn add_aa_private_link_principals(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .add_principals_active_active(input.subscription_id, input.region_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to add AA PrivateLink principals: {}", e))
-                    })?;
+                    .tool_context("Failed to add AA PrivateLink principals")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2825,9 +2714,7 @@ pub fn remove_aa_private_link_principals(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to remove AA PrivateLink principals: {}", e))
-                    })?;
+                    .tool_context("Failed to remove AA PrivateLink principals")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2853,9 +2740,7 @@ pub fn get_aa_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
         .description(
             "Get the endpoint creation script for an Active-Active AWS PrivateLink configuration.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAaPrivateLinkEndpointScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2869,12 +2754,7 @@ pub fn get_aa_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_endpoint_script_active_active(input.subscription_id, input.region_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to get AA PrivateLink endpoint script: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to get AA PrivateLink endpoint script")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2885,67 +2765,6 @@ pub fn get_aa_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
 // ============================================================================
 // Instructions and Router
 // ============================================================================
-
-pub(super) const INSTRUCTIONS: &str = "\n\
-### Redis Cloud - VPC Peering\n\
-- get_vpc_peering: Get VPC peering details for a subscription\n\
-- get_aa_vpc_peering: Get Active-Active VPC peering details\n\
-- create_vpc_peering: Create a VPC peering connection [write]\n\
-- update_vpc_peering: Update a VPC peering connection [write]\n\
-- create_aa_vpc_peering: Create an Active-Active VPC peering [write]\n\
-- update_aa_vpc_peering: Update an Active-Active VPC peering [write]\n\
-- delete_vpc_peering: Permanently delete a VPC peering connection [destructive]\n\
-- delete_aa_vpc_peering: Permanently delete an Active-Active VPC peering [destructive]\n\
-\n\
-### Redis Cloud - Transit Gateway\n\
-- get_tgw_attachments: Get Transit Gateway attachments\n\
-- get_tgw_invitations: Get Transit Gateway shared invitations\n\
-- get_aa_tgw_attachments: Get Active-Active TGW attachments\n\
-- get_aa_tgw_invitations: Get Active-Active TGW shared invitations\n\
-- accept_tgw_invitation: Accept a TGW resource share invitation [write]\n\
-- reject_tgw_invitation: Reject a TGW resource share invitation [write]\n\
-- create_tgw_attachment: Create a TGW attachment [write]\n\
-- update_tgw_attachment_cidrs: Update TGW attachment CIDRs [write]\n\
-- accept_aa_tgw_invitation: Accept an AA TGW resource share invitation [write]\n\
-- reject_aa_tgw_invitation: Reject an AA TGW resource share invitation [write]\n\
-- create_aa_tgw_attachment: Create an AA TGW attachment [write]\n\
-- update_aa_tgw_attachment_cidrs: Update AA TGW attachment CIDRs [write]\n\
-- delete_tgw_attachment: Permanently delete a TGW attachment [destructive]\n\
-- delete_aa_tgw_attachment: Permanently delete an AA TGW attachment [destructive]\n\
-\n\
-### Redis Cloud - Private Service Connect (PSC)\n\
-- get_psc_service: Get PSC service for a subscription\n\
-- get_psc_endpoints: Get PSC endpoints\n\
-- get_psc_creation_script: Get PSC endpoint creation script\n\
-- get_psc_deletion_script: Get PSC endpoint deletion script\n\
-- get_aa_psc_service: Get Active-Active PSC service\n\
-- get_aa_psc_endpoints: Get AA PSC endpoints\n\
-- get_aa_psc_creation_script: Get AA PSC endpoint creation script\n\
-- get_aa_psc_deletion_script: Get AA PSC endpoint deletion script\n\
-- create_psc_service: Create a PSC service [write]\n\
-- create_psc_endpoint: Create a PSC endpoint [write]\n\
-- update_psc_endpoint: Update a PSC endpoint [write]\n\
-- create_aa_psc_service: Create an AA PSC service [write]\n\
-- create_aa_psc_endpoint: Create an AA PSC endpoint [write]\n\
-- update_aa_psc_endpoint: Update an AA PSC endpoint [write]\n\
-- delete_psc_service: Permanently delete a PSC service [destructive]\n\
-- delete_psc_endpoint: Permanently delete a PSC endpoint [destructive]\n\
-- delete_aa_psc_service: Permanently delete an AA PSC service [destructive]\n\
-- delete_aa_psc_endpoint: Permanently delete an AA PSC endpoint [destructive]\n\
-\n\
-### Redis Cloud - PrivateLink\n\
-- get_private_link: Get AWS PrivateLink configuration\n\
-- get_private_link_endpoint_script: Get PrivateLink endpoint script\n\
-- get_aa_private_link: Get AA PrivateLink configuration\n\
-- get_aa_private_link_endpoint_script: Get AA PrivateLink endpoint script\n\
-- create_private_link: Create an AWS PrivateLink [write]\n\
-- add_private_link_principals: Add principals to PrivateLink [write]\n\
-- remove_private_link_principals: Remove principals from PrivateLink [write]\n\
-- create_aa_private_link: Create an AA PrivateLink [write]\n\
-- add_aa_private_link_principals: Add principals to AA PrivateLink [write]\n\
-- remove_aa_private_link_principals: Remove principals from AA PrivateLink [write]\n\
-- delete_private_link: Permanently delete an AWS PrivateLink [destructive]\n\
-";
 
 /// Build an MCP sub-router containing all networking tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

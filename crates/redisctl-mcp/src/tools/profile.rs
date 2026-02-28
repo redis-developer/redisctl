@@ -6,7 +6,9 @@ use redisctl_core::{Config, DeploymentType, ProfileCredentials};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{
+    CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder, ToolError,
+};
 
 use crate::state::AppState;
 
@@ -32,14 +34,12 @@ struct ProfileSummary {
 pub fn list_profiles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_list")
         .description("List all configured redisctl profiles with their types and default status")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListProfilesInput>(
             state,
             |State(_state): State<Arc<AppState>>, Json(_input): Json<ListProfilesInput>| async move {
                 let config = Config::load()
-                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                    .tool_context("Failed to load config")?;
 
                 let profiles: Vec<ProfileSummary> = config
                     .list_profiles()
@@ -167,14 +167,11 @@ fn mask_credential(value: &str) -> String {
 pub fn show_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_show")
         .description("Show details of a specific profile. Credentials are masked for security.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ShowProfileInput>(
             state,
             |State(_state): State<Arc<AppState>>, Json(input): Json<ShowProfileInput>| async move {
-                let config = Config::load()
-                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                let config = Config::load().tool_context("Failed to load config")?;
 
                 let profile = config
                     .profiles
@@ -279,12 +276,9 @@ pub struct ConfigPathInput {}
 pub fn config_path(_state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_path")
         .description("Show the path to the redisctl configuration file")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .handler(|_input: ConfigPathInput| async move {
-            let path = Config::config_path()
-                .map_err(|e| ToolError::new(format!("Failed to get config path: {}", e)))?;
+            let path = Config::config_path().tool_context("Failed to get config path")?;
 
             let exists = path.exists();
             let output = format!(
@@ -310,14 +304,12 @@ pub struct ValidateConfigInput {
 pub fn validate_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_validate")
         .description("Validate the redisctl configuration file and check for common issues. Set connect=true to also test actual API/database connectivity for each profile.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ValidateConfigInput>(
             state,
             |State(_state): State<Arc<AppState>>, Json(input): Json<ValidateConfigInput>| async move {
             let path = Config::config_path()
-                .map_err(|e| ToolError::new(format!("Failed to get config path: {}", e)))?;
+                .tool_context("Failed to get config path")?;
 
             if !path.exists() {
                 return Ok(CallToolResult::text(format!(
@@ -597,7 +589,7 @@ pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
                 }
 
                 let mut config = Config::load()
-                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                    .tool_context("Failed to load config")?;
 
                 // Verify profile exists and is a cloud profile
                 let profile = config
@@ -615,7 +607,7 @@ pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
                 config.default_cloud = Some(input.name.clone());
                 config
                     .save()
-                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+                    .tool_context("Failed to save config")?;
 
                 Ok(CallToolResult::text(format!(
                     "Default cloud profile set to '{}'",
@@ -648,7 +640,7 @@ pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
                 }
 
                 let mut config = Config::load()
-                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                    .tool_context("Failed to load config")?;
 
                 // Verify profile exists and is an enterprise profile
                 let profile = config
@@ -666,7 +658,7 @@ pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
                 config.default_enterprise = Some(input.name.clone());
                 config
                     .save()
-                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+                    .tool_context("Failed to save config")?;
 
                 Ok(CallToolResult::text(format!(
                     "Default enterprise profile set to '{}'",
@@ -691,6 +683,7 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a profile from the configuration. \
              This action cannot be undone. Requires write access.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteProfileInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteProfileInput>| async move {
@@ -699,8 +692,7 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
                     return Err(McpError::tool("Write operations require --read-only=false"));
                 }
 
-                let mut config = Config::load()
-                    .map_err(|e| ToolError::new(format!("Failed to load config: {}", e)))?;
+                let mut config = Config::load().tool_context("Failed to load config")?;
 
                 // Check if profile exists
                 if !config.profiles.contains_key(&input.name) {
@@ -713,9 +705,7 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
                 // Remove the profile (also clears defaults if this was a default)
                 config.remove_profile(&input.name);
 
-                config
-                    .save()
-                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+                config.save().tool_context("Failed to save config")?;
 
                 Ok(CallToolResult::text(format!(
                     "Profile '{}' deleted",
@@ -914,7 +904,7 @@ pub fn create_profile(state: Arc<AppState>) -> Tool {
 
                 config
                     .save()
-                    .map_err(|e| ToolError::new(format!("Failed to save config: {}", e)))?;
+                    .tool_context("Failed to save config")?;
 
                 let mut output = format!(
                     "Profile '{}' created (type: {})",
@@ -932,38 +922,6 @@ pub fn create_profile(state: Arc<AppState>) -> Tool {
             },
         )
         .build()
-}
-
-/// Instructions text describing all App-level tools, resources, and prompts
-pub fn instructions() -> &'static str {
-    r#"
-### Profile Management - Read
-- profile_list: List all configured profiles
-- profile_show: Show profile details (credentials masked)
-- profile_path: Show configuration file path
-- profile_validate: Validate configuration file (set connect=true to test connectivity)
-
-### Profile Management - Write
-- profile_create: Create a new profile (cloud, enterprise, or database) [write]
-- profile_set_default_cloud: Set default Cloud profile [write]
-- profile_set_default_enterprise: Set default Enterprise profile [write]
-- profile_delete: Permanently delete a profile [destructive]
-
-## Resources
-
-Read-only data accessible via URI:
-- redis://config/path - Configuration file path
-- redis://profiles - List of configured profiles
-- redis://help - Usage instructions and help
-
-## Prompts
-
-Pre-built templates for common workflows:
-- troubleshoot_database - Diagnose database issues
-- analyze_performance - Analyze performance metrics
-- capacity_planning - Help with capacity planning
-- migration_planning - Plan Redis migrations
-"#
 }
 
 /// Build an MCP sub-router containing all App-level tools, resources, and prompts

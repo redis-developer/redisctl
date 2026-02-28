@@ -11,7 +11,7 @@ use redis_enterprise::stats::StatsHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -32,9 +32,7 @@ pub struct ListAlertsInput {
 pub fn list_alerts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_alerts")
         .description("List all active alerts in the Redis Enterprise cluster")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAlertsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAlertsInput>| async move {
@@ -44,10 +42,7 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = AlertHandler::new(client);
-                let alerts = handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list alerts: {}", e)))?;
+                let alerts = handler.list().await.tool_context("Failed to list alerts")?;
 
                 wrap_list("alerts", &alerts)
             },
@@ -90,9 +85,7 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
              changes, node status updates, configuration modifications, and alerts. Supports \
              filtering by time range and pagination.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListLogsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListLogsInput>| async move {
@@ -122,7 +115,7 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
                 let logs = handler
                     .list(query)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list logs: {}", e)))?;
+                    .tool_context("Failed to list logs")?;
 
                 wrap_list("logs", &logs)
             },
@@ -149,9 +142,7 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
             "Get current statistics for all nodes in the Redis Enterprise cluster in a single \
              call. Returns aggregated stats per node including CPU, memory, and network metrics.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAllNodesStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -165,9 +156,7 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
                 let stats = handler
                     .nodes_last()
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get all nodes stats: {}", e))
-                    })?;
+                    .tool_context("Failed to get all nodes stats")?;
 
                 CallToolResult::from_serialize(&stats)
             },
@@ -191,9 +180,7 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
              single call. Returns aggregated stats per database including latency, throughput, \
              and memory usage.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAllDatabasesStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -204,9 +191,7 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = StatsHandler::new(client);
-                let stats = handler.databases_last().await.map_err(|e| {
-                    ToolError::new(format!("Failed to get all databases stats: {}", e))
-                })?;
+                let stats = handler.databases_last().await.tool_context("Failed to get all databases stats")?;
 
                 CallToolResult::from_serialize(&stats)
             },
@@ -228,9 +213,7 @@ pub struct GetShardStatsInput {
 pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_shard_stats")
         .description("Get current statistics for a specific shard in the Redis Enterprise cluster")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetShardStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardStatsInput>| async move {
@@ -243,7 +226,7 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
                 let stats = handler
                     .shard(input.uid, None)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get shard stats: {}", e)))?;
+                    .tool_context("Failed to get shard stats")?;
 
                 CallToolResult::from_serialize(&stats)
             },
@@ -266,9 +249,7 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
             "Get current statistics for all shards in the Redis Enterprise cluster in a single \
              call. Returns aggregated stats per shard.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAllShardsStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -282,9 +263,7 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
                 let stats = handler
                     .shards(None)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get all shards stats: {}", e))
-                    })?;
+                    .tool_context("Failed to get all shards stats")?;
 
                 CallToolResult::from_serialize(&stats)
             },
@@ -313,9 +292,7 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
         .description(
             "List all shards in the Redis Enterprise cluster. Optionally filter by database UID.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListShardsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListShardsInput>| async move {
@@ -329,12 +306,9 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
                     handler
                         .list_by_database(db_uid)
                         .await
-                        .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
+                        .tool_context("Failed to list shards")?
                 } else {
-                    handler
-                        .list()
-                        .await
-                        .map_err(|e| ToolError::new(format!("Failed to list shards: {}", e)))?
+                    handler.list().await.tool_context("Failed to list shards")?
                 };
 
                 wrap_list("shards", &shards)
@@ -360,9 +334,7 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific shard in the Redis Enterprise cluster \
              including role (master/replica), status, and assigned node.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetShardInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardInput>| async move {
@@ -375,7 +347,7 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
                 let shard = handler
                     .get(&input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get shard: {}", e)))?;
+                    .tool_context("Failed to get shard")?;
 
                 CallToolResult::from_serialize(&shard)
             },
@@ -403,9 +375,7 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
              IDs, statuses (queued, running, completed, failed), and download URLs for completed \
              collections.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDebugInfoTasksInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -419,9 +389,7 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
                 let tasks = handler
                     .list()
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to list debug info tasks: {}", e))
-                    })?;
+                    .tool_context("Failed to list debug info tasks")?;
 
                 wrap_list("tasks", &tasks)
             },
@@ -447,9 +415,7 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
              completed, failed), progress percentage, download URL (when completed), and error \
              message (if failed).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDebugInfoStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -463,9 +429,7 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
                 let status = handler
                     .status(&input.task_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get debug info status: {}", e))
-                    })?;
+                    .tool_context("Failed to get debug info status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -493,9 +457,7 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
              names, versions, descriptions, and capabilities (e.g., RedisJSON, RediSearch, \
              RedisTimeSeries).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListModulesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListModulesInput>| async move {
@@ -508,7 +470,7 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
                 let modules = handler
                     .list()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list modules: {}", e)))?;
+                    .tool_context("Failed to list modules")?;
 
                 wrap_list("modules", &modules)
             },
@@ -533,9 +495,7 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific Redis module including version, \
              description, author, license, capabilities, and platform compatibility.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetModuleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModuleInput>| async move {
@@ -548,37 +508,13 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
                 let module = handler
                     .get(&input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get module: {}", e)))?;
+                    .tool_context("Failed to get module")?;
 
                 CallToolResult::from_serialize(&module)
             },
         )
         .build()
 }
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Enterprise - Alerts & Logs
-- list_alerts: List all active alerts
-- list_logs: List cluster event logs (with time range and pagination)
-
-### Redis Enterprise - Aggregate Stats
-- get_all_nodes_stats: Get stats for all nodes in one call
-- get_all_databases_stats: Get stats for all databases in one call
-- get_shard_stats: Get stats for a specific shard
-- get_all_shards_stats: Get stats for all shards in one call
-
-### Redis Enterprise - Shards
-- list_shards: List database shards (with optional database filter)
-- get_shard: Get shard details by UID
-
-### Redis Enterprise - Debug Info
-- list_debug_info_tasks: List debug info collection tasks
-- get_debug_info_status: Get status of a debug info collection task
-
-### Redis Enterprise - Modules
-- list_modules: List installed Redis modules (RedisJSON, RediSearch, etc.)
-- get_module: Get details about a specific module
-"#;
 
 /// Build an MCP sub-router containing observability tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

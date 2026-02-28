@@ -14,7 +14,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -40,9 +40,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
             "List all databases on the Redis Enterprise cluster. Supports filtering by name \
              (case-insensitive substring match) and status.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
@@ -55,7 +53,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                 let databases = handler
                     .list()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
+                    .tool_context("Failed to list databases")?;
 
                 // Apply name filter
                 let filtered: Vec<_> = databases
@@ -99,9 +97,7 @@ pub struct GetDatabaseInput {
 pub fn get_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_database")
         .description("Get detailed information about a specific Redis Enterprise database")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
@@ -114,7 +110,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
                 let database = handler
                     .get(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
+                    .tool_context("Failed to get database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -148,9 +144,7 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
             "Get statistics for a specific database. By default returns the latest stats. \
              Optionally specify interval and time range for historical data.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -175,17 +169,13 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
                     let stats = handler
                         .database(input.uid, Some(query))
                         .await
-                        .map_err(|e| {
-                            ToolError::new(format!("Failed to get database stats: {}", e))
-                        })?;
+                        .tool_context("Failed to get database stats")?;
                     CallToolResult::from_serialize(&stats)
                 } else {
                     let stats = handler
                         .database_last(input.uid)
                         .await
-                        .map_err(|e| {
-                            ToolError::new(format!("Failed to get database stats: {}", e))
-                        })?;
+                        .tool_context("Failed to get database stats")?;
                     CallToolResult::from_serialize(&stats)
                 }
             },
@@ -209,9 +199,7 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
         .description(
             "Get connection endpoints for a specific database in the Redis Enterprise cluster",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -225,7 +213,7 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
                 let endpoints = handler
                     .endpoints(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get endpoints: {}", e)))?;
+                    .tool_context("Failed to get endpoints")?;
 
                 wrap_list("endpoints", &endpoints)
             },
@@ -247,9 +235,7 @@ pub struct ListDatabaseAlertsInput {
 pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_database_alerts")
         .description("List all alerts for a specific database in the Redis Enterprise cluster")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDatabaseAlertsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -263,9 +249,7 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
                 let alerts = handler
                     .list_by_database(input.uid)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to list database alerts: {}", e))
-                    })?;
+                    .tool_context("Failed to list database alerts")?;
 
                 wrap_list("alerts", &alerts)
             },
@@ -326,7 +310,7 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to backup database: {}", e)))?;
+                .tool_context("Failed to backup database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Backup completed successfully",
@@ -390,7 +374,7 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to import database: {}", e)))?;
+                .tool_context("Failed to import database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Import completed successfully",
@@ -474,7 +458,7 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
                 let database = handler
                     .create(request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create database: {}", e)))?;
+                    .tool_context("Failed to create database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -522,7 +506,7 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
                 let database = handler
                     .update(input.uid, input.updates)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update database: {}", e)))?;
+                    .tool_context("Failed to update database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -547,6 +531,7 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a database from the Redis Enterprise cluster \
              and all its data. This action cannot be undone. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -567,7 +552,7 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
                 handler
                     .delete(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete database: {}", e)))?;
+                    .tool_context("Failed to delete database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Database deleted successfully",
@@ -598,6 +583,7 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Removes all data from a Redis Enterprise database. \
              This action cannot be undone. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, FlushEnterpriseDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -622,7 +608,7 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to flush database: {}", e)))?;
+                .tool_context("Failed to flush database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Database flushed successfully",
@@ -652,9 +638,7 @@ pub fn list_enterprise_crdbs(state: Arc<AppState>) -> Tool {
             "List all Active-Active (CRDB) databases in the Redis Enterprise cluster. \
              Returns database names, GUIDs, status, and instance information.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListCrdbsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListCrdbsInput>| async move {
@@ -664,10 +648,7 @@ pub fn list_enterprise_crdbs(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = CrdbHandler::new(client);
-                let crdbs = handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list CRDBs: {}", e)))?;
+                let crdbs = handler.list().await.tool_context("Failed to list CRDBs")?;
 
                 wrap_list("crdbs", &crdbs)
             },
@@ -692,9 +673,7 @@ pub fn get_enterprise_crdb(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific Active-Active (CRDB) database \
              including instances, replication status, and configuration.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCrdbInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbInput>| async move {
@@ -707,7 +686,7 @@ pub fn get_enterprise_crdb(state: Arc<AppState>) -> Tool {
                 let crdb = handler
                     .get(&input.guid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get CRDB: {}", e)))?;
+                    .tool_context("Failed to get CRDB")?;
 
                 CallToolResult::from_serialize(&crdb)
             },
@@ -732,9 +711,7 @@ pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
             "Get tasks for a specific Active-Active (CRDB) database. \
              Returns pending and completed tasks related to CRDB operations.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCrdbTasksInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbTasksInput>| async move {
@@ -747,35 +724,13 @@ pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
                 let tasks = handler
                     .tasks(&input.guid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get CRDB tasks: {}", e)))?;
+                    .tool_context("Failed to get CRDB tasks")?;
 
                 CallToolResult::from_serialize(&tasks)
             },
         )
         .build()
 }
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Enterprise - Databases
-- list_enterprise_databases: List all databases
-- get_enterprise_database: Get database details
-- get_database_stats: Get database statistics
-- get_database_endpoints: Get connection endpoints
-- list_database_alerts: Get alerts for a database
-
-### Redis Enterprise - Active-Active (CRDB)
-- list_enterprise_crdbs: List all Active-Active databases
-- get_enterprise_crdb: Get Active-Active database details by GUID
-- get_enterprise_crdb_tasks: Get tasks for an Active-Active database
-
-### Redis Enterprise - Database Write Operations
-- backup_enterprise_database: Trigger a database backup and wait for completion [write]
-- import_enterprise_database: Import data into a database and wait for completion [write]
-- create_enterprise_database: Create a new database [write]
-- update_enterprise_database: Update database configuration [write]
-- delete_enterprise_database: Permanently delete a database and all its data [destructive]
-- flush_enterprise_database: Remove all data from a database [destructive]
-"#;
 
 /// Build an MCP sub-router containing database tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

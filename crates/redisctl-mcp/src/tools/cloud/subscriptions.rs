@@ -13,7 +13,7 @@ use redisctl_core::cloud::{
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 
@@ -29,9 +29,7 @@ pub struct ListSubscriptionsInput {
 pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_subscriptions")
         .description("List all Redis Cloud subscriptions accessible with the current credentials. Returns JSON with subscription details.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListSubscriptionsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListSubscriptionsInput>| async move {
@@ -44,7 +42,7 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
                 let account_subs = handler
                     .get_all_subscriptions()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list subscriptions: {}", e)))?;
+                    .tool_context("Failed to list subscriptions")?;
 
                 CallToolResult::from_serialize(&account_subs)
             },
@@ -66,9 +64,7 @@ pub struct GetSubscriptionInput {
 pub fn get_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_subscription")
         .description("Get detailed information about a specific Redis Cloud subscription. Returns JSON with full subscription details.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSubscriptionInput>| async move {
@@ -81,7 +77,7 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
                 let subscription = handler
                     .get_subscription_by_id(input.subscription_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get subscription: {}", e)))?;
+                    .tool_context("Failed to get subscription")?;
 
                 CallToolResult::from_serialize(&subscription)
             },
@@ -105,9 +101,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
         .description(
             "List all databases in a Redis Cloud subscription. Returns JSON with database details.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
@@ -120,7 +114,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
                 let databases = handler
                     .get_subscription_databases(input.subscription_id, None, None)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list databases: {}", e)))?;
+                    .tool_context("Failed to list databases")?;
 
                 CallToolResult::from_serialize(&databases)
             },
@@ -144,9 +138,7 @@ pub struct GetDatabaseInput {
 pub fn get_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database")
         .description("Get detailed information about a specific Redis Cloud database. Returns JSON with full database configuration.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
@@ -159,7 +151,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
                 let database = handler
                     .get_subscription_database_by_id(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get database: {}", e)))?;
+                    .tool_context("Failed to get database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -190,9 +182,7 @@ pub struct GetBackupStatusInput {
 pub fn get_backup_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_backup_status")
         .description("Get backup status and history for a Redis Cloud database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetBackupStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -210,7 +200,7 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
                         input.region_name,
                     )
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get backup status: {}", e)))?;
+                    .tool_context("Failed to get backup status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -239,9 +229,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
         .description(
             "Get slow log entries for a Redis Cloud database. Shows slow queries for debugging.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSlowLogInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSlowLogInput>| async move {
@@ -254,7 +242,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
                 let log = handler
                     .get_slow_log(input.subscription_id, input.database_id, input.region_name)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get slow log: {}", e)))?;
+                    .tool_context("Failed to get slow log")?;
 
                 CallToolResult::from_serialize(&log)
             },
@@ -278,9 +266,7 @@ pub struct GetTagsInput {
 pub fn get_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_tags")
         .description("Get tags attached to a Redis Cloud database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetTagsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTagsInput>| async move {
@@ -293,7 +279,7 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
                 let tags = handler
                     .get_tags(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get tags: {}", e)))?;
+                    .tool_context("Failed to get tags")?;
 
                 CallToolResult::from_serialize(&tags)
             },
@@ -320,9 +306,7 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
             "Get the TLS/SSL certificate for a Redis Cloud database. \
              Returns the public certificate in PEM format for TLS connections.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCertificateInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -339,7 +323,7 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
                         input.database_id,
                     )
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get certificate: {}", e)))?;
+                    .tool_context("Failed to get certificate")?;
 
                 CallToolResult::from_serialize(&cert)
             },
@@ -450,7 +434,7 @@ pub fn create_database(state: Arc<AppState>) -> Tool {
                     None, // MCP doesn't need progress callbacks
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to create database: {}", e)))?;
+                .tool_context("Failed to create database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -544,7 +528,7 @@ pub fn update_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to update database: {}", e)))?;
+                .tool_context("Failed to update database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -574,6 +558,7 @@ pub fn delete_database(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a database and all its data. This action cannot be undone. \
              Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -599,7 +584,7 @@ pub fn delete_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to delete database: {}", e)))?;
+                .tool_context("Failed to delete database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Database deleted successfully",
@@ -663,7 +648,7 @@ pub fn backup_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to backup database: {}", e)))?;
+                .tool_context("Failed to backup database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Backup completed successfully",
@@ -740,7 +725,7 @@ pub fn import_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to import database: {}", e)))?;
+                .tool_context("Failed to import database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Import completed successfully",
@@ -772,6 +757,7 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a subscription. All databases must be deleted first. \
              This action cannot be undone. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -796,7 +782,7 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to delete subscription: {}", e)))?;
+                .tool_context("Failed to delete subscription")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Subscription deleted successfully",
@@ -833,6 +819,7 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Removes all data from a database. This action cannot be undone. \
              Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, FlushDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<FlushDatabaseInput>| async move {
@@ -857,7 +844,7 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| ToolError::new(format!("Failed to flush database: {}", e)))?;
+                .tool_context("Failed to flush database")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Database flushed successfully",
@@ -979,9 +966,7 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
                     None,
                 )
                 .await
-                .map_err(|e| {
-                    ToolError::new(format!("Failed to create subscription: {}", e))
-                })?;
+                .tool_context("Failed to create subscription")?;
 
                 CallToolResult::from_serialize(&subscription)
             },
@@ -1033,9 +1018,7 @@ pub fn update_subscription(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_subscription(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update subscription: {}", e))
-                    })?;
+                    .tool_context("Failed to update subscription")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1059,9 +1042,7 @@ pub fn get_subscription_pricing(state: Arc<AppState>) -> Tool {
         .description(
             "Get pricing details for a Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSubscriptionPricingInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1075,9 +1056,7 @@ pub fn get_subscription_pricing(state: Arc<AppState>) -> Tool {
                 let pricing = handler
                     .get_subscription_pricing(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get subscription pricing: {}", e))
-                    })?;
+                    .tool_context("Failed to get subscription pricing")?;
 
                 CallToolResult::from_serialize(&pricing)
             },
@@ -1102,9 +1081,7 @@ pub fn get_redis_versions(state: Arc<AppState>) -> Tool {
         .description(
             "Get available Redis versions. Optionally filter by subscription ID.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRedisVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1118,9 +1095,7 @@ pub fn get_redis_versions(state: Arc<AppState>) -> Tool {
                 let versions = handler
                     .get_redis_versions(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get Redis versions: {}", e))
-                    })?;
+                    .tool_context("Failed to get Redis versions")?;
 
                 CallToolResult::from_serialize(&versions)
             },
@@ -1142,9 +1117,7 @@ pub struct GetSubscriptionCidrAllowlistInput {
 pub fn get_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_subscription_cidr_allowlist")
         .description("Get the CIDR allowlist for a Redis Cloud subscription.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSubscriptionCidrAllowlistInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1158,9 +1131,7 @@ pub fn get_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
                 let allowlist = handler
                     .get_cidr_allowlist(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get subscription CIDR allowlist: {}", e))
-                    })?;
+                    .tool_context("Failed to get subscription CIDR allowlist")?;
 
                 CallToolResult::from_serialize(&allowlist)
             },
@@ -1220,12 +1191,7 @@ pub fn update_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_subscription_cidr_allowlist(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to update subscription CIDR allowlist: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to update subscription CIDR allowlist")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1247,9 +1213,7 @@ pub struct GetSubscriptionMaintenanceWindowsInput {
 pub fn get_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_subscription_maintenance_windows")
         .description("Get maintenance windows for a Redis Cloud subscription.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSubscriptionMaintenanceWindowsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1263,12 +1227,7 @@ pub fn get_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
                 let windows = handler
                     .get_subscription_maintenance_windows(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to get subscription maintenance windows: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to get subscription maintenance windows")?;
 
                 CallToolResult::from_serialize(&windows)
             },
@@ -1348,12 +1307,7 @@ pub fn update_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_subscription_maintenance_windows(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to update subscription maintenance windows: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to update subscription maintenance windows")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1377,9 +1331,7 @@ pub fn get_active_active_regions(state: Arc<AppState>) -> Tool {
         .description(
             "Get regions from an Active-Active Redis Cloud subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetActiveActiveRegionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1393,12 +1345,7 @@ pub fn get_active_active_regions(state: Arc<AppState>) -> Tool {
                 let regions = handler
                     .get_regions_from_active_active_subscription(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to get Active-Active regions: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to get Active-Active regions")?;
 
                 CallToolResult::from_serialize(&regions)
             },
@@ -1474,12 +1421,7 @@ pub fn add_active_active_region(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to add Active-Active region: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to add Active-Active region")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1516,6 +1458,7 @@ pub fn delete_active_active_regions(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently removes regions from an Active-Active subscription. \
              This may cause data loss in the removed regions. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteActiveActiveRegionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1554,9 +1497,7 @@ pub fn delete_active_active_regions(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_regions_from_active_active_subscription(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete Active-Active regions: {}", e))
-                    })?;
+                    .tool_context("Failed to delete Active-Active regions")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1580,9 +1521,7 @@ pub struct GetAvailableDatabaseVersionsInput {
 pub fn get_available_database_versions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_available_database_versions")
         .description("Get available target Redis versions for upgrading a database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAvailableDatabaseVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1596,9 +1535,7 @@ pub fn get_available_database_versions(state: Arc<AppState>) -> Tool {
                 let versions = handler
                     .get_available_target_versions(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get available database versions: {}", e))
-                    })?;
+                    .tool_context("Failed to get available database versions")?;
 
                 CallToolResult::from_serialize(&versions)
             },
@@ -1661,9 +1598,7 @@ pub fn upgrade_database_redis_version(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to upgrade database Redis version: {}", e))
-                    })?;
+                    .tool_context("Failed to upgrade database Redis version")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1687,9 +1622,7 @@ pub struct GetDatabaseUpgradeStatusInput {
 pub fn get_database_upgrade_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_upgrade_status")
         .description("Get the Redis version upgrade status for a database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseUpgradeStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1706,9 +1639,7 @@ pub fn get_database_upgrade_status(state: Arc<AppState>) -> Tool {
                         input.database_id,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get database upgrade status: {}", e))
-                    })?;
+                    .tool_context("Failed to get database upgrade status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -1732,9 +1663,7 @@ pub struct GetDatabaseImportStatusInput {
 pub fn get_database_import_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_import_status")
         .description("Get the import status for a Redis Cloud database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseImportStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1748,9 +1677,7 @@ pub fn get_database_import_status(state: Arc<AppState>) -> Tool {
                 let status = handler
                     .get_database_import_status(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get database import status: {}", e))
-                    })?;
+                    .tool_context("Failed to get database import status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -1811,9 +1738,7 @@ pub fn create_database_tag(state: Arc<AppState>) -> Tool {
                 let tag = handler
                     .create_tag(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create database tag: {}", e))
-                    })?;
+                    .tool_context("Failed to create database tag")?;
 
                 CallToolResult::from_serialize(&tag)
             },
@@ -1879,9 +1804,7 @@ pub fn update_database_tag(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update database tag: {}", e))
-                    })?;
+                    .tool_context("Failed to update database tag")?;
 
                 CallToolResult::from_serialize(&tag)
             },
@@ -1910,6 +1833,7 @@ pub fn delete_database_tag(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a tag from a database. This action cannot be undone. \
              Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteDatabaseTagInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1929,9 +1853,7 @@ pub fn delete_database_tag(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_tag(input.subscription_id, input.database_id, input.tag_key)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete database tag: {}", e))
-                    })?;
+                    .tool_context("Failed to delete database tag")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2008,9 +1930,7 @@ pub fn update_database_tags(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_tags(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update database tags: {}", e))
-                    })?;
+                    .tool_context("Failed to update database tags")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -2118,56 +2038,13 @@ pub fn update_crdb_local_properties(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update CRDB local properties: {}", e))
-                    })?;
+                    .tool_context("Failed to update CRDB local properties")?;
 
                 CallToolResult::from_serialize(&result)
             },
         )
         .build()
 }
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Cloud - Subscriptions & Databases
-- list_subscriptions: List all Cloud subscriptions
-- get_subscription: Get subscription details
-- get_subscription_pricing: Get pricing details for a subscription
-- get_redis_versions: Get available Redis versions
-- get_subscription_cidr_allowlist: Get CIDR allowlist for a subscription
-- get_subscription_maintenance_windows: Get maintenance windows for a subscription
-- get_active_active_regions: Get regions from an Active-Active subscription
-- list_databases: List databases in a subscription
-- get_database: Get database details
-- get_backup_status: Get database backup status
-- get_slow_log: Get slow query log
-- get_database_tags: Get tags for a database
-- get_database_certificate: Get TLS/SSL certificate for a database
-- get_available_database_versions: Get available target Redis versions for upgrade
-- get_database_upgrade_status: Get Redis version upgrade status
-- get_database_import_status: Get database import status
-
-### Redis Cloud - Write Operations
-- create_database: Create a new database and wait for it to be ready [write]
-- update_database: Update a database configuration [write]
-- backup_database: Trigger a manual backup [write]
-- import_database: Import data into a database [write]
-- create_subscription: Create a new subscription [write]
-- update_subscription: Update a subscription [write]
-- update_subscription_cidr_allowlist: Update CIDR allowlist for a subscription [write]
-- update_subscription_maintenance_windows: Update maintenance windows [write]
-- add_active_active_region: Add a region to an Active-Active subscription [write]
-- upgrade_database_redis_version: Upgrade the Redis version of a database [write]
-- create_database_tag: Create a tag on a database [write]
-- update_database_tag: Update a tag on a database [write]
-- update_database_tags: Update all tags on a database [write]
-- update_crdb_local_properties: Update local properties of an Active-Active database [write]
-- delete_database: Permanently delete a database and all its data [destructive]
-- delete_subscription: Permanently delete a subscription [destructive]
-- flush_database: Remove all data from a database [destructive]
-- delete_active_active_regions: Remove regions from an Active-Active subscription [destructive]
-- delete_database_tag: Delete a tag from a database [destructive]
-"#;
 
 /// Build an MCP sub-router containing subscription and database tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

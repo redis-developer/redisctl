@@ -14,26 +14,11 @@ pub use server::*;
 #[allow(unused_imports)]
 pub use structures::*;
 
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
 
 use tower_mcp::{McpRouter, ToolError};
 
 use crate::state::AppState;
-
-static INSTRUCTIONS: LazyLock<String> = LazyLock::new(|| {
-    [
-        server::INSTRUCTIONS,
-        keys::INSTRUCTIONS,
-        structures::INSTRUCTIONS,
-        diagnostics::INSTRUCTIONS,
-    ]
-    .concat()
-});
-
-/// Instructions text describing all Redis database tools
-pub fn instructions() -> &'static str {
-    &INSTRUCTIONS
-}
 
 /// Resolve a Redis URL from the provided inputs.
 ///

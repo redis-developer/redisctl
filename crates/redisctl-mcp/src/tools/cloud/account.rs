@@ -15,7 +15,7 @@ use redis_cloud::{
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -36,9 +36,7 @@ pub struct GetAccountInput {
 pub fn get_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_account")
         .description("Get information about the current Redis Cloud account including name, ID, and settings.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAccountInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAccountInput>| async move {
@@ -51,7 +49,7 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
                 let account = handler
                     .get_current_account()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get account: {}", e)))?;
+                    .tool_context("Failed to get account")?;
 
                 CallToolResult::from_serialize(&account)
             },
@@ -80,9 +78,7 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
             "Get system audit logs for the Redis Cloud account. Includes events like \
              subscription changes, database modifications, and user actions.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSystemLogsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSystemLogsInput>| async move {
@@ -95,7 +91,7 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
                 let logs = handler
                     .get_account_system_logs(input.offset, input.limit)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get system logs: {}", e)))?;
+                    .tool_context("Failed to get system logs")?;
 
                 CallToolResult::from_serialize(&logs)
             },
@@ -124,9 +120,7 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
             "Get session activity logs for the Redis Cloud account. Includes user login/logout \
              events and session information.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSessionLogsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -140,7 +134,7 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
                 let logs = handler
                     .get_account_session_logs(input.offset, input.limit)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get session logs: {}", e)))?;
+                    .tool_context("Failed to get session logs")?;
 
                 CallToolResult::from_serialize(&logs)
             },
@@ -165,9 +159,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
         .description(
             "Get supported cloud regions for Redis Cloud. Optionally filter by provider (AWS, GCP, Azure).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRegionsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRegionsInput>| async move {
@@ -180,7 +172,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
                 let regions = handler
                     .get_supported_regions(input.provider)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get regions: {}", e)))?;
+                    .tool_context("Failed to get regions")?;
 
                 CallToolResult::from_serialize(&regions)
             },
@@ -202,9 +194,7 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
         .description(
             "Get supported Redis database modules (e.g., Search, JSON, TimeSeries, Bloom).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetModulesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModulesInput>| async move {
@@ -217,7 +207,7 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
                 let modules = handler
                     .get_supported_database_modules()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get modules: {}", e)))?;
+                    .tool_context("Failed to get modules")?;
 
                 CallToolResult::from_serialize(&modules)
             },
@@ -243,9 +233,7 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
         .description(
             "List all users in the Redis Cloud account (team members with console access).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAccountUsersInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -259,7 +247,7 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
                 let users = handler
                     .get_all_users()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
+                    .tool_context("Failed to list users")?;
 
                 CallToolResult::from_serialize(&users)
             },
@@ -283,9 +271,7 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
         .description(
             "Get detailed information about a specific account user (team member) by ID.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAccountUserInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -299,7 +285,7 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
                 let user = handler
                     .get_user_by_id(input.user_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get account user: {}", e)))?;
+                    .tool_context("Failed to get account user")?;
 
                 CallToolResult::from_serialize(&user)
             },
@@ -323,9 +309,7 @@ pub struct ListAclUsersInput {
 pub fn list_acl_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_acl_users")
         .description("List all ACL users (database-level Redis users for authentication).")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAclUsersInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAclUsersInput>| async move {
@@ -338,7 +322,7 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
                 let users = handler
                     .get_all_acl_users()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list ACL users: {}", e)))?;
+                    .tool_context("Failed to list ACL users")?;
 
                 CallToolResult::from_serialize(&users)
             },
@@ -360,9 +344,7 @@ pub struct GetAclUserInput {
 pub fn get_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_acl_user")
         .description("Get detailed information about a specific ACL user by ID.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAclUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAclUserInput>| async move {
@@ -375,7 +357,7 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
                 let user = handler
                     .get_user_by_id(input.user_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get ACL user: {}", e)))?;
+                    .tool_context("Failed to get ACL user")?;
 
                 CallToolResult::from_serialize(&user)
             },
@@ -395,9 +377,7 @@ pub struct ListAclRolesInput {
 pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_acl_roles")
         .description("List all ACL roles (permission templates for database access).")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAclRolesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAclRolesInput>| async move {
@@ -410,7 +390,7 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
                 let roles = handler
                     .get_roles()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list ACL roles: {}", e)))?;
+                    .tool_context("Failed to list ACL roles")?;
 
                 CallToolResult::from_serialize(&roles)
             },
@@ -430,9 +410,7 @@ pub struct ListRedisRulesInput {
 pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_redis_rules")
         .description("List all Redis ACL rules (command permissions for Redis users).")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListRedisRulesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -446,7 +424,7 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
                 let rules = handler
                     .get_all_redis_rules()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list Redis rules: {}", e)))?;
+                    .tool_context("Failed to list Redis rules")?;
 
                 CallToolResult::from_serialize(&rules)
             },
@@ -504,7 +482,7 @@ pub fn create_acl_user(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_user(&request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create ACL user: {}", e)))?;
+                    .tool_context("Failed to create ACL user")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -560,7 +538,7 @@ pub fn update_acl_user(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_acl_user(input.user_id, &request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update ACL user: {}", e)))?;
+                    .tool_context("Failed to update ACL user")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -585,6 +563,7 @@ pub fn delete_acl_user(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an ACL user. Active sessions using this user \
              will be terminated. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAclUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteAclUserInput>| async move {
@@ -603,7 +582,7 @@ pub fn delete_acl_user(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_user(input.user_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete ACL user: {}", e)))?;
+                    .tool_context("Failed to delete ACL user")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -690,7 +669,7 @@ pub fn create_acl_role(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_role(&request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create ACL role: {}", e)))?;
+                    .tool_context("Failed to create ACL role")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -762,7 +741,7 @@ pub fn update_acl_role(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_role(input.role_id, &request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update ACL role: {}", e)))?;
+                    .tool_context("Failed to update ACL role")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -787,6 +766,7 @@ pub fn delete_acl_role(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes an ACL role. Users assigned to this role \
              will lose their permissions. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAclRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteAclRoleInput>| async move {
@@ -805,7 +785,7 @@ pub fn delete_acl_role(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_acl_role(input.role_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete ACL role: {}", e)))?;
+                    .tool_context("Failed to delete ACL role")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -857,9 +837,7 @@ pub fn create_redis_rule(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_redis_rule(&request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create Redis rule: {}", e))
-                    })?;
+                    .tool_context("Failed to create Redis rule")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -914,9 +892,7 @@ pub fn update_redis_rule(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_redis_rule(input.rule_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update Redis rule: {}", e))
-                    })?;
+                    .tool_context("Failed to update Redis rule")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -941,6 +917,7 @@ pub fn delete_redis_rule(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a Redis ACL rule. Roles using this rule \
              will lose those permissions. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteRedisRuleInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -960,9 +937,7 @@ pub fn delete_redis_rule(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_redis_rule(input.rule_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete Redis rule: {}", e))
-                    })?;
+                    .tool_context("Failed to delete Redis rule")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1049,9 +1024,7 @@ pub fn generate_cost_report(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .generate_cost_report(request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to generate cost report: {}", e))
-                    })?;
+                    .tool_context("Failed to generate cost report")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1076,9 +1049,7 @@ pub fn download_cost_report(state: Arc<AppState>) -> Tool {
             "Download a previously generated cost report by ID. \
              Returns the report content (CSV or JSON).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, DownloadCostReportInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1092,9 +1063,7 @@ pub fn download_cost_report(state: Arc<AppState>) -> Tool {
                 let bytes = handler
                     .download_cost_report(&input.cost_report_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to download cost report: {}", e))
-                    })?;
+                    .tool_context("Failed to download cost report")?;
 
                 let content = String::from_utf8(bytes).unwrap_or_else(|e| {
                     format!("<binary data, {} bytes>", e.into_bytes().len())
@@ -1121,9 +1090,7 @@ pub struct ListPaymentMethodsInput {
 pub fn list_payment_methods(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_payment_methods")
         .description("List all payment methods for the Redis Cloud account.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListPaymentMethodsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1137,9 +1104,7 @@ pub fn list_payment_methods(state: Arc<AppState>) -> Tool {
                 let methods = handler
                     .get_account_payment_methods()
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to list payment methods: {}", e))
-                    })?;
+                    .tool_context("Failed to list payment methods")?;
 
                 CallToolResult::from_serialize(&methods)
             },
@@ -1163,9 +1128,7 @@ pub struct ListTasksInput {
 pub fn list_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_tasks")
         .description("List all async tasks in the Redis Cloud account. Tasks track long-running operations like database creation.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListTasksInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListTasksInput>| async move {
@@ -1178,7 +1141,7 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
                 let tasks = handler
                     .get_all_tasks()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list tasks: {}", e)))?;
+                    .tool_context("Failed to list tasks")?;
 
                 wrap_list("tasks", &tasks)
             },
@@ -1200,9 +1163,7 @@ pub struct GetTaskInput {
 pub fn get_task(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_task")
         .description("Get status and details of a specific async task by ID.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetTaskInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTaskInput>| async move {
@@ -1215,7 +1176,7 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
                 let task = handler
                     .get_task_by_id(input.task_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get task: {}", e)))?;
+                    .tool_context("Failed to get task")?;
 
                 CallToolResult::from_serialize(&task)
             },
@@ -1242,9 +1203,7 @@ pub fn list_cloud_accounts(state: Arc<AppState>) -> Tool {
             "List all configured cloud provider accounts (BYOC). Returns cloud accounts \
              for AWS, GCP, or Azure that are integrated with Redis Cloud.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListCloudAccountsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1258,9 +1217,7 @@ pub fn list_cloud_accounts(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .get_cloud_accounts()
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to list cloud accounts: {}", e))
-                    })?;
+                    .tool_context("Failed to list cloud accounts")?;
 
                 let accounts = result.cloud_accounts.unwrap_or_default();
                 wrap_list("cloud_accounts", &accounts)
@@ -1286,9 +1243,7 @@ pub fn get_cloud_account(state: Arc<AppState>) -> Tool {
             "Get details for a specific cloud provider account (BYOC) by ID, \
              including provider type, access credentials, and status.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCloudAccountInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1302,9 +1257,7 @@ pub fn get_cloud_account(state: Arc<AppState>) -> Tool {
                 let account = handler
                     .get_cloud_account_by_id(input.cloud_account_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get cloud account: {}", e))
-                    })?;
+                    .tool_context("Failed to get cloud account")?;
 
                 CallToolResult::from_serialize(&account)
             },
@@ -1373,9 +1326,7 @@ pub fn create_cloud_account(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create_cloud_account(&request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create cloud account: {}", e))
-                    })?;
+                    .tool_context("Failed to create cloud account")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1445,9 +1396,7 @@ pub fn update_cloud_account(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_cloud_account(input.cloud_account_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update cloud account: {}", e))
-                    })?;
+                    .tool_context("Failed to update cloud account")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1472,6 +1421,7 @@ pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a cloud provider account (BYOC). This removes \
              the cloud account integration and cannot be undone. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteCloudAccountInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1491,59 +1441,13 @@ pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_cloud_account(input.cloud_account_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete cloud account: {}", e))
-                    })?;
+                    .tool_context("Failed to delete cloud account")?;
 
                 CallToolResult::from_serialize(&result)
             },
         )
         .build()
 }
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Cloud - Account & Configuration
-- get_account: Get current account information
-- get_regions: Get supported cloud regions
-- get_modules: Get supported Redis modules
-- list_account_users: List team members
-- get_account_user: Get team member details by ID
-- list_acl_users: List database ACL users
-- get_acl_user: Get ACL user details by ID
-- list_acl_roles: List ACL roles
-- list_redis_rules: List Redis ACL rules
-- list_payment_methods: List account payment methods
-
-### Redis Cloud - ACL Write Operations
-- create_acl_user: Create a new ACL user with a role and password [write]
-- update_acl_user: Update an ACL user's role or password [write]
-- create_acl_role: Create a new ACL role with Redis rules and database associations [write]
-- update_acl_role: Update an ACL role's name or rule assignments [write]
-- create_redis_rule: Create a new Redis ACL rule pattern [write]
-- update_redis_rule: Update a Redis ACL rule's name or pattern [write]
-- delete_acl_user: Permanently delete an ACL user [destructive]
-- delete_acl_role: Permanently delete an ACL role [destructive]
-- delete_redis_rule: Permanently delete a Redis ACL rule [destructive]
-
-### Redis Cloud - Cloud Accounts (BYOC)
-- list_cloud_accounts: List configured cloud provider accounts (AWS, GCP, Azure)
-- get_cloud_account: Get cloud account details by ID
-- create_cloud_account: Create a new cloud provider account [write]
-- update_cloud_account: Update cloud account configuration [write]
-- delete_cloud_account: Permanently delete a cloud provider account [destructive]
-
-### Redis Cloud - Cost Reports
-- generate_cost_report: Generate a FOCUS cost report [write]
-- download_cost_report: Download a generated cost report
-
-### Redis Cloud - Logs
-- get_system_logs: Get system audit logs (subscription/database changes)
-- get_session_logs: Get session activity logs (login/logout events)
-
-### Redis Cloud - Tasks
-- list_tasks: List async operations
-- get_task: Get task status
-"#;
 
 /// Build an MCP sub-router containing account, ACL, cloud account, and task tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
