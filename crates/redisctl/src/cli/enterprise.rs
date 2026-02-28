@@ -3,10 +3,22 @@
 use clap::Subcommand;
 
 #[derive(Subcommand, Debug)]
+#[command(after_long_help = "\
+COMMAND GROUPS:
+  Core:          database (db), cluster, node, shard, endpoint
+  Access:        user, role, acl, ldap, ldap-mappings, auth
+  Monitoring:    stats, status, alerts (alert), logs (log), diagnostics (diag),
+                 debug-info
+  Admin:         license (lic), module, proxy, services (svc), cm-settings, suffix
+  Advanced:      crdb, crdb-task, bdb-group, migration, bootstrap, job-scheduler
+  Troubleshoot:  support-package, ocsp, usage-report, local
+  Other:         action, jsonschema, workflow
+
+Aliases shown in parentheses (e.g. 'enterprise db list' instead of 'enterprise database list').")]
 pub enum EnterpriseCommands {
-    // -- Core Operations (display_order 1-9) --
+    // -- Core Operations --
     /// Database operations
-    #[command(subcommand, display_order = 1)]
+    #[command(subcommand, display_order = 1, visible_alias = "db")]
     Database(EnterpriseDatabaseCommands),
 
     /// Cluster operations
@@ -25,7 +37,7 @@ pub enum EnterpriseCommands {
     #[command(subcommand, display_order = 5)]
     Endpoint(crate::commands::enterprise::endpoint::EndpointCommands),
 
-    // -- Access Control (display_order 10-19) --
+    // -- Access Control --
     /// User operations
     #[command(subcommand, display_order = 10)]
     User(EnterpriseUserCommands),
@@ -46,11 +58,11 @@ pub enum EnterpriseCommands {
     #[command(subcommand, name = "ldap-mappings", display_order = 14)]
     LdapMappings(crate::commands::enterprise::ldap::LdapMappingsCommands),
 
-    /// Authentication & sessions
+    /// Authentication and sessions
     #[command(subcommand, display_order = 15)]
     Auth(EnterpriseAuthCommands),
 
-    // -- Monitoring (display_order 20-29) --
+    // -- Monitoring --
     /// Statistics and metrics operations
     #[command(subcommand, display_order = 20)]
     Stats(EnterpriseStatsCommands),
@@ -80,24 +92,24 @@ pub enum EnterpriseCommands {
     },
 
     /// Alert management operations
-    #[command(subcommand, display_order = 22)]
+    #[command(subcommand, display_order = 22, visible_alias = "alert")]
     Alerts(crate::commands::enterprise::alerts::AlertsCommands),
 
     /// Log operations
-    #[command(subcommand, display_order = 23)]
+    #[command(subcommand, display_order = 23, visible_alias = "log")]
     Logs(crate::commands::enterprise::logs::LogsCommands),
 
     /// Diagnostics operations
-    #[command(subcommand, display_order = 24)]
+    #[command(subcommand, display_order = 24, visible_alias = "diag")]
     Diagnostics(crate::commands::enterprise::diagnostics::DiagnosticsCommands),
 
     /// Debug info collection
     #[command(subcommand, display_order = 25)]
     DebugInfo(crate::commands::enterprise::debuginfo::DebugInfoCommands),
 
-    // -- Administration (display_order 30-39) --
+    // -- Administration --
     /// License management
-    #[command(subcommand, display_order = 30)]
+    #[command(subcommand, display_order = 30, visible_alias = "lic")]
     License(crate::commands::enterprise::license::LicenseCommands),
 
     /// Module management operations
@@ -109,7 +121,7 @@ pub enum EnterpriseCommands {
     Proxy(crate::commands::enterprise::proxy::ProxyCommands),
 
     /// Service management
-    #[command(subcommand, display_order = 33)]
+    #[command(subcommand, display_order = 33, visible_alias = "svc")]
     Services(crate::commands::enterprise::services::ServicesCommands),
 
     /// Cluster manager settings
@@ -120,7 +132,7 @@ pub enum EnterpriseCommands {
     #[command(subcommand, display_order = 35)]
     Suffix(crate::commands::enterprise::suffix::SuffixCommands),
 
-    // -- Advanced (display_order 40-49) --
+    // -- Advanced --
     /// Active-Active database (CRDB) operations
     #[command(subcommand, display_order = 40)]
     Crdb(EnterpriseCrdbCommands),
@@ -145,7 +157,7 @@ pub enum EnterpriseCommands {
     #[command(subcommand, name = "job-scheduler", display_order = 45)]
     JobScheduler(crate::commands::enterprise::job_scheduler::JobSchedulerCommands),
 
-    // -- Troubleshooting (display_order 50-59) --
+    // -- Troubleshooting --
     /// Support package generation for troubleshooting
     #[command(subcommand, name = "support-package", display_order = 50)]
     SupportPackage(crate::commands::enterprise::support_package::SupportPackageCommands),
@@ -162,7 +174,7 @@ pub enum EnterpriseCommands {
     #[command(subcommand, display_order = 53)]
     Local(crate::commands::enterprise::local::LocalCommands),
 
-    // -- Other (display_order 60+) --
+    // -- Other --
     /// Action (task) operations
     #[command(subcommand, display_order = 60)]
     Action(crate::commands::enterprise::actions::ActionCommands),
