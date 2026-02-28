@@ -78,7 +78,7 @@ directories = "6.0"
 comfy-table = "7.2"
 serde_yaml = "0.9"
 csv = "1.3"
-jmespath = "0.4"
+jpx-core = "0.2"
 
 # Password input
 rpassword = "7.4"

@@ -2,7 +2,7 @@
 
 use anyhow::{Context, Result};
 use comfy_table::Table;
-use jmespath::Runtime;
+use jpx_core::Runtime;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
@@ -13,12 +13,7 @@ static JMESPATH_RUNTIME: OnceLock<Runtime> = OnceLock::new();
 
 /// Get or initialize the JMESPath runtime with extended functions
 pub fn get_jmespath_runtime() -> &'static Runtime {
-    JMESPATH_RUNTIME.get_or_init(|| {
-        let mut runtime = Runtime::new();
-        runtime.register_builtin_functions();
-        jmespath_extensions::register_all(&mut runtime);
-        runtime
-    })
+    JMESPATH_RUNTIME.get_or_init(|| Runtime::builder().with_all_extensions().build())
 }
 
 /// Normalize backtick literals in JMESPath expressions.
@@ -66,7 +61,7 @@ fn normalize_backtick_literals(query: &str) -> String {
 /// specification's "elided quotes" feature before compilation.
 pub fn compile_jmespath(
     query: &str,
-) -> Result<jmespath::Expression<'static>, jmespath::JmespathError> {
+) -> Result<jpx_core::Expression<'static>, jpx_core::JmespathError> {
     let normalized = normalize_backtick_literals(query);
     get_jmespath_runtime().compile(&normalized)
 }
@@ -96,22 +91,11 @@ pub fn print_output<T: Serialize>(
 ) -> Result<()> {
     let mut json_value = serde_json::to_value(data)?;
 
-    // Apply JMESPath query if provided (using extended runtime with 300+ functions)
+    // Apply JMESPath query if provided (using extended runtime with 400+ functions)
     if let Some(query_str) = query {
-        let normalized = normalize_backtick_literals(query_str);
-        let runtime = get_jmespath_runtime();
-        let expr = runtime
-            .compile(&normalized)
+        let expr = compile_jmespath(query_str)
             .with_context(|| format!("Invalid JMESPath expression: {}", query_str))?;
-        // Convert Value to string then parse as Variable
-        let json_str = serde_json::to_string(&json_value)?;
-        let data = jmespath::Variable::from_json(&json_str)
-            .map_err(|e| anyhow::anyhow!("Failed to parse JSON for JMESPath: {}", e))?;
-        let result = expr.search(&data).context("JMESPath query failed")?;
-        // Convert result back to JSON string then parse as Value
-        let result_str = result.to_string();
-        json_value =
-            serde_json::from_str(&result_str).context("Failed to parse JMESPath result")?;
+        json_value = expr.search(&json_value).context("JMESPath query failed")?;
     }
 
     match format {

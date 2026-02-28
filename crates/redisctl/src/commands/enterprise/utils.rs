@@ -8,18 +8,13 @@ use anyhow::Context;
 use dialoguer::Confirm;
 use serde_json::Value;
 
-/// Apply JMESPath query to JSON data (using extended runtime with 150+ functions)
+/// Apply JMESPath query to JSON data (using extended runtime with 400+ functions)
 pub fn apply_jmespath(data: &Value, query: &str) -> CliResult<Value> {
     let expr = crate::output::compile_jmespath(query)
         .with_context(|| format!("Invalid JMESPath expression: {}", query))?;
-    let result = expr
-        .search(data)
-        .with_context(|| format!("Failed to apply JMESPath query: {}", query))?;
-    // Convert jmespath Variable to serde_json Value
-    let json_str = serde_json::to_string(&result).context("Failed to serialize JMESPath result")?;
-    let value =
-        serde_json::from_str(&json_str).context("Failed to parse JMESPath result as JSON")?;
-    Ok(value)
+    expr.search(data)
+        .with_context(|| format!("Failed to apply JMESPath query: {}", query))
+        .map_err(Into::into)
 }
 
 /// Handle output with optional JMESPath query
