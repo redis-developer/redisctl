@@ -38,6 +38,7 @@ pub fn get_vpc_peering(state: Arc<AppState>) -> Tool {
         .description("Get VPC peering details for a Redis Cloud subscription.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetVpcPeeringInput>| async move {
@@ -99,6 +100,7 @@ pub fn create_vpc_peering(state: Arc<AppState>) -> Tool {
             "Create a VPC peering connection for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -181,6 +183,7 @@ pub fn update_vpc_peering(state: Arc<AppState>) -> Tool {
             "Update a VPC peering connection for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -236,8 +239,8 @@ pub struct DeleteVpcPeeringInput {
 pub fn delete_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_vpc_peering")
         .description(
-            "Delete a VPC peering connection for a Redis Cloud subscription. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a VPC peering connection. \
+             Network connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteVpcPeeringInput>(
             state,
@@ -288,6 +291,7 @@ pub fn get_aa_vpc_peering(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -352,6 +356,7 @@ pub fn create_aa_vpc_peering(state: Arc<AppState>) -> Tool {
             "Create an Active-Active VPC peering connection for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAaVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -436,6 +441,7 @@ pub fn update_aa_vpc_peering(state: Arc<AppState>) -> Tool {
             "Update an Active-Active VPC peering connection for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAaVpcPeeringInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -493,8 +499,8 @@ pub struct DeleteAaVpcPeeringInput {
 pub fn delete_aa_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_vpc_peering")
         .description(
-            "Delete an Active-Active VPC peering connection for a Redis Cloud subscription. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an Active-Active VPC peering connection. \
+             Network connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteAaVpcPeeringInput>(
             state,
@@ -547,6 +553,7 @@ pub fn get_tgw_attachments(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetTgwAttachmentsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -588,6 +595,7 @@ pub fn get_tgw_invitations(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetTgwInvitationsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -630,6 +638,7 @@ pub fn accept_tgw_invitation(state: Arc<AppState>) -> Tool {
             "Accept a Transit Gateway resource share invitation. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AcceptTgwInvitationInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -678,6 +687,7 @@ pub fn reject_tgw_invitation(state: Arc<AppState>) -> Tool {
             "Reject a Transit Gateway resource share invitation. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RejectTgwInvitationInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -733,6 +743,7 @@ pub fn create_tgw_attachment(state: Arc<AppState>) -> Tool {
             "Create a Transit Gateway attachment for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateTgwAttachmentInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -796,6 +807,7 @@ pub fn update_tgw_attachment_cidrs(state: Arc<AppState>) -> Tool {
             "Update CIDRs for a Transit Gateway attachment. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateTgwAttachmentCidrsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -847,8 +859,8 @@ pub struct DeleteTgwAttachmentInput {
 pub fn delete_tgw_attachment(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_tgw_attachment")
         .description(
-            "Delete a Transit Gateway attachment. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a Transit Gateway attachment. \
+             Network connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteTgwAttachmentInput>(
             state,
@@ -901,6 +913,7 @@ pub fn get_aa_tgw_attachments(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaTgwAttachmentsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -942,6 +955,7 @@ pub fn get_aa_tgw_invitations(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaTgwInvitationsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -986,6 +1000,7 @@ pub fn accept_aa_tgw_invitation(state: Arc<AppState>) -> Tool {
             "Accept an Active-Active Transit Gateway resource share invitation. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AcceptAaTgwInvitationInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1040,6 +1055,7 @@ pub fn reject_aa_tgw_invitation(state: Arc<AppState>) -> Tool {
             "Reject an Active-Active Transit Gateway resource share invitation. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RejectAaTgwInvitationInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1101,6 +1117,7 @@ pub fn create_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
             "Create an Active-Active Transit Gateway attachment. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAaTgwAttachmentInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1170,6 +1187,7 @@ pub fn update_aa_tgw_attachment_cidrs(state: Arc<AppState>) -> Tool {
             "Update CIDRs for an Active-Active Transit Gateway attachment. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAaTgwAttachmentCidrsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1228,8 +1246,8 @@ pub struct DeleteAaTgwAttachmentInput {
 pub fn delete_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_tgw_attachment")
         .description(
-            "Delete an Active-Active Transit Gateway attachment. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an Active-Active Transit Gateway attachment. \
+             Network connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteAaTgwAttachmentInput>(
             state,
@@ -1284,6 +1302,7 @@ pub fn get_psc_service(state: Arc<AppState>) -> Tool {
         .description("Get Private Service Connect service for a Redis Cloud subscription.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetPscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetPscServiceInput>| async move {
@@ -1321,6 +1340,7 @@ pub fn create_psc_service(state: Arc<AppState>) -> Tool {
             "Create a Private Service Connect service for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreatePscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1364,8 +1384,8 @@ pub struct DeletePscServiceInput {
 pub fn delete_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_psc_service")
         .description(
-            "Delete a Private Service Connect service for a Redis Cloud subscription. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a Private Service Connect service. \
+             All endpoints will be disconnected. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeletePscServiceInput>(
             state,
@@ -1414,6 +1434,7 @@ pub fn get_psc_endpoints(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetPscEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1470,6 +1491,7 @@ pub fn create_psc_endpoint(state: Arc<AppState>) -> Tool {
             "Create a Private Service Connect endpoint. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreatePscEndpointInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1542,6 +1564,7 @@ pub fn update_psc_endpoint(state: Arc<AppState>) -> Tool {
             "Update a Private Service Connect endpoint. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdatePscEndpointInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1597,8 +1620,8 @@ pub struct DeletePscEndpointInput {
 pub fn delete_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_psc_endpoint")
         .description(
-            "Delete a Private Service Connect endpoint. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a Private Service Connect endpoint. \
+             Connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeletePscEndpointInput>(
             state,
@@ -1649,6 +1672,7 @@ pub fn get_psc_creation_script(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetPscCreationScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1692,6 +1716,7 @@ pub fn get_psc_deletion_script(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetPscDeletionScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1737,6 +1762,7 @@ pub fn get_aa_psc_service(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaPscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1777,6 +1803,7 @@ pub fn create_aa_psc_service(state: Arc<AppState>) -> Tool {
             "Create an Active-Active Private Service Connect service. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAaPscServiceInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1820,8 +1847,8 @@ pub struct DeleteAaPscServiceInput {
 pub fn delete_aa_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_psc_service")
         .description(
-            "Delete an Active-Active Private Service Connect service. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an Active-Active Private Service Connect service. \
+             All endpoints will be disconnected. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteAaPscServiceInput>(
             state,
@@ -1870,6 +1897,7 @@ pub fn get_aa_psc_endpoints(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaPscEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1926,6 +1954,7 @@ pub fn create_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
             "Create an Active-Active Private Service Connect endpoint. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAaPscEndpointInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2000,6 +2029,7 @@ pub fn update_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
             "Update an Active-Active Private Service Connect endpoint. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAaPscEndpointInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2062,8 +2092,8 @@ pub struct DeleteAaPscEndpointInput {
 pub fn delete_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_psc_endpoint")
         .description(
-            "Delete an Active-Active Private Service Connect endpoint. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an Active-Active Private Service Connect endpoint. \
+             Connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteAaPscEndpointInput>(
             state,
@@ -2122,6 +2152,7 @@ pub fn get_aa_psc_creation_script(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaPscCreationScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2174,6 +2205,7 @@ pub fn get_aa_psc_deletion_script(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaPscDeletionScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2224,6 +2256,7 @@ pub fn get_private_link(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetPrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2288,6 +2321,7 @@ pub fn create_private_link(state: Arc<AppState>) -> Tool {
             "Create an AWS PrivateLink configuration for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreatePrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2340,8 +2374,8 @@ pub struct DeletePrivateLinkInput {
 pub fn delete_private_link(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_private_link")
         .description(
-            "Delete an AWS PrivateLink configuration for a Redis Cloud subscription. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an AWS PrivateLink configuration. \
+             Connectivity will be immediately lost. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeletePrivateLinkInput>(
             state,
@@ -2397,6 +2431,7 @@ pub fn add_private_link_principals(state: Arc<AppState>) -> Tool {
             "Add AWS principals to a PrivateLink access list. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AddPrivateLinkPrincipalsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2462,6 +2497,7 @@ pub fn remove_private_link_principals(state: Arc<AppState>) -> Tool {
             "Remove AWS principals from a PrivateLink access list. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RemovePrivateLinkPrincipalsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2519,6 +2555,7 @@ pub fn get_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
         .description("Get the endpoint creation script for an AWS PrivateLink configuration.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetPrivateLinkEndpointScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2566,6 +2603,7 @@ pub fn get_aa_private_link(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaPrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2617,6 +2655,7 @@ pub fn create_aa_private_link(state: Arc<AppState>) -> Tool {
             "Create an Active-Active AWS PrivateLink configuration. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAaPrivateLinkInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2682,6 +2721,7 @@ pub fn add_aa_private_link_principals(state: Arc<AppState>) -> Tool {
             "Add AWS principals to an Active-Active PrivateLink access list. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AddAaPrivateLinkPrincipalsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2749,6 +2789,7 @@ pub fn remove_aa_private_link_principals(state: Arc<AppState>) -> Tool {
             "Remove AWS principals from an Active-Active PrivateLink access list. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RemoveAaPrivateLinkPrincipalsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2814,6 +2855,7 @@ pub fn get_aa_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAaPrivateLinkEndpointScriptInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2846,63 +2888,63 @@ pub fn get_aa_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
 
 pub(super) const INSTRUCTIONS: &str = "\n\
 ### Redis Cloud - VPC Peering\n\
-- `get_vpc_peering`: Get VPC peering details for a subscription\n\
-- `create_vpc_peering`: Create a VPC peering connection (WRITE)\n\
-- `update_vpc_peering`: Update a VPC peering connection (WRITE)\n\
-- `delete_vpc_peering`: Delete a VPC peering connection (WRITE)\n\
-- `get_aa_vpc_peering`: Get Active-Active VPC peering details\n\
-- `create_aa_vpc_peering`: Create an Active-Active VPC peering (WRITE)\n\
-- `update_aa_vpc_peering`: Update an Active-Active VPC peering (WRITE)\n\
-- `delete_aa_vpc_peering`: Delete an Active-Active VPC peering (WRITE)\n\
+- get_vpc_peering: Get VPC peering details for a subscription\n\
+- get_aa_vpc_peering: Get Active-Active VPC peering details\n\
+- create_vpc_peering: Create a VPC peering connection [write]\n\
+- update_vpc_peering: Update a VPC peering connection [write]\n\
+- create_aa_vpc_peering: Create an Active-Active VPC peering [write]\n\
+- update_aa_vpc_peering: Update an Active-Active VPC peering [write]\n\
+- delete_vpc_peering: Permanently delete a VPC peering connection [destructive]\n\
+- delete_aa_vpc_peering: Permanently delete an Active-Active VPC peering [destructive]\n\
 \n\
 ### Redis Cloud - Transit Gateway\n\
-- `get_tgw_attachments`: Get Transit Gateway attachments\n\
-- `get_tgw_invitations`: Get Transit Gateway shared invitations\n\
-- `accept_tgw_invitation`: Accept a TGW resource share invitation (WRITE)\n\
-- `reject_tgw_invitation`: Reject a TGW resource share invitation (WRITE)\n\
-- `create_tgw_attachment`: Create a TGW attachment (WRITE)\n\
-- `update_tgw_attachment_cidrs`: Update TGW attachment CIDRs (WRITE)\n\
-- `delete_tgw_attachment`: Delete a TGW attachment (WRITE)\n\
-- `get_aa_tgw_attachments`: Get Active-Active TGW attachments\n\
-- `get_aa_tgw_invitations`: Get Active-Active TGW shared invitations\n\
-- `accept_aa_tgw_invitation`: Accept an AA TGW resource share invitation (WRITE)\n\
-- `reject_aa_tgw_invitation`: Reject an AA TGW resource share invitation (WRITE)\n\
-- `create_aa_tgw_attachment`: Create an AA TGW attachment (WRITE)\n\
-- `update_aa_tgw_attachment_cidrs`: Update AA TGW attachment CIDRs (WRITE)\n\
-- `delete_aa_tgw_attachment`: Delete an AA TGW attachment (WRITE)\n\
+- get_tgw_attachments: Get Transit Gateway attachments\n\
+- get_tgw_invitations: Get Transit Gateway shared invitations\n\
+- get_aa_tgw_attachments: Get Active-Active TGW attachments\n\
+- get_aa_tgw_invitations: Get Active-Active TGW shared invitations\n\
+- accept_tgw_invitation: Accept a TGW resource share invitation [write]\n\
+- reject_tgw_invitation: Reject a TGW resource share invitation [write]\n\
+- create_tgw_attachment: Create a TGW attachment [write]\n\
+- update_tgw_attachment_cidrs: Update TGW attachment CIDRs [write]\n\
+- accept_aa_tgw_invitation: Accept an AA TGW resource share invitation [write]\n\
+- reject_aa_tgw_invitation: Reject an AA TGW resource share invitation [write]\n\
+- create_aa_tgw_attachment: Create an AA TGW attachment [write]\n\
+- update_aa_tgw_attachment_cidrs: Update AA TGW attachment CIDRs [write]\n\
+- delete_tgw_attachment: Permanently delete a TGW attachment [destructive]\n\
+- delete_aa_tgw_attachment: Permanently delete an AA TGW attachment [destructive]\n\
 \n\
 ### Redis Cloud - Private Service Connect (PSC)\n\
-- `get_psc_service`: Get PSC service for a subscription\n\
-- `create_psc_service`: Create a PSC service (WRITE)\n\
-- `delete_psc_service`: Delete a PSC service (WRITE)\n\
-- `get_psc_endpoints`: Get PSC endpoints\n\
-- `create_psc_endpoint`: Create a PSC endpoint (WRITE)\n\
-- `update_psc_endpoint`: Update a PSC endpoint (WRITE)\n\
-- `delete_psc_endpoint`: Delete a PSC endpoint (WRITE)\n\
-- `get_psc_creation_script`: Get PSC endpoint creation script\n\
-- `get_psc_deletion_script`: Get PSC endpoint deletion script\n\
-- `get_aa_psc_service`: Get Active-Active PSC service\n\
-- `create_aa_psc_service`: Create an AA PSC service (WRITE)\n\
-- `delete_aa_psc_service`: Delete an AA PSC service (WRITE)\n\
-- `get_aa_psc_endpoints`: Get AA PSC endpoints\n\
-- `create_aa_psc_endpoint`: Create an AA PSC endpoint (WRITE)\n\
-- `update_aa_psc_endpoint`: Update an AA PSC endpoint (WRITE)\n\
-- `delete_aa_psc_endpoint`: Delete an AA PSC endpoint (WRITE)\n\
-- `get_aa_psc_creation_script`: Get AA PSC endpoint creation script\n\
-- `get_aa_psc_deletion_script`: Get AA PSC endpoint deletion script\n\
+- get_psc_service: Get PSC service for a subscription\n\
+- get_psc_endpoints: Get PSC endpoints\n\
+- get_psc_creation_script: Get PSC endpoint creation script\n\
+- get_psc_deletion_script: Get PSC endpoint deletion script\n\
+- get_aa_psc_service: Get Active-Active PSC service\n\
+- get_aa_psc_endpoints: Get AA PSC endpoints\n\
+- get_aa_psc_creation_script: Get AA PSC endpoint creation script\n\
+- get_aa_psc_deletion_script: Get AA PSC endpoint deletion script\n\
+- create_psc_service: Create a PSC service [write]\n\
+- create_psc_endpoint: Create a PSC endpoint [write]\n\
+- update_psc_endpoint: Update a PSC endpoint [write]\n\
+- create_aa_psc_service: Create an AA PSC service [write]\n\
+- create_aa_psc_endpoint: Create an AA PSC endpoint [write]\n\
+- update_aa_psc_endpoint: Update an AA PSC endpoint [write]\n\
+- delete_psc_service: Permanently delete a PSC service [destructive]\n\
+- delete_psc_endpoint: Permanently delete a PSC endpoint [destructive]\n\
+- delete_aa_psc_service: Permanently delete an AA PSC service [destructive]\n\
+- delete_aa_psc_endpoint: Permanently delete an AA PSC endpoint [destructive]\n\
 \n\
 ### Redis Cloud - PrivateLink\n\
-- `get_private_link`: Get AWS PrivateLink configuration\n\
-- `create_private_link`: Create an AWS PrivateLink (WRITE)\n\
-- `delete_private_link`: Delete an AWS PrivateLink (WRITE)\n\
-- `add_private_link_principals`: Add principals to PrivateLink (WRITE)\n\
-- `remove_private_link_principals`: Remove principals from PrivateLink (WRITE)\n\
-- `get_private_link_endpoint_script`: Get PrivateLink endpoint script\n\
-- `get_aa_private_link`: Get AA PrivateLink configuration\n\
-- `create_aa_private_link`: Create an AA PrivateLink (WRITE)\n\
-- `add_aa_private_link_principals`: Add principals to AA PrivateLink (WRITE)\n\
-- `remove_aa_private_link_principals`: Remove principals from AA PrivateLink (WRITE)\n\
-- `get_aa_private_link_endpoint_script`: Get AA PrivateLink endpoint script\n\
+- get_private_link: Get AWS PrivateLink configuration\n\
+- get_private_link_endpoint_script: Get PrivateLink endpoint script\n\
+- get_aa_private_link: Get AA PrivateLink configuration\n\
+- get_aa_private_link_endpoint_script: Get AA PrivateLink endpoint script\n\
+- create_private_link: Create an AWS PrivateLink [write]\n\
+- add_private_link_principals: Add principals to PrivateLink [write]\n\
+- remove_private_link_principals: Remove principals from PrivateLink [write]\n\
+- create_aa_private_link: Create an AA PrivateLink [write]\n\
+- add_aa_private_link_principals: Add principals to AA PrivateLink [write]\n\
+- remove_aa_private_link_principals: Remove principals from AA PrivateLink [write]\n\
+- delete_private_link: Permanently delete an AWS PrivateLink [destructive]\n\
 ";
 
 /// Build an MCP sub-router containing all networking tools

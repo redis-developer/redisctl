@@ -33,6 +33,7 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
         .description("List all users in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListUsersInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListUsersInput>| async move {
@@ -71,6 +72,7 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetUserInput>| async move {
@@ -121,6 +123,7 @@ pub fn create_enterprise_user(state: Arc<AppState>) -> Tool {
             "Create a new user in the Redis Enterprise cluster. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseUserInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -195,6 +198,7 @@ pub fn update_enterprise_user(state: Arc<AppState>) -> Tool {
             "Update an existing user in the Redis Enterprise cluster. \
              Only specified fields will be modified. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseUserInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -248,8 +252,8 @@ pub struct DeleteEnterpriseUserInput {
 pub fn delete_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_user")
         .description(
-            "Delete a user from the Redis Enterprise cluster. \
-             WARNING: This permanently removes the user! Requires write permission.",
+            "DANGEROUS: Permanently deletes a user from the Redis Enterprise cluster. \
+             Active sessions using this user will be terminated. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseUserInput>(
             state,
@@ -303,6 +307,7 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListRolesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListRolesInput>| async move {
@@ -342,6 +347,7 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRoleInput>| async move {
@@ -385,6 +391,7 @@ pub fn create_enterprise_role(state: Arc<AppState>) -> Tool {
             "Create a new role in the Redis Enterprise cluster. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseRoleInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -446,6 +453,7 @@ pub fn update_enterprise_role(state: Arc<AppState>) -> Tool {
             "Update an existing role in the Redis Enterprise cluster. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseRoleInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -496,8 +504,8 @@ pub struct DeleteEnterpriseRoleInput {
 pub fn delete_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_role")
         .description(
-            "Delete a role from the Redis Enterprise cluster. \
-             WARNING: This permanently removes the role! Requires write permission.",
+            "DANGEROUS: Permanently deletes a role from the Redis Enterprise cluster. \
+             Users assigned to this role will lose their permissions. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseRoleInput>(
             state,
@@ -551,6 +559,7 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListRedisAclsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListRedisAclsInput>| async move {
@@ -590,6 +599,7 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetRedisAclInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRedisAclInput>| async move {
@@ -633,6 +643,7 @@ pub fn create_enterprise_acl(state: Arc<AppState>) -> Tool {
              The ACL rule string follows Redis ACL syntax (e.g., \"+@all ~*\"). \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseAclInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -691,6 +702,7 @@ pub fn update_enterprise_acl(state: Arc<AppState>) -> Tool {
             "Update an existing Redis ACL in the Redis Enterprise cluster. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseAclInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -739,8 +751,8 @@ pub struct DeleteEnterpriseAclInput {
 pub fn delete_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_acl")
         .description(
-            "Delete a Redis ACL from the Redis Enterprise cluster. \
-             WARNING: This permanently removes the ACL! Requires write permission.",
+            "DANGEROUS: Permanently deletes a Redis ACL from the cluster. \
+             Databases using this ACL will lose those access controls. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseAclInput>(
             state,
@@ -794,6 +806,7 @@ pub fn get_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetLdapConfigInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetLdapConfigInput>| async move {
@@ -832,6 +845,7 @@ pub fn update_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
             "Update the LDAP configuration for the Redis Enterprise cluster. \
              Accepts a JSON object with LDAP settings. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateLdapConfigInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -869,27 +883,27 @@ pub(super) const INSTRUCTIONS: &str = r#"
 ### Redis Enterprise - Users
 - list_enterprise_users: List cluster users
 - get_enterprise_user: Get user details
-- create_enterprise_user: Create a new user (write)
-- update_enterprise_user: Update user settings (write)
-- delete_enterprise_user: Delete a user (write)
+- create_enterprise_user: Create a new user [write]
+- update_enterprise_user: Update user settings [write]
+- delete_enterprise_user: Permanently delete a user [destructive]
 
 ### Redis Enterprise - Roles
 - list_enterprise_roles: List all roles in the cluster
 - get_enterprise_role: Get role details and permissions
-- create_enterprise_role: Create a new role (write)
-- update_enterprise_role: Update role settings (write)
-- delete_enterprise_role: Delete a role (write)
+- create_enterprise_role: Create a new role [write]
+- update_enterprise_role: Update role settings [write]
+- delete_enterprise_role: Permanently delete a role [destructive]
 
 ### Redis Enterprise - ACLs
 - list_enterprise_acls: List all Redis ACLs
 - get_enterprise_acl: Get ACL details and rules
-- create_enterprise_acl: Create a new ACL (write)
-- update_enterprise_acl: Update ACL rules (write)
-- delete_enterprise_acl: Delete an ACL (write)
+- create_enterprise_acl: Create a new ACL [write]
+- update_enterprise_acl: Update ACL rules [write]
+- delete_enterprise_acl: Permanently delete an ACL [destructive]
 
 ### Redis Enterprise - LDAP
 - get_enterprise_ldap_config: Get LDAP configuration
-- update_enterprise_ldap_config: Update LDAP configuration (write)
+- update_enterprise_ldap_config: Update LDAP configuration [write]
 "#;
 
 /// Build an MCP sub-router containing RBAC and LDAP tools

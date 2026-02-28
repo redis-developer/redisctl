@@ -28,7 +28,7 @@ or a `url` parameter for direct connections. If neither is provided, the default
 - redis_acl_whoami: Get current authenticated username\n\
 - redis_module_list: List loaded modules\n\
 - redis_config_set: Set configuration parameter at runtime [write]\n\
-- redis_flushdb: Flush current database (DANGEROUS) [write]\n\
+- redis_flushdb: Permanently remove all data from the current database [destructive]\n\
 ";
 
 /// Build a sub-router containing all server-level Redis tools
@@ -67,6 +67,7 @@ pub fn ping(state: Arc<AppState>) -> Tool {
         .description("Test connectivity to a Redis database by sending a PING command")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, PingInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PingInput>| async move {
@@ -114,6 +115,7 @@ pub fn info(state: Arc<AppState>) -> Tool {
         .description("Get Redis server information using the INFO command")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, InfoInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<InfoInput>| async move {
@@ -160,6 +162,7 @@ pub fn dbsize(state: Arc<AppState>) -> Tool {
         .description("Get the number of keys in the currently selected database")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, DbsizeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DbsizeInput>| async move {
@@ -204,6 +207,7 @@ pub fn client_list(state: Arc<AppState>) -> Tool {
         .description("Get list of client connections to the Redis server")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ClientListInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ClientListInput>| async move {
@@ -250,6 +254,7 @@ pub fn cluster_info(state: Arc<AppState>) -> Tool {
         .description("Get Redis Cluster information (only works on cluster-enabled databases)")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ClusterInfoInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ClusterInfoInput>| async move {
@@ -301,6 +306,7 @@ pub fn slowlog(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SlowlogInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SlowlogInput>| async move {
@@ -374,6 +380,7 @@ pub fn config_get(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ConfigGetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ConfigGetInput>| async move {
@@ -437,6 +444,7 @@ pub fn memory_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, MemoryStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryStatsInput>| async move {
@@ -486,6 +494,7 @@ pub fn latency_history(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, LatencyHistoryInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -553,6 +562,7 @@ pub fn acl_list(state: Arc<AppState>) -> Tool {
         .description("List all ACL rules configured on the Redis server using ACL LIST")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AclListInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AclListInput>| async move {
@@ -603,6 +613,7 @@ pub fn acl_whoami(state: Arc<AppState>) -> Tool {
         .description("Get the username of the current authenticated connection using ACL WHOAMI")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AclWhoamiInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AclWhoamiInput>| async move {
@@ -645,6 +656,7 @@ pub fn module_list(state: Arc<AppState>) -> Tool {
         .description("List loaded Redis modules with their names and versions using MODULE LIST")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ModuleListInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ModuleListInput>| async move {
@@ -702,6 +714,7 @@ pub fn config_set(state: Arc<AppState>) -> Tool {
             "Set a Redis configuration parameter at runtime using CONFIG SET. \
              Changes may not persist across restarts unless CONFIG REWRITE is called.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ConfigSetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ConfigSetInput>| async move {

@@ -82,6 +82,7 @@ pub fn hgetall(state: Arc<AppState>) -> Tool {
         .description("Get all fields and values from a hash")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, HgetallInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HgetallInput>| async move {
@@ -154,6 +155,7 @@ pub fn lrange(state: Arc<AppState>) -> Tool {
         .description("Get a range of elements from a list. Use start=0, stop=-1 for all elements.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, LrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LrangeInput>| async move {
@@ -219,6 +221,7 @@ pub fn smembers(state: Arc<AppState>) -> Tool {
         .description("Get all members of a set")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SmembersInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SmembersInput>| async move {
@@ -284,6 +287,7 @@ pub fn zrange(state: Arc<AppState>) -> Tool {
         .description("Get a range of members from a sorted set by index. Use withscores=true to include scores.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ZrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZrangeInput>| async move {
@@ -384,6 +388,7 @@ pub fn xinfo_stream(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, XinfoStreamInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XinfoStreamInput>| async move {
@@ -453,6 +458,7 @@ pub fn xrange(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, XrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XrangeInput>| async move {
@@ -520,6 +526,7 @@ pub fn xlen(state: Arc<AppState>) -> Tool {
         .description("Get the number of entries in a stream using XLEN")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, XlenInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XlenInput>| async move {
@@ -571,6 +578,7 @@ pub fn pubsub_channels(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, PubsubChannelsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -634,6 +642,7 @@ pub fn pubsub_numsub(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, PubsubNumsubInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PubsubNumsubInput>| async move {
@@ -705,6 +714,7 @@ pub fn hset(state: Arc<AppState>) -> Tool {
             "Set one or more field-value pairs in a hash. Creates the hash if it does not \
              exist. Returns the number of fields that were added (not updated).",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, HsetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HsetInput>| async move {
@@ -767,6 +777,7 @@ pub fn hdel(state: Arc<AppState>) -> Tool {
         .description(
             "Delete one or more fields from a hash. Returns the number of fields that were removed.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, HdelInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HdelInput>| async move {
@@ -830,6 +841,7 @@ pub fn lpush(state: Arc<AppState>) -> Tool {
             "Push one or more elements to the head (left) of a list. Creates the list \
              if it does not exist. Returns the new list length.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, LpushInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LpushInput>| async move {
@@ -893,6 +905,7 @@ pub fn rpush(state: Arc<AppState>) -> Tool {
             "Push one or more elements to the tail (right) of a list. Creates the list \
              if it does not exist. Returns the new list length.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RpushInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RpushInput>| async move {
@@ -957,6 +970,7 @@ pub fn lpop(state: Arc<AppState>) -> Tool {
             "Pop one or more elements from the head (left) of a list. Returns the \
              popped element(s), or nil if the list is empty.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, LpopInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LpopInput>| async move {
@@ -1020,6 +1034,7 @@ pub fn rpop(state: Arc<AppState>) -> Tool {
             "Pop one or more elements from the tail (right) of a list. Returns the \
              popped element(s), or nil if the list is empty.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RpopInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RpopInput>| async move {
@@ -1082,6 +1097,7 @@ pub fn sadd(state: Arc<AppState>) -> Tool {
             "Add one or more members to a set. Creates the set if it does not exist. \
              Returns the number of members that were added (not already present).",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SaddInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SaddInput>| async move {
@@ -1145,6 +1161,7 @@ pub fn srem(state: Arc<AppState>) -> Tool {
             "Remove one or more members from a set. Returns the number of members \
              that were removed.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SremInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SremInput>| async move {
@@ -1233,6 +1250,7 @@ pub fn zadd(state: Arc<AppState>) -> Tool {
              does not exist. Supports NX (only add new), XX (only update existing), \
              GT/LT (score comparison), and CH (count changed) flags.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ZaddInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZaddInput>| async move {
@@ -1312,6 +1330,7 @@ pub fn zrem(state: Arc<AppState>) -> Tool {
             "Remove one or more members from a sorted set. Returns the number of \
              members that were removed.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ZremInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZremInput>| async move {
@@ -1391,6 +1410,7 @@ pub fn xadd(state: Arc<AppState>) -> Tool {
              Supports NOMKSTREAM, MAXLEN, and MINID trimming options. \
              Returns the ID of the added entry.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, XaddInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XaddInput>| async move {
@@ -1480,6 +1500,7 @@ pub fn xtrim(state: Arc<AppState>) -> Tool {
              Use approximate=true for better performance with near-exact trimming. \
              Returns the number of entries removed.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, XtrimInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XtrimInput>| async move {

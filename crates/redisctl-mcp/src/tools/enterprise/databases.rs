@@ -42,6 +42,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
@@ -100,6 +101,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific Redis Enterprise database")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
@@ -148,6 +150,7 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDatabaseStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -208,6 +211,7 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDatabaseEndpointsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -245,6 +249,7 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
         .description("List all alerts for a specific database in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListDatabaseAlertsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -296,6 +301,7 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
             "Trigger a backup of a Redis Enterprise database and wait for completion. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -357,6 +363,7 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
              WARNING: If flush is true, existing data will be deleted before import. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -428,6 +435,7 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
             "Create a new database in the Redis Enterprise cluster. \
              Returns the created database details. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -493,6 +501,7 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
             "Update configuration of an existing Redis Enterprise database. \
              Pass a JSON object with the fields to update. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -535,9 +544,8 @@ pub struct DeleteEnterpriseDatabaseInput {
 pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_database")
         .description(
-            "Delete a database from the Redis Enterprise cluster. \
-             WARNING: This permanently deletes the database and all its data! \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a database from the Redis Enterprise cluster \
+             and all its data. This action cannot be undone. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseDatabaseInput>(
             state,
@@ -587,9 +595,8 @@ pub struct FlushEnterpriseDatabaseInput {
 pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("flush_enterprise_database")
         .description(
-            "Flush all data from a Redis Enterprise database and wait for completion. \
-             WARNING: This permanently deletes ALL data in the database! \
-             Requires write permission.",
+            "DANGEROUS: Removes all data from a Redis Enterprise database. \
+             This action cannot be undone. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, FlushEnterpriseDatabaseInput>(
             state,
@@ -647,6 +654,7 @@ pub fn list_enterprise_crdbs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListCrdbsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListCrdbsInput>| async move {
@@ -686,6 +694,7 @@ pub fn get_enterprise_crdb(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetCrdbInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbInput>| async move {
@@ -725,6 +734,7 @@ pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetCrdbTasksInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbTasksInput>| async move {
@@ -758,13 +768,13 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - get_enterprise_crdb: Get Active-Active database details by GUID
 - get_enterprise_crdb_tasks: Get tasks for an Active-Active database
 
-### Redis Enterprise - Database Write Operations (require --read-only=false)
-- backup_enterprise_database: Trigger a database backup and wait for completion
-- import_enterprise_database: Import data into a database and wait for completion
-- create_enterprise_database: Create a new database
-- update_enterprise_database: Update database configuration
-- delete_enterprise_database: Delete a database
-- flush_enterprise_database: Flush all data from a database
+### Redis Enterprise - Database Write Operations
+- backup_enterprise_database: Trigger a database backup and wait for completion [write]
+- import_enterprise_database: Import data into a database and wait for completion [write]
+- create_enterprise_database: Create a new database [write]
+- update_enterprise_database: Update database configuration [write]
+- delete_enterprise_database: Permanently delete a database and all its data [destructive]
+- flush_enterprise_database: Remove all data from a database [destructive]
 "#;
 
 /// Build an MCP sub-router containing database tools

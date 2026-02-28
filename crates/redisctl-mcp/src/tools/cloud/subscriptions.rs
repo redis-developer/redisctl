@@ -31,6 +31,7 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
         .description("List all Redis Cloud subscriptions accessible with the current credentials. Returns JSON with subscription details.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListSubscriptionsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListSubscriptionsInput>| async move {
@@ -67,6 +68,7 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific Redis Cloud subscription. Returns JSON with full subscription details.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSubscriptionInput>| async move {
@@ -105,6 +107,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
@@ -143,6 +146,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific Redis Cloud database. Returns JSON with full database configuration.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
@@ -188,6 +192,7 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
         .description("Get backup status and history for a Redis Cloud database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetBackupStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -236,6 +241,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSlowLogInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSlowLogInput>| async move {
@@ -274,6 +280,7 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
         .description("Get tags attached to a Redis Cloud database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetTagsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTagsInput>| async move {
@@ -315,6 +322,7 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetCertificateInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -388,6 +396,7 @@ pub fn create_database(state: Arc<AppState>) -> Tool {
             "Create a new Redis Cloud database and wait for it to be ready. \
              Returns the created database details. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -486,6 +495,7 @@ pub fn update_database(state: Arc<AppState>) -> Tool {
             "Update an existing Redis Cloud database configuration. \
              Returns the updated database details. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -561,7 +571,7 @@ pub struct DeleteDatabaseInput {
 pub fn delete_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_database")
         .description(
-            "Delete a Redis Cloud database. This is a destructive operation. \
+            "DANGEROUS: Permanently deletes a database and all its data. This action cannot be undone. \
              Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteDatabaseInput>(
@@ -626,6 +636,7 @@ pub fn backup_database(state: Arc<AppState>) -> Tool {
             "Trigger a manual backup of a Redis Cloud database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -694,6 +705,7 @@ pub fn import_database(state: Arc<AppState>) -> Tool {
             "Import data into a Redis Cloud database from an external source. \
              WARNING: This will overwrite existing data. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -757,8 +769,8 @@ pub struct DeleteSubscriptionInput {
 pub fn delete_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_subscription")
         .description(
-            "Delete a Redis Cloud subscription. WARNING: All databases in the subscription \
-             must be deleted first. This is a destructive operation. Requires write permission.",
+            "DANGEROUS: Permanently deletes a subscription. All databases must be deleted first. \
+             This action cannot be undone. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteSubscriptionInput>(
             state,
@@ -818,8 +830,7 @@ pub struct FlushDatabaseInput {
 pub fn flush_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("flush_database")
         .description(
-            "Flush all data from a Redis Cloud database and wait for completion. \
-             WARNING: This permanently deletes ALL data in the database! \
+            "DANGEROUS: Removes all data from a database. This action cannot be undone. \
              Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, FlushDatabaseInput>(
@@ -904,6 +915,7 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
              This is a simplified interface for common subscription creation scenarios. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -994,6 +1006,7 @@ pub fn update_subscription(state: Arc<AppState>) -> Tool {
             "Update a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1048,6 +1061,7 @@ pub fn get_subscription_pricing(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSubscriptionPricingInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1090,6 +1104,7 @@ pub fn get_redis_versions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetRedisVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1129,6 +1144,7 @@ pub fn get_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
         .description("Get the CIDR allowlist for a Redis Cloud subscription.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSubscriptionCidrAllowlistInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1175,6 +1191,7 @@ pub fn update_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
             "Update the CIDR allowlist for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateSubscriptionCidrAllowlistInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1232,6 +1249,7 @@ pub fn get_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
         .description("Get maintenance windows for a Redis Cloud subscription.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSubscriptionMaintenanceWindowsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1291,6 +1309,7 @@ pub fn update_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
             "Update maintenance windows for a Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateSubscriptionMaintenanceWindowsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1360,6 +1379,7 @@ pub fn get_active_active_regions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetActiveActiveRegionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1417,6 +1437,7 @@ pub fn add_active_active_region(state: Arc<AppState>) -> Tool {
             "Add a new region to an Active-Active Redis Cloud subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, AddActiveActiveRegionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1492,8 +1513,8 @@ pub struct DeleteActiveActiveRegionsInput {
 pub fn delete_active_active_regions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_active_active_regions")
         .description(
-            "Delete regions from an Active-Active Redis Cloud subscription. \
-             Requires write permission.",
+            "DANGEROUS: Permanently removes regions from an Active-Active subscription. \
+             This may cause data loss in the removed regions. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteActiveActiveRegionsInput>(
             state,
@@ -1561,6 +1582,7 @@ pub fn get_available_database_versions(state: Arc<AppState>) -> Tool {
         .description("Get available target Redis versions for upgrading a database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAvailableDatabaseVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1606,6 +1628,7 @@ pub fn upgrade_database_redis_version(state: Arc<AppState>) -> Tool {
              Use get_available_database_versions to find valid target versions. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpgradeDatabaseRedisVersionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1666,6 +1689,7 @@ pub fn get_database_upgrade_status(state: Arc<AppState>) -> Tool {
         .description("Get the Redis version upgrade status for a database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDatabaseUpgradeStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1710,6 +1734,7 @@ pub fn get_database_import_status(state: Arc<AppState>) -> Tool {
         .description("Get the import status for a Redis Cloud database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDatabaseImportStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1756,6 +1781,7 @@ pub fn create_database_tag(state: Arc<AppState>) -> Tool {
             "Create a tag on a Redis Cloud database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateDatabaseTagInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1818,6 +1844,7 @@ pub fn update_database_tag(state: Arc<AppState>) -> Tool {
             "Update a tag on a Redis Cloud database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateDatabaseTagInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1880,7 +1907,7 @@ pub struct DeleteDatabaseTagInput {
 pub fn delete_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_database_tag")
         .description(
-            "Delete a tag from a Redis Cloud database. \
+            "DANGEROUS: Permanently deletes a tag from a database. This action cannot be undone. \
              Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteDatabaseTagInput>(
@@ -1942,6 +1969,7 @@ pub fn update_database_tags(state: Arc<AppState>) -> Tool {
             "Update all tags on a Redis Cloud database (replaces existing tags). \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateDatabaseTagsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2042,6 +2070,7 @@ pub fn update_crdb_local_properties(state: Arc<AppState>) -> Tool {
             "Update local properties of an Active-Active (CRDB) database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateCrdbLocalPropertiesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -2118,25 +2147,26 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - get_database_upgrade_status: Get Redis version upgrade status
 - get_database_import_status: Get database import status
 
-### Redis Cloud - Write Operations (require --read-only=false)
-- create_database: Create a new database and wait for it to be ready
-- update_database: Update a database configuration
-- delete_database: Delete a database
-- backup_database: Trigger a manual backup
-- import_database: Import data into a database
-- delete_subscription: Delete a subscription (all databases must be deleted first)
-- flush_database: Flush all data from a database
-- update_subscription: Update a subscription
-- update_subscription_cidr_allowlist: Update CIDR allowlist for a subscription
-- update_subscription_maintenance_windows: Update maintenance windows for a subscription
-- add_active_active_region: Add a region to an Active-Active subscription
-- delete_active_active_regions: Delete regions from an Active-Active subscription
-- upgrade_database_redis_version: Upgrade the Redis version of a database
-- create_database_tag: Create a tag on a database
-- update_database_tag: Update a tag on a database
-- delete_database_tag: Delete a tag from a database
-- update_database_tags: Update all tags on a database
-- update_crdb_local_properties: Update local properties of an Active-Active database
+### Redis Cloud - Write Operations
+- create_database: Create a new database and wait for it to be ready [write]
+- update_database: Update a database configuration [write]
+- backup_database: Trigger a manual backup [write]
+- import_database: Import data into a database [write]
+- create_subscription: Create a new subscription [write]
+- update_subscription: Update a subscription [write]
+- update_subscription_cidr_allowlist: Update CIDR allowlist for a subscription [write]
+- update_subscription_maintenance_windows: Update maintenance windows [write]
+- add_active_active_region: Add a region to an Active-Active subscription [write]
+- upgrade_database_redis_version: Upgrade the Redis version of a database [write]
+- create_database_tag: Create a tag on a database [write]
+- update_database_tag: Update a tag on a database [write]
+- update_database_tags: Update all tags on a database [write]
+- update_crdb_local_properties: Update local properties of an Active-Active database [write]
+- delete_database: Permanently delete a database and all its data [destructive]
+- delete_subscription: Permanently delete a subscription [destructive]
+- flush_database: Remove all data from a database [destructive]
+- delete_active_active_regions: Remove regions from an Active-Active subscription [destructive]
+- delete_database_tag: Delete a tag from a database [destructive]
 "#;
 
 /// Build an MCP sub-router containing subscription and database tools
