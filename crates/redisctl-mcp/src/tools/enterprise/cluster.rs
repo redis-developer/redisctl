@@ -30,6 +30,7 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetClusterInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetClusterInput>| async move {
@@ -71,6 +72,7 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetLicenseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetLicenseInput>| async move {
@@ -108,6 +110,7 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetLicenseUsageInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -150,6 +153,7 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
             "Update the Redis Enterprise cluster license with a new license key. \
              This applies a new license to the cluster. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateLicenseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateLicenseInput>| async move {
@@ -200,6 +204,7 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ValidateLicenseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -243,6 +248,7 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
              Pass a JSON object with the fields to update (e.g., name, email_alerts, rack_aware). \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateClusterInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateClusterInput>| async move {
@@ -287,6 +293,7 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetClusterPolicyInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -328,6 +335,7 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
              default_provisioned_redis_version, persistent_node_removal. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateClusterPolicyInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -378,6 +386,7 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
              When enabled, cluster configuration changes are blocked, allowing safe \
              maintenance operations like upgrades. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, EnableMaintenanceModeInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -428,6 +437,7 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
              This re-enables cluster configuration changes after maintenance is complete. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, DisableMaintenanceModeInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -483,6 +493,7 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetClusterCertificatesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -520,6 +531,7 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
              This generates new certificates and replaces the existing ones. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RotateClusterCertificatesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -573,6 +585,7 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
              Provide the certificate name (proxy, syncer, api), the PEM-encoded certificate, \
              and the PEM-encoded private key. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateClusterCertificatesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -628,6 +641,7 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
         .description("List all nodes in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListNodesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListNodesInput>| async move {
@@ -666,6 +680,7 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetNodeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeInput>| async move {
@@ -714,6 +729,7 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetNodeStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeStatsInput>| async move {
@@ -773,6 +789,7 @@ pub fn enable_node_maintenance(state: Arc<AppState>) -> Tool {
              Shards will be migrated off the node before maintenance begins. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
@@ -815,6 +832,7 @@ pub fn disable_node_maintenance(state: Arc<AppState>) -> Tool {
              The node will rejoin the cluster and accept shards again. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
@@ -857,6 +875,7 @@ pub fn rebalance_node(state: Arc<AppState>) -> Tool {
              Redistributes shards across nodes for optimal performance. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
@@ -897,6 +916,7 @@ pub fn drain_node(state: Arc<AppState>) -> Tool {
              All shards will be migrated to other available nodes. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
@@ -955,6 +975,7 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetClusterStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1002,29 +1023,29 @@ pub(super) const INSTRUCTIONS: &str = r#"
 ### Redis Enterprise - Cluster
 - get_cluster: Get cluster information
 - get_cluster_stats: Get cluster statistics
-- update_enterprise_cluster: Update cluster configuration (write)
 - get_enterprise_cluster_policy: Get cluster policy settings
-- update_enterprise_cluster_policy: Update cluster policy (write)
-- enable_enterprise_maintenance_mode: Enable maintenance mode (write)
-- disable_enterprise_maintenance_mode: Disable maintenance mode (write)
 - get_enterprise_cluster_certificates: Get cluster certificates
-- rotate_enterprise_cluster_certificates: Rotate all certificates (write)
-- update_enterprise_cluster_certificates: Update a specific certificate (write)
+- update_enterprise_cluster: Update cluster configuration [write]
+- update_enterprise_cluster_policy: Update cluster policy [write]
+- enable_enterprise_maintenance_mode: Enable maintenance mode [write]
+- disable_enterprise_maintenance_mode: Disable maintenance mode [write]
+- rotate_enterprise_cluster_certificates: Rotate all certificates [write]
+- update_enterprise_cluster_certificates: Update a specific certificate [write]
 
 ### Redis Enterprise - License
 - get_license: Get license information (type, expiration, features)
 - get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
-- update_enterprise_license: Update cluster license with a new key (write)
 - validate_enterprise_license: Validate a license key before applying
+- update_enterprise_license: Update cluster license with a new key [write]
 
 ### Redis Enterprise - Nodes
 - list_nodes: List cluster nodes
 - get_node: Get node details
 - get_node_stats: Get node statistics
-- enable_enterprise_node_maintenance: Enable maintenance on a node (write)
-- disable_enterprise_node_maintenance: Disable maintenance on a node (write)
-- rebalance_enterprise_node: Rebalance shards on a node (write)
-- drain_enterprise_node: Drain all shards from a node (write)
+- enable_enterprise_node_maintenance: Enable maintenance on a node [write]
+- disable_enterprise_node_maintenance: Disable maintenance on a node [write]
+- rebalance_enterprise_node: Rebalance shards on a node [write]
+- drain_enterprise_node: Drain all shards from a node [write]
 "#;
 
 /// Build an MCP sub-router containing cluster, license, and node tools

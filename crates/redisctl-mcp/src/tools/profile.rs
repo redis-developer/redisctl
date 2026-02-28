@@ -34,6 +34,7 @@ pub fn list_profiles(state: Arc<AppState>) -> Tool {
         .description("List all configured redisctl profiles with their types and default status")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListProfilesInput>(
             state,
             |State(_state): State<Arc<AppState>>, Json(_input): Json<ListProfilesInput>| async move {
@@ -168,6 +169,7 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
         .description("Show details of a specific profile. Credentials are masked for security.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ShowProfileInput>(
             state,
             |State(_state): State<Arc<AppState>>, Json(input): Json<ShowProfileInput>| async move {
@@ -279,6 +281,7 @@ pub fn config_path(_state: Arc<AppState>) -> Tool {
         .description("Show the path to the redisctl configuration file")
         .read_only()
         .idempotent()
+        .non_destructive()
         .handler(|_input: ConfigPathInput| async move {
             let path = Config::config_path()
                 .map_err(|e| ToolError::new(format!("Failed to get config path: {}", e)))?;
@@ -309,6 +312,7 @@ pub fn validate_config(state: Arc<AppState>) -> Tool {
         .description("Validate the redisctl configuration file and check for common issues. Set connect=true to also test actual API/database connectivity for each profile.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ValidateConfigInput>(
             state,
             |State(_state): State<Arc<AppState>>, Json(input): Json<ValidateConfigInput>| async move {
@@ -583,6 +587,7 @@ pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_set_default_cloud")
         .description("Set the default profile for Cloud commands. Requires write access.")
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SetDefaultCloudInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetDefaultCloudInput>| async move {
@@ -633,6 +638,7 @@ pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_set_default_enterprise")
         .description("Set the default profile for Enterprise commands. Requires write access.")
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SetDefaultEnterpriseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetDefaultEnterpriseInput>| async move {
@@ -681,7 +687,10 @@ pub struct DeleteProfileInput {
 /// Build the profile_delete tool
 pub fn delete_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_delete")
-        .description("Delete a profile from the configuration. Requires write access.")
+        .description(
+            "DANGEROUS: Permanently deletes a profile from the configuration. \
+             This action cannot be undone. Requires write access.",
+        )
         .extractor_handler_typed::<_, _, _, DeleteProfileInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteProfileInput>| async move {
@@ -790,6 +799,7 @@ pub fn create_profile(state: Arc<AppState>) -> Tool {
              The profile is automatically set as default for its type if it's the first of that type, \
              unless set_default is explicitly false.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateProfileInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -933,11 +943,11 @@ pub fn instructions() -> &'static str {
 - profile_path: Show configuration file path
 - profile_validate: Validate configuration file (set connect=true to test connectivity)
 
-### Profile Management - Write (requires --read-only=false)
-- profile_create: Create a new profile (cloud, enterprise, or database)
-- profile_set_default_cloud: Set default Cloud profile
-- profile_set_default_enterprise: Set default Enterprise profile
-- profile_delete: Delete a profile
+### Profile Management - Write
+- profile_create: Create a new profile (cloud, enterprise, or database) [write]
+- profile_set_default_cloud: Set default Cloud profile [write]
+- profile_set_default_enterprise: Set default Enterprise profile [write]
+- profile_delete: Permanently delete a profile [destructive]
 
 ## Resources
 

@@ -105,6 +105,7 @@ pub fn health_check(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, HealthCheckInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HealthCheckInput>| async move {
@@ -251,6 +252,7 @@ pub fn key_summary(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, KeySummaryInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeySummaryInput>| async move {
@@ -375,6 +377,7 @@ pub fn hotkeys(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, HotkeysInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HotkeysInput>| async move {
@@ -521,6 +524,7 @@ pub fn connection_summary(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ConnectionSummaryInput>(
             state,
             |State(state): State<Arc<AppState>>,

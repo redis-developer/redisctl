@@ -34,6 +34,7 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
         .description("List all active alerts in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListAlertsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAlertsInput>| async move {
@@ -91,6 +92,7 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListLogsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListLogsInput>| async move {
@@ -149,6 +151,7 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAllNodesStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -190,6 +193,7 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAllDatabasesStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -226,6 +230,7 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
         .description("Get current statistics for a specific shard in the Redis Enterprise cluster")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetShardStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardStatsInput>| async move {
@@ -263,6 +268,7 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAllShardsStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -309,6 +315,7 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListShardsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListShardsInput>| async move {
@@ -355,6 +362,7 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetShardInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardInput>| async move {
@@ -397,6 +405,7 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListDebugInfoTasksInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -440,6 +449,7 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetDebugInfoStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -485,6 +495,7 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListModulesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListModulesInput>| async move {
@@ -524,6 +535,7 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetModuleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModuleInput>| async move {

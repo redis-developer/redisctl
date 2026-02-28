@@ -37,6 +37,7 @@ pub fn list_fixed_subscriptions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListFixedSubscriptionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -76,6 +77,7 @@ pub fn get_fixed_subscription(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -124,6 +126,7 @@ pub fn create_fixed_subscription(state: Arc<AppState>) -> Tool {
             "Create a new Redis Cloud Fixed/Essentials subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateFixedSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -187,6 +190,7 @@ pub fn update_fixed_subscription(state: Arc<AppState>) -> Tool {
             "Update a Redis Cloud Fixed/Essentials subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -239,8 +243,9 @@ pub struct DeleteFixedSubscriptionInput {
 pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_subscription")
         .description(
-            "Delete a Redis Cloud Fixed/Essentials subscription. \
-             All databases must be deleted first. Requires write permission.",
+            "DANGEROUS: Permanently deletes a Fixed/Essentials subscription. \
+             All databases must be deleted first. This action cannot be undone. \
+             Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteFixedSubscriptionInput>(
             state,
@@ -294,6 +299,7 @@ pub fn list_fixed_plans(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListFixedPlansInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -336,6 +342,7 @@ pub fn get_fixed_plans_by_subscription(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedPlansBySubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -378,6 +385,7 @@ pub fn get_fixed_plan(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedPlanInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetFixedPlanInput>| async move {
@@ -416,6 +424,7 @@ pub fn get_fixed_redis_versions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedRedisVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -467,6 +476,7 @@ pub fn list_fixed_databases(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListFixedDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -511,6 +521,7 @@ pub fn get_fixed_database(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -586,6 +597,7 @@ pub fn create_fixed_database(state: Arc<AppState>) -> Tool {
             "Create a new database in a Redis Cloud Fixed/Essentials subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -687,6 +699,7 @@ pub fn update_fixed_database(state: Arc<AppState>) -> Tool {
             "Update a database in a Redis Cloud Fixed/Essentials subscription. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -760,8 +773,8 @@ pub struct DeleteFixedDatabaseInput {
 pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_database")
         .description(
-            "Delete a database from a Redis Cloud Fixed/Essentials subscription. \
-             This is a destructive operation. Requires write permission.",
+            "DANGEROUS: Permanently deletes a Fixed/Essentials database and all its data. \
+             This action cannot be undone. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseInput>(
             state,
@@ -814,6 +827,7 @@ pub fn get_fixed_database_backup_status(state: Arc<AppState>) -> Tool {
         .description("Get the latest backup status for a Fixed/Essentials database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseBackupStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -859,6 +873,7 @@ pub fn backup_fixed_database(state: Arc<AppState>) -> Tool {
             "Trigger a manual backup of a Fixed/Essentials database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, BackupFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -913,6 +928,7 @@ pub fn get_fixed_database_import_status(state: Arc<AppState>) -> Tool {
         .description("Get the latest import status for a Fixed/Essentials database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseImportStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -959,6 +975,7 @@ pub fn import_fixed_database(state: Arc<AppState>) -> Tool {
             "Import data into a Fixed/Essentials database from an external source. \
              WARNING: This will overwrite existing data. Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ImportFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1017,6 +1034,7 @@ pub fn get_fixed_database_slow_log(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseSlowLogInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1062,6 +1080,7 @@ pub fn get_fixed_database_tags(state: Arc<AppState>) -> Tool {
         .description("Get tags attached to a Fixed/Essentials database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseTagsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1108,6 +1127,7 @@ pub fn create_fixed_database_tag(state: Arc<AppState>) -> Tool {
             "Create a tag on a Fixed/Essentials database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateFixedDatabaseTagInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1168,6 +1188,7 @@ pub fn update_fixed_database_tag(state: Arc<AppState>) -> Tool {
             "Update a tag value on a Fixed/Essentials database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseTagInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1228,8 +1249,8 @@ pub struct DeleteFixedDatabaseTagInput {
 pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_database_tag")
         .description(
-            "Delete a tag from a Fixed/Essentials database. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a tag from a Fixed/Essentials database. \
+             This action cannot be undone. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseTagInput>(
             state,
@@ -1290,6 +1311,7 @@ pub fn update_fixed_database_tags(state: Arc<AppState>) -> Tool {
             "Update all tags on a Fixed/Essentials database (replaces existing tags). \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseTagsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1360,6 +1382,7 @@ pub fn get_fixed_database_upgrade_versions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1404,6 +1427,7 @@ pub fn get_fixed_database_upgrade_status(state: Arc<AppState>) -> Tool {
         .description("Get the latest Redis version upgrade status for a Fixed/Essentials database.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1451,6 +1475,7 @@ pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
             "Upgrade the Redis version of a Fixed/Essentials database. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpgradeFixedDatabaseRedisVersionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1510,20 +1535,20 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - get_fixed_database_upgrade_versions: Get available Redis upgrade versions
 - get_fixed_database_upgrade_status: Get Redis version upgrade status
 
-### Redis Cloud - Fixed/Essentials Write Operations (require --read-only=false)
-- create_fixed_subscription: Create a new Fixed/Essentials subscription
-- update_fixed_subscription: Update a Fixed/Essentials subscription
-- delete_fixed_subscription: Delete a Fixed/Essentials subscription
-- create_fixed_database: Create a new Fixed/Essentials database
-- update_fixed_database: Update a Fixed/Essentials database
-- delete_fixed_database: Delete a Fixed/Essentials database
-- backup_fixed_database: Trigger a manual backup
-- import_fixed_database: Import data into a Fixed/Essentials database
-- create_fixed_database_tag: Create a tag on a Fixed/Essentials database
-- update_fixed_database_tag: Update a tag on a Fixed/Essentials database
-- delete_fixed_database_tag: Delete a tag from a Fixed/Essentials database
-- update_fixed_database_tags: Update all tags on a Fixed/Essentials database
-- upgrade_fixed_database_redis_version: Upgrade the Redis version of a Fixed/Essentials database
+### Redis Cloud - Fixed/Essentials Write Operations
+- create_fixed_subscription: Create a new Fixed/Essentials subscription [write]
+- update_fixed_subscription: Update a Fixed/Essentials subscription [write]
+- create_fixed_database: Create a new Fixed/Essentials database [write]
+- update_fixed_database: Update a Fixed/Essentials database [write]
+- backup_fixed_database: Trigger a manual backup [write]
+- import_fixed_database: Import data into a Fixed/Essentials database [write]
+- create_fixed_database_tag: Create a tag on a Fixed/Essentials database [write]
+- update_fixed_database_tag: Update a tag on a Fixed/Essentials database [write]
+- update_fixed_database_tags: Update all tags on a Fixed/Essentials database [write]
+- upgrade_fixed_database_redis_version: Upgrade the Redis version [write]
+- delete_fixed_subscription: Permanently delete a Fixed/Essentials subscription [destructive]
+- delete_fixed_database: Permanently delete a Fixed/Essentials database [destructive]
+- delete_fixed_database_tag: Delete a tag from a Fixed/Essentials database [destructive]
 "#;
 
 /// Build an MCP sub-router containing all Fixed/Essentials tools

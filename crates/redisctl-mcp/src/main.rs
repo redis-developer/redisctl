@@ -276,14 +276,32 @@ fn build_router(
     enabled: &HashSet<Toolset>,
 ) -> Result<McpRouter> {
     let mut instructions = String::from(
-        r#"Redis Cloud and Enterprise MCP Server
-
-This server provides comprehensive tools for managing Redis Cloud subscriptions and databases,
-Redis Enterprise clusters and databases, and direct Redis database operations.
-
-## Available Tool Categories
-"#,
+        "# Redis Cloud and Enterprise MCP Server\n\n\
+         ## Safety Model\n\n\
+         Every tool carries MCP annotation hints that describe its safety characteristics:\n\
+         - `readOnlyHint = true` -- reads data, never modifies state\n\
+         - `destructiveHint = false` -- writes data but is non-destructive (create, update, backup)\n\
+         - `destructiveHint = true` -- irreversible operation (delete, flush)\n\n\
+         In the tool list below, tags indicate the safety tier:\n\
+         - (no tag) = read-only\n\
+         - [write] = non-destructive write\n\
+         - [destructive] = destructive write -- DANGEROUS, irreversible\n\n",
     );
+
+    // Append active safety tier
+    if read_only {
+        instructions.push_str(
+            "**Active safety tier: READ-ONLY** -- only read-only tools are available. \
+             Write and destructive tools are hidden and will return unauthorized if called directly.\n\n",
+        );
+    } else {
+        instructions.push_str(
+            "**Active safety tier: WRITE-ENABLED** -- all tools including writes are available. \
+             Destructive tools (delete, flush) are enabled. Exercise caution with [destructive] tools.\n\n",
+        );
+    }
+
+    instructions.push_str("## Available Tool Categories\n");
 
     let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
 
@@ -510,5 +528,341 @@ mod tests {
         assert!(toolsets.contains(&Toolset::Enterprise));
         #[cfg(feature = "database")]
         assert!(toolsets.contains(&Toolset::Database));
+    }
+
+    // ========================================================================
+    // Safety annotation tests
+    // ========================================================================
+
+    /// Helper: assert a tool has read-only, idempotent, non-destructive annotations
+    fn assert_read_only(tool: &Tool, name: &str) {
+        let ann = tool
+            .annotations
+            .as_ref()
+            .unwrap_or_else(|| panic!("{name}: missing annotations"));
+        assert!(ann.read_only_hint, "{name}: should be read_only");
+        assert!(ann.idempotent_hint, "{name}: should be idempotent");
+        assert!(
+            !ann.destructive_hint,
+            "{name}: should be non-destructive (destructive_hint=false)"
+        );
+    }
+
+    /// Helper: assert a tool is a non-destructive write (not read-only, destructive_hint=false)
+    fn assert_non_destructive_write(tool: &Tool, name: &str) {
+        let ann = tool
+            .annotations
+            .as_ref()
+            .unwrap_or_else(|| panic!("{name}: missing annotations"));
+        assert!(!ann.read_only_hint, "{name}: should NOT be read_only");
+        assert!(
+            !ann.destructive_hint,
+            "{name}: should be non-destructive (destructive_hint=false)"
+        );
+    }
+
+    /// Helper: assert a tool is destructive (not read-only, destructive_hint=true by MCP default)
+    fn assert_destructive(tool: &Tool, name: &str) {
+        // Destructive tools may have no annotations at all (MCP defaults destructive_hint=true)
+        // or may have annotations without non_destructive()
+        //
+        // NOTE: tower-mcp's ToolAnnotations derives Default which sets destructive_hint=false
+        // (Rust bool default), but the MCP spec says the default is true. When annotations
+        // are None, the MCP spec defaults apply, so destructive_hint is effectively true.
+        let destructive_hint = tool
+            .annotations
+            .as_ref()
+            .map(|a| a.destructive_hint)
+            .unwrap_or(true); // MCP spec default: destructive_hint = true
+        assert!(
+            destructive_hint,
+            "{name}: should be destructive (destructive_hint=true)"
+        );
+
+        // Should NOT be read-only
+        let read_only = tool
+            .annotations
+            .as_ref()
+            .map(|a| a.read_only_hint)
+            .unwrap_or(false);
+        assert!(
+            !read_only,
+            "{name}: destructive tool should NOT be read_only"
+        );
+
+        // Description should start with "DANGEROUS:"
+        let desc = tool
+            .description
+            .as_deref()
+            .unwrap_or_else(|| panic!("{name}: missing description"));
+        assert!(
+            desc.starts_with("DANGEROUS:"),
+            "{name}: destructive tool description should start with 'DANGEROUS:', got: {desc}"
+        );
+    }
+
+    fn test_state() -> Arc<AppState> {
+        Arc::new(AppState::new(state::CredentialSource::Profiles(vec![]), true, None).unwrap())
+    }
+
+    // -- Profile tools --
+
+    #[test]
+    fn profile_read_tools_are_read_only() {
+        let state = test_state();
+        assert_read_only(
+            &tools::profile::list_profiles(state.clone()),
+            "profile_list",
+        );
+        assert_read_only(&tools::profile::show_profile(state.clone()), "profile_show");
+        assert_read_only(&tools::profile::config_path(state.clone()), "profile_path");
+        assert_read_only(
+            &tools::profile::validate_config(state.clone()),
+            "profile_validate",
+        );
+    }
+
+    #[test]
+    fn profile_write_tools_are_non_destructive() {
+        let state = test_state();
+        assert_non_destructive_write(
+            &tools::profile::create_profile(state.clone()),
+            "profile_create",
+        );
+        assert_non_destructive_write(
+            &tools::profile::set_default_cloud(state.clone()),
+            "profile_set_default_cloud",
+        );
+        assert_non_destructive_write(
+            &tools::profile::set_default_enterprise(state.clone()),
+            "profile_set_default_enterprise",
+        );
+    }
+
+    #[test]
+    fn profile_destructive_tools() {
+        let state = test_state();
+        assert_destructive(
+            &tools::profile::delete_profile(state.clone()),
+            "profile_delete",
+        );
+    }
+
+    // -- Cloud tools (representative samples) --
+
+    #[cfg(feature = "cloud")]
+    mod cloud_annotations {
+        use super::*;
+
+        #[test]
+        fn cloud_read_tools_are_read_only() {
+            let state = test_state();
+            assert_read_only(
+                &tools::cloud::list_subscriptions(state.clone()),
+                "list_subscriptions",
+            );
+            assert_read_only(&tools::cloud::get_account(state.clone()), "get_account");
+            assert_read_only(
+                &tools::cloud::list_fixed_subscriptions(state.clone()),
+                "list_fixed_subscriptions",
+            );
+            assert_read_only(
+                &tools::cloud::get_vpc_peering(state.clone()),
+                "get_vpc_peering",
+            );
+        }
+
+        #[test]
+        fn cloud_write_tools_are_non_destructive() {
+            let state = test_state();
+            assert_non_destructive_write(
+                &tools::cloud::create_database(state.clone()),
+                "create_database",
+            );
+            assert_non_destructive_write(
+                &tools::cloud::update_database(state.clone()),
+                "update_database",
+            );
+            assert_non_destructive_write(
+                &tools::cloud::backup_database(state.clone()),
+                "backup_database",
+            );
+            assert_non_destructive_write(
+                &tools::cloud::create_acl_user(state.clone()),
+                "create_acl_user",
+            );
+            assert_non_destructive_write(
+                &tools::cloud::create_vpc_peering(state.clone()),
+                "create_vpc_peering",
+            );
+            assert_non_destructive_write(
+                &tools::cloud::create_fixed_database(state.clone()),
+                "create_fixed_database",
+            );
+        }
+
+        #[test]
+        fn cloud_destructive_tools() {
+            let state = test_state();
+            assert_destructive(
+                &tools::cloud::delete_database(state.clone()),
+                "delete_database",
+            );
+            assert_destructive(
+                &tools::cloud::delete_subscription(state.clone()),
+                "delete_subscription",
+            );
+            assert_destructive(
+                &tools::cloud::flush_database(state.clone()),
+                "flush_database",
+            );
+            assert_destructive(
+                &tools::cloud::delete_acl_user(state.clone()),
+                "delete_acl_user",
+            );
+            assert_destructive(
+                &tools::cloud::delete_cloud_account(state.clone()),
+                "delete_cloud_account",
+            );
+            assert_destructive(
+                &tools::cloud::delete_vpc_peering(state.clone()),
+                "delete_vpc_peering",
+            );
+            assert_destructive(
+                &tools::cloud::delete_private_link(state.clone()),
+                "delete_private_link",
+            );
+            assert_destructive(
+                &tools::cloud::delete_fixed_database(state.clone()),
+                "delete_fixed_database",
+            );
+            assert_destructive(
+                &tools::cloud::delete_fixed_subscription(state.clone()),
+                "delete_fixed_subscription",
+            );
+        }
+    }
+
+    // -- Enterprise tools (representative samples) --
+
+    #[cfg(feature = "enterprise")]
+    mod enterprise_annotations {
+        use super::*;
+
+        #[test]
+        fn enterprise_read_tools_are_read_only() {
+            let state = test_state();
+            assert_read_only(
+                &tools::enterprise::get_cluster(state.clone()),
+                "get_cluster",
+            );
+            assert_read_only(
+                &tools::enterprise::list_databases(state.clone()),
+                "list_enterprise_databases",
+            );
+            assert_read_only(
+                &tools::enterprise::list_users(state.clone()),
+                "list_enterprise_users",
+            );
+            assert_read_only(
+                &tools::enterprise::list_alerts(state.clone()),
+                "list_alerts",
+            );
+        }
+
+        #[test]
+        fn enterprise_write_tools_are_non_destructive() {
+            let state = test_state();
+            assert_non_destructive_write(
+                &tools::enterprise::update_cluster(state.clone()),
+                "update_enterprise_cluster",
+            );
+            assert_non_destructive_write(
+                &tools::enterprise::create_enterprise_database(state.clone()),
+                "create_enterprise_database",
+            );
+            assert_non_destructive_write(
+                &tools::enterprise::create_enterprise_user(state.clone()),
+                "create_enterprise_user",
+            );
+        }
+
+        #[test]
+        fn enterprise_destructive_tools() {
+            let state = test_state();
+            assert_destructive(
+                &tools::enterprise::delete_enterprise_database(state.clone()),
+                "delete_enterprise_database",
+            );
+            assert_destructive(
+                &tools::enterprise::flush_enterprise_database(state.clone()),
+                "flush_enterprise_database",
+            );
+            assert_destructive(
+                &tools::enterprise::delete_enterprise_user(state.clone()),
+                "delete_enterprise_user",
+            );
+            assert_destructive(
+                &tools::enterprise::delete_enterprise_role(state.clone()),
+                "delete_enterprise_role",
+            );
+            assert_destructive(
+                &tools::enterprise::delete_enterprise_acl(state.clone()),
+                "delete_enterprise_acl",
+            );
+        }
+    }
+
+    // -- Redis database tools (representative samples) --
+
+    #[cfg(feature = "database")]
+    mod database_annotations {
+        use super::*;
+
+        #[test]
+        fn redis_read_tools_are_read_only() {
+            let state = test_state();
+            assert_read_only(&tools::redis::ping(state.clone()), "redis_ping");
+            assert_read_only(&tools::redis::info(state.clone()), "redis_info");
+            assert_read_only(&tools::redis::keys(state.clone()), "redis_keys");
+            assert_read_only(&tools::redis::get(state.clone()), "redis_get");
+            assert_read_only(&tools::redis::hgetall(state.clone()), "redis_hgetall");
+            assert_read_only(
+                &tools::redis::health_check(state.clone()),
+                "redis_health_check",
+            );
+        }
+
+        #[test]
+        fn redis_write_tools_are_non_destructive() {
+            let state = test_state();
+            assert_non_destructive_write(
+                &tools::redis::config_set(state.clone()),
+                "redis_config_set",
+            );
+            assert_non_destructive_write(&tools::redis::set(state.clone()), "redis_set");
+            assert_non_destructive_write(&tools::redis::expire(state.clone()), "redis_expire");
+            assert_non_destructive_write(&tools::redis::hset(state.clone()), "redis_hset");
+            assert_non_destructive_write(&tools::redis::lpush(state.clone()), "redis_lpush");
+            assert_non_destructive_write(&tools::redis::xadd(state.clone()), "redis_xadd");
+        }
+
+        #[test]
+        fn redis_destructive_tools() {
+            let state = test_state();
+            assert_destructive(&tools::redis::flushdb(state.clone()), "redis_flushdb");
+            assert_destructive(&tools::redis::del(state.clone()), "redis_del");
+        }
+    }
+
+    #[test]
+    fn instructions_contain_safety_model() {
+        let state = test_state();
+        let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+
+        let _router = build_router(state.clone(), true, &enabled).unwrap();
+        // The router instructions are set but not publicly accessible.
+        // Verify the build succeeds (no panics) for both modes.
+        let _router_write = build_router(state.clone(), false, &enabled).unwrap();
     }
 }

@@ -38,6 +38,7 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
         .description("Get information about the current Redis Cloud account including name, ID, and settings.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAccountInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAccountInput>| async move {
@@ -81,6 +82,7 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSystemLogsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSystemLogsInput>| async move {
@@ -124,6 +126,7 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetSessionLogsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -164,6 +167,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetRegionsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRegionsInput>| async move {
@@ -200,6 +204,7 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetModulesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModulesInput>| async move {
@@ -240,6 +245,7 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListAccountUsersInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -279,6 +285,7 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAccountUserInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -318,6 +325,7 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
         .description("List all ACL users (database-level Redis users for authentication).")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListAclUsersInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAclUsersInput>| async move {
@@ -354,6 +362,7 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
         .description("Get detailed information about a specific ACL user by ID.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetAclUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAclUserInput>| async move {
@@ -388,6 +397,7 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
         .description("List all ACL roles (permission templates for database access).")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListAclRolesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAclRolesInput>| async move {
@@ -422,6 +432,7 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
         .description("List all Redis ACL rules (command permissions for Redis users).")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListRedisRulesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -468,6 +479,7 @@ pub fn create_acl_user(state: Arc<AppState>) -> Tool {
             "Create a new ACL user with the assigned database access role. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAclUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<CreateAclUserInput>| async move {
@@ -523,6 +535,7 @@ pub fn update_acl_user(state: Arc<AppState>) -> Tool {
             "Update an ACL user's role or password. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAclUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateAclUserInput>| async move {
@@ -569,8 +582,8 @@ pub struct DeleteAclUserInput {
 pub fn delete_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_acl_user")
         .description(
-            "Delete an ACL user. This is a destructive operation. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an ACL user. Active sessions using this user \
+             will be terminated. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteAclUserInput>(
             state,
@@ -638,6 +651,7 @@ pub fn create_acl_role(state: Arc<AppState>) -> Tool {
             "Create a new ACL role with assigned Redis rules and database associations. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAclRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<CreateAclRoleInput>| async move {
@@ -707,6 +721,7 @@ pub fn update_acl_role(state: Arc<AppState>) -> Tool {
             "Update an ACL role's name or Redis rule assignments. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAclRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateAclRoleInput>| async move {
@@ -769,8 +784,8 @@ pub struct DeleteAclRoleInput {
 pub fn delete_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_acl_role")
         .description(
-            "Delete an ACL role. This is a destructive operation. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes an ACL role. Users assigned to this role \
+             will lose their permissions. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteAclRoleInput>(
             state,
@@ -817,6 +832,7 @@ pub fn create_redis_rule(state: Arc<AppState>) -> Tool {
             "Create a new Redis ACL rule defining command permissions. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateRedisRuleInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -872,6 +888,7 @@ pub fn update_redis_rule(state: Arc<AppState>) -> Tool {
             "Update a Redis ACL rule's name or pattern. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateRedisRuleInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -921,8 +938,8 @@ pub struct DeleteRedisRuleInput {
 pub fn delete_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_redis_rule")
         .description(
-            "Delete a Redis ACL rule. This is a destructive operation. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a Redis ACL rule. Roles using this rule \
+             will lose those permissions. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteRedisRuleInput>(
             state,
@@ -992,6 +1009,7 @@ pub fn generate_cost_report(state: Arc<AppState>) -> Tool {
              Returns a task ID to track generation progress. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GenerateCostReportInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1060,6 +1078,7 @@ pub fn download_cost_report(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, DownloadCostReportInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1104,6 +1123,7 @@ pub fn list_payment_methods(state: Arc<AppState>) -> Tool {
         .description("List all payment methods for the Redis Cloud account.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListPaymentMethodsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1145,6 +1165,7 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
         .description("List all async tasks in the Redis Cloud account. Tasks track long-running operations like database creation.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListTasksInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListTasksInput>| async move {
@@ -1181,6 +1202,7 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
         .description("Get status and details of a specific async task by ID.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetTaskInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTaskInput>| async move {
@@ -1222,6 +1244,7 @@ pub fn list_cloud_accounts(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ListCloudAccountsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1265,6 +1288,7 @@ pub fn get_cloud_account(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetCloudAccountInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1319,6 +1343,7 @@ pub fn create_cloud_account(state: Arc<AppState>) -> Tool {
              Registers cloud credentials with Redis Cloud for resource provisioning. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateCloudAccountInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1390,6 +1415,7 @@ pub fn update_cloud_account(state: Arc<AppState>) -> Tool {
              including credentials and console access details. \
              Requires write permission.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateCloudAccountInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1443,9 +1469,8 @@ pub struct DeleteCloudAccountInput {
 pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_cloud_account")
         .description(
-            "Delete a cloud provider account (BYOC). This is a destructive operation \
-             that removes the cloud account integration. \
-             Requires write permission.",
+            "DANGEROUS: Permanently deletes a cloud provider account (BYOC). This removes \
+             the cloud account integration and cannot be undone. Requires write permission.",
         )
         .extractor_handler_typed::<_, _, _, DeleteCloudAccountInput>(
             state,
@@ -1489,26 +1514,26 @@ pub(super) const INSTRUCTIONS: &str = r#"
 - list_redis_rules: List Redis ACL rules
 - list_payment_methods: List account payment methods
 
-### Redis Cloud - ACL Write Operations (require --read-only=false)
-- create_acl_user: Create a new ACL user with a role and password
-- update_acl_user: Update an ACL user's role or password
-- delete_acl_user: Delete an ACL user
-- create_acl_role: Create a new ACL role with Redis rules and database associations
-- update_acl_role: Update an ACL role's name or rule assignments
-- delete_acl_role: Delete an ACL role
-- create_redis_rule: Create a new Redis ACL rule pattern
-- update_redis_rule: Update a Redis ACL rule's name or pattern
-- delete_redis_rule: Delete a Redis ACL rule
+### Redis Cloud - ACL Write Operations
+- create_acl_user: Create a new ACL user with a role and password [write]
+- update_acl_user: Update an ACL user's role or password [write]
+- create_acl_role: Create a new ACL role with Redis rules and database associations [write]
+- update_acl_role: Update an ACL role's name or rule assignments [write]
+- create_redis_rule: Create a new Redis ACL rule pattern [write]
+- update_redis_rule: Update a Redis ACL rule's name or pattern [write]
+- delete_acl_user: Permanently delete an ACL user [destructive]
+- delete_acl_role: Permanently delete an ACL role [destructive]
+- delete_redis_rule: Permanently delete a Redis ACL rule [destructive]
 
 ### Redis Cloud - Cloud Accounts (BYOC)
 - list_cloud_accounts: List configured cloud provider accounts (AWS, GCP, Azure)
 - get_cloud_account: Get cloud account details by ID
-- create_cloud_account: Create a new cloud provider account (require --read-only=false)
-- update_cloud_account: Update cloud account configuration (require --read-only=false)
-- delete_cloud_account: Delete a cloud provider account (require --read-only=false)
+- create_cloud_account: Create a new cloud provider account [write]
+- update_cloud_account: Update cloud account configuration [write]
+- delete_cloud_account: Permanently delete a cloud provider account [destructive]
 
 ### Redis Cloud - Cost Reports
-- generate_cost_report: Generate a FOCUS cost report (require --read-only=false)
+- generate_cost_report: Generate a FOCUS cost report [write]
 - download_cost_report: Download a generated cost report
 
 ### Redis Cloud - Logs

@@ -24,9 +24,9 @@ pub(super) const INSTRUCTIONS: &str = "\
 - redis_object_idletime: Get key idle time in seconds\n\
 - redis_object_help: Get available OBJECT subcommands\n\
 - redis_set: Set key to string value with optional expiry and conditional flags [write]\n\
-- redis_del: Delete one or more keys [write]\n\
 - redis_expire: Set TTL on a key in seconds [write]\n\
 - redis_rename: Rename a key [write]\n\
+- redis_del: Permanently delete one or more keys [destructive]\n\
 ";
 
 /// Build a sub-router containing all key-level Redis tools
@@ -83,6 +83,7 @@ pub fn keys(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, KeysInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeysInput>| async move {
@@ -158,6 +159,7 @@ pub fn get(state: Arc<AppState>) -> Tool {
         .description("Get the value of a key from Redis")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, GetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetInput>| async move {
@@ -208,6 +210,7 @@ pub fn key_type(state: Arc<AppState>) -> Tool {
         .description("Get the type of a key (string, list, set, zset, hash, stream)")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, TypeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TypeInput>| async move {
@@ -252,6 +255,7 @@ pub fn ttl(state: Arc<AppState>) -> Tool {
         .description("Get the time-to-live (TTL) of a key in seconds. Returns -1 if no expiry, -2 if key doesn't exist.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, TtlInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
@@ -302,6 +306,7 @@ pub fn exists(state: Arc<AppState>) -> Tool {
         .description("Check if one or more keys exist. Returns the count of keys that exist.")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ExistsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ExistsInput>| async move {
@@ -354,6 +359,7 @@ pub fn memory_usage(state: Arc<AppState>) -> Tool {
         .description("Get the memory usage of a key in bytes")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, MemoryUsageInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryUsageInput>| async move {
@@ -415,6 +421,7 @@ pub fn scan(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ScanInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ScanInput>| async move {
@@ -508,6 +515,7 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ObjectEncodingInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -563,6 +571,7 @@ pub fn object_freq(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ObjectFreqInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectFreqInput>| async move {
@@ -614,6 +623,7 @@ pub fn object_idletime(state: Arc<AppState>) -> Tool {
         )
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ObjectIdletimeInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -661,6 +671,7 @@ pub fn object_help(state: Arc<AppState>) -> Tool {
         .description("Get available OBJECT subcommands using OBJECT HELP")
         .read_only()
         .idempotent()
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ObjectHelpInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectHelpInput>| async move {
@@ -726,6 +737,7 @@ pub fn set(state: Arc<AppState>) -> Tool {
              Use EX for seconds, PX for milliseconds expiry. Use NX to only set if \
              the key does not exist, XX to only set if it exists.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, SetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetInput>| async move {
@@ -802,7 +814,10 @@ pub struct DelInput {
 /// Build the del tool
 pub fn del(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_del")
-        .description("Delete one or more keys. Returns the number of keys that were removed.")
+        .description(
+            "DANGEROUS: Permanently deletes one or more keys and their data. \
+             This action cannot be undone. Returns the number of keys removed.",
+        )
         .extractor_handler_typed::<_, _, _, DelInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DelInput>| async move {
@@ -864,6 +879,7 @@ pub fn expire(state: Arc<AppState>) -> Tool {
             "Set a timeout on a key in seconds. The key will be automatically deleted \
              after the timeout expires. Returns whether the timeout was set.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, ExpireInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ExpireInput>| async move {
@@ -928,6 +944,7 @@ pub fn rename(state: Arc<AppState>) -> Tool {
             "Rename a key. Returns an error if the source key does not exist. \
              If the destination key already exists, it is overwritten.",
         )
+        .non_destructive()
         .extractor_handler_typed::<_, _, _, RenameInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RenameInput>| async move {
