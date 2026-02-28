@@ -1,6 +1,6 @@
 [package]
 name = "redisctl-mcp"
-version = "0.3.0"
+version = "0.4.0"
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -21,7 +21,7 @@ tower-mcp = { version = "0.7.0", features = ["http", "oauth"] }
 schemars = "1.2"
 
 # Internal crates
-redisctl-core = { version = "0.1.0", path = "../redisctl-core" }
+redisctl-core = { version = "0.2.0", path = "../redisctl-core" }
 
 # External API clients (optional, gated by features)
 redis-cloud = { workspace = true, optional = true }

@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.4.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.3.0...redisctl-mcp-v0.4.0) - 2026-02-28
+
+### Added
+
+- *(mcp)* migrate to tower-mcp 0.7.0 ([#748](https://github.com/redis-developer/redisctl/pull/748))
+- *(mcp)* add safety annotations, normalize instructions, add verification tests ([#610](https://github.com/redis-developer/redisctl/pull/610)) ([#746](https://github.com/redis-developer/redisctl/pull/746))
+- *(mcp)* add 4 composed Redis diagnostic tools ([#737](https://github.com/redis-developer/redisctl/pull/737)) ([#744](https://github.com/redis-developer/redisctl/pull/744))
+- *(mcp)* add 18 write-gated Redis data management tools ([#743](https://github.com/redis-developer/redisctl/pull/743))
+- *(mcp)* add profile-based connection support for Redis database tools ([#742](https://github.com/redis-developer/redisctl/pull/742))
+- *(mcp)* add 14 Redis read tools for streams, pub/sub, diagnostics, ACL, modules ([#741](https://github.com/redis-developer/redisctl/pull/741))
+- *(mcp)* add 27 Fixed/Essentials tier MCP tools ([#734](https://github.com/redis-developer/redisctl/pull/734))
+- *(mcp)* add 5 cloud accounts (BYOC) MCP tools ([#733](https://github.com/redis-developer/redisctl/pull/733))
+- *(mcp)* add 51 cloud networking MCP tools for VPC, TGW, PSC, PrivateLink ([#732](https://github.com/redis-developer/redisctl/pull/732))
+- *(mcp)* add 19 cloud subscription and database MCP tools ([#731](https://github.com/redis-developer/redisctl/pull/731))
+- *(mcp)* add ACL write, cost report, and payment method cloud tools ([#730](https://github.com/redis-developer/redisctl/pull/730))
+- *(mcp)* add 18 enterprise tools for node actions, RBAC, CRDB, and LDAP ([#715](https://github.com/redis-developer/redisctl/pull/715))
+- *(cli)* add profile tags for organizing many profiles ([#692](https://github.com/redis-developer/redisctl/pull/692)) ([#705](https://github.com/redis-developer/redisctl/pull/705))
+- *(mcp)* surface credential issues clearly in tool error responses ([#695](https://github.com/redis-developer/redisctl/pull/695)) ([#704](https://github.com/redis-developer/redisctl/pull/704))
+- *(mcp)* add profile_create tool for creating profiles via MCP ([#646](https://github.com/redis-developer/redisctl/pull/646)) ([#703](https://github.com/redis-developer/redisctl/pull/703))
+- *(cli)* add --connect flag to profile validate for connectivity testing ([#688](https://github.com/redis-developer/redisctl/pull/688))
+
+### Other
+
+- *(mcp)* split redis.rs into server, keys, and structures submodules ([#740](https://github.com/redis-developer/redisctl/pull/740))
+- *(mcp)* split enterprise.rs and cloud.rs into domain submodules ([#717](https://github.com/redis-developer/redisctl/pull/717))
+
 ## [0.3.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.2.0...redisctl-mcp-v0.3.0) - 2026-02-25
 
 ### Added

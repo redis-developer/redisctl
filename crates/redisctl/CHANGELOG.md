@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.1](https://github.com/redis-developer/redisctl/compare/redisctl-v0.8.0...redisctl-v0.8.1) - 2026-02-28
+
+### Added
+
+- *(cli)* add table output and brief summary for enterprise status ([#714](https://github.com/redis-developer/redisctl/pull/714))
+- *(cli)* add cluster health verification commands ([#626](https://github.com/redis-developer/redisctl/pull/626)) ([#713](https://github.com/redis-developer/redisctl/pull/713))
+- *(cli)* add profile tags for organizing many profiles ([#692](https://github.com/redis-developer/redisctl/pull/692)) ([#705](https://github.com/redis-developer/redisctl/pull/705))
+- *(cli)* preserve profile settings on credential update ([#694](https://github.com/redis-developer/redisctl/pull/694)) ([#702](https://github.com/redis-developer/redisctl/pull/702))
+- *(cli)* add profile current command for shell prompt integration ([#693](https://github.com/redis-developer/redisctl/pull/693)) ([#701](https://github.com/redis-developer/redisctl/pull/701))
+- *(cli)* add interactive profile init wizard ([#690](https://github.com/redis-developer/redisctl/pull/690)) ([#698](https://github.com/redis-developer/redisctl/pull/698))
+- *(cli)* improve profile help and discoverability ([#663](https://github.com/redis-developer/redisctl/pull/663)) ([#689](https://github.com/redis-developer/redisctl/pull/689))
+- *(cli)* add --connect flag to profile validate for connectivity testing ([#688](https://github.com/redis-developer/redisctl/pull/688))
+
+### Fixed
+
+- *(cli)* improve error messages for credential and connection failures ([#691](https://github.com/redis-developer/redisctl/pull/691)) ([#700](https://github.com/redis-developer/redisctl/pull/700))
+
 ## [0.8.0](https://github.com/redis-developer/redisctl/compare/redisctl-v0.7.7...redisctl-v0.8.0) - 2026-02-25
 
 ### Added

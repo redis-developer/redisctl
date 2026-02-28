@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0](https://github.com/redis-developer/redisctl/compare/redisctl-core-v0.1.0...redisctl-core-v0.2.0) - 2026-02-28
+
+### Added
+
+- *(cli)* add profile tags for organizing many profiles ([#692](https://github.com/redis-developer/redisctl/pull/692)) ([#705](https://github.com/redis-developer/redisctl/pull/705))
+
+### Other
+
+- add edge case tests for profile config loading ([#696](https://github.com/redis-developer/redisctl/pull/696)) ([#699](https://github.com/redis-developer/redisctl/pull/699))
+- add repository and homepage metadata to redisctl-core ([#685](https://github.com/redis-developer/redisctl/pull/685))
+
 ## [0.1.0](https://github.com/redis-developer/redisctl/releases/tag/redisctl-core-v0.1.0) - 2026-02-25
 
 ### Added
