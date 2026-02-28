@@ -20,6 +20,7 @@ pub struct ApiCommandParams {
     pub data: Option<String>,
     pub query: Option<String>,
     pub output_format: OutputFormat,
+    pub curl: bool,
 }
 
 /// Handle raw API commands
@@ -37,6 +38,7 @@ pub async fn handle_api_command(params: ApiCommandParams) -> CliResult<()> {
                 params.data,
                 params.query,
                 params.output_format,
+                params.curl,
             )
             .await
         }
@@ -49,6 +51,7 @@ pub async fn handle_api_command(params: ApiCommandParams) -> CliResult<()> {
                 params.data,
                 params.query,
                 params.output_format,
+                params.curl,
             )
             .await
         }
@@ -59,7 +62,7 @@ pub async fn handle_api_command(params: ApiCommandParams) -> CliResult<()> {
 }
 
 /// Handle Cloud API calls
-#[allow(dead_code)] // Used by binary target
+#[allow(dead_code, clippy::too_many_arguments)] // Used by binary target
 async fn handle_cloud_api(
     connection_manager: ConnectionManager,
     profile_name: Option<&str>,
@@ -68,9 +71,8 @@ async fn handle_cloud_api(
     data: Option<String>,
     query: Option<String>,
     output_format: OutputFormat,
+    curl: bool,
 ) -> CliResult<()> {
-    let client = connection_manager.create_cloud_client(profile_name).await?;
-
     // Ensure path starts with /
     let normalized_path = if path.starts_with('/') {
         path
@@ -79,25 +81,16 @@ async fn handle_cloud_api(
     };
 
     // Parse request body if provided
-    let body: Option<Value> = if let Some(data_str) = data {
-        if let Some(file_path) = data_str.strip_prefix('@') {
-            // Read from file
-            let content = std::fs::read_to_string(file_path)
-                .with_context(|| format!("Failed to read file: {}", file_path))?;
-            Some(
-                serde_json::from_str(&content)
-                    .with_context(|| format!("Failed to parse JSON from file: {}", file_path))?,
-            )
-        } else {
-            // Parse as JSON string
-            Some(
-                serde_json::from_str(&data_str)
-                    .context("Failed to parse JSON from data parameter")?,
-            )
-        }
-    } else {
-        None
-    };
+    let body: Option<Value> = parse_body(data)?;
+
+    if curl {
+        let info = connection_manager.resolve_cloud_connection(profile_name)?;
+        let cmd = super::curl::format_cloud_curl(&info, &method, &normalized_path, body.as_ref());
+        println!("{}", cmd);
+        return Ok(());
+    }
+
+    let client = connection_manager.create_cloud_client(profile_name).await?;
 
     // Execute the API call based on HTTP method
     let result: std::result::Result<Value, _> = match method {
@@ -144,7 +137,7 @@ async fn handle_cloud_api(
 }
 
 /// Handle Enterprise API calls
-#[allow(dead_code)] // Used by binary target
+#[allow(dead_code, clippy::too_many_arguments)] // Used by binary target
 async fn handle_enterprise_api(
     connection_manager: ConnectionManager,
     profile_name: Option<&str>,
@@ -153,67 +146,25 @@ async fn handle_enterprise_api(
     data: Option<String>,
     query: Option<String>,
     output_format: OutputFormat,
+    curl: bool,
 ) -> CliResult<()> {
+    // Normalize path with smart v1 prefixing for Enterprise
+    let normalized_path = normalize_enterprise_path(path);
+
+    // Parse request body if provided
+    let body: Option<Value> = parse_body(data)?;
+
+    if curl {
+        let info = connection_manager.resolve_enterprise_connection(profile_name)?;
+        let cmd =
+            super::curl::format_enterprise_curl(&info, &method, &normalized_path, body.as_ref());
+        println!("{}", cmd);
+        return Ok(());
+    }
+
     let client = connection_manager
         .create_enterprise_client(profile_name)
         .await?;
-
-    // Normalize path with smart v1 prefixing for Enterprise
-    let normalized_path = if path.starts_with('/') {
-        // Path has leading slash - check if it has version
-        if path.starts_with("/v")
-            && path
-                .chars()
-                .nth(2)
-                .map(|c| c.is_ascii_digit())
-                .unwrap_or(false)
-        {
-            // Already has version (e.g., /v1/cluster, /v2/bdbs)
-            path
-        } else if path == "/" {
-            // Just root path - prefix with /v1
-            "/v1".to_string()
-        } else {
-            // Has leading slash but no version - prefix with /v1
-            format!("/v1{}", path)
-        }
-    } else {
-        // No leading slash - check if it starts with version
-        if path.starts_with("v")
-            && path
-                .chars()
-                .nth(1)
-                .map(|c| c.is_ascii_digit())
-                .unwrap_or(false)
-        {
-            // Starts with version (e.g., v1/cluster) - just add leading slash
-            format!("/{}", path)
-        } else {
-            // No version - prefix with /v1/
-            format!("/v1/{}", path)
-        }
-    };
-
-    // Parse request body if provided
-    let body: Option<Value> = if let Some(data_str) = data {
-        if let Some(file_path) = data_str.strip_prefix('@') {
-            // Read from file
-            let content = std::fs::read_to_string(file_path)
-                .with_context(|| format!("Failed to read file: {}", file_path))?;
-            Some(
-                serde_json::from_str(&content)
-                    .with_context(|| format!("Failed to parse JSON from file: {}", file_path))?,
-            )
-        } else {
-            // Parse as JSON string
-            Some(
-                serde_json::from_str(&data_str)
-                    .context("Failed to parse JSON from data parameter")?,
-            )
-        }
-    } else {
-        None
-    };
 
     // Execute the API call based on HTTP method
     let result: std::result::Result<Value, _> = match method {
@@ -256,5 +207,52 @@ async fn handle_enterprise_api(
             eprintln!("API Error: {}", e);
             std::process::exit(1);
         }
+    }
+}
+
+/// Parse request body from a JSON string or @file reference.
+fn parse_body(data: Option<String>) -> Result<Option<Value>, crate::error::RedisCtlError> {
+    let Some(data_str) = data else {
+        return Ok(None);
+    };
+    if let Some(file_path) = data_str.strip_prefix('@') {
+        let content = std::fs::read_to_string(file_path)
+            .with_context(|| format!("Failed to read file: {}", file_path))?;
+        Ok(Some(serde_json::from_str(&content).with_context(|| {
+            format!("Failed to parse JSON from file: {}", file_path)
+        })?))
+    } else {
+        Ok(Some(
+            serde_json::from_str(&data_str).context("Failed to parse JSON from data parameter")?,
+        ))
+    }
+}
+
+/// Normalize an Enterprise API path with smart v1 prefixing.
+fn normalize_enterprise_path(path: String) -> String {
+    if path.starts_with('/') {
+        if path.starts_with("/v")
+            && path
+                .chars()
+                .nth(2)
+                .map(|c| c.is_ascii_digit())
+                .unwrap_or(false)
+        {
+            path
+        } else if path == "/" {
+            "/v1".to_string()
+        } else {
+            format!("/v1{}", path)
+        }
+    } else if path.starts_with("v")
+        && path
+            .chars()
+            .nth(1)
+            .map(|c| c.is_ascii_digit())
+            .unwrap_or(false)
+    {
+        format!("/{}", path)
+    } else {
+        format!("/v1/{}", path)
     }
 }
