@@ -167,6 +167,10 @@ pub enum Commands {
         /// Request body (JSON string or @file)
         #[arg(long)]
         data: Option<String>,
+
+        /// Print equivalent curl command instead of executing
+        #[arg(long)]
+        curl: bool,
     },
 
     /// Profile management

@@ -473,6 +473,7 @@ async fn execute_command(cli: &Cli, conn_mgr: &ConnectionManager) -> Result<(), 
             method,
             path,
             data,
+            curl,
         } => {
             info!(
                 "API call: {} {} {} (deployment: {:?})",
@@ -485,7 +486,16 @@ async fn execute_command(cli: &Cli, conn_mgr: &ConnectionManager) -> Result<(), 
                 },
                 deployment
             );
-            execute_api_command(cli, conn_mgr, deployment, method, path, data.as_deref()).await
+            execute_api_command(
+                cli,
+                conn_mgr,
+                deployment,
+                method,
+                path,
+                data.as_deref(),
+                *curl,
+            )
+            .await
         }
 
         Commands::Cloud(cloud_cmd) => execute_cloud_command(cli, conn_mgr, cloud_cmd).await,
@@ -1190,6 +1200,7 @@ async fn execute_api_command(
     method: &cli::HttpMethod,
     path: &str,
     data: Option<&str>,
+    curl: bool,
 ) -> Result<(), RedisCtlError> {
     commands::api::handle_api_command(commands::api::ApiCommandParams {
         config: conn_mgr.config.clone(),
@@ -1201,6 +1212,7 @@ async fn execute_api_command(
         data: data.map(|s| s.to_string()),
         query: cli.query.clone(),
         output_format: cli.output,
+        curl,
     })
     .await
 }
