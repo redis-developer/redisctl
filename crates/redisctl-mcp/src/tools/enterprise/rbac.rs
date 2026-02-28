@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -31,9 +31,7 @@ pub struct ListUsersInput {
 pub fn list_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_users")
         .description("List all users in the Redis Enterprise cluster")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListUsersInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListUsersInput>| async move {
@@ -43,10 +41,7 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = UserHandler::new(client);
-                let users = handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list users: {}", e)))?;
+                let users = handler.list().await.tool_context("Failed to list users")?;
 
                 wrap_list("users", &users)
             },
@@ -70,9 +65,7 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
         .description(
             "Get detailed information about a specific user in the Redis Enterprise cluster",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetUserInput>| async move {
@@ -85,7 +78,7 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
                 let user = handler
                     .get(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get user: {}", e)))?;
+                    .tool_context("Failed to get user")?;
 
                 CallToolResult::from_serialize(&user)
             },
@@ -155,7 +148,7 @@ pub fn create_enterprise_user(state: Arc<AppState>) -> Tool {
                 let user = handler
                     .create(request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create user: {}", e)))?;
+                    .tool_context("Failed to create user")?;
 
                 CallToolResult::from_serialize(&user)
             },
@@ -230,7 +223,7 @@ pub fn update_enterprise_user(state: Arc<AppState>) -> Tool {
                 let user = handler
                     .update(input.uid, request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update user: {}", e)))?;
+                    .tool_context("Failed to update user")?;
 
                 CallToolResult::from_serialize(&user)
             },
@@ -255,6 +248,7 @@ pub fn delete_enterprise_user(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a user from the Redis Enterprise cluster. \
              Active sessions using this user will be terminated. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseUserInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -275,7 +269,7 @@ pub fn delete_enterprise_user(state: Arc<AppState>) -> Tool {
                 handler
                     .delete(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete user: {}", e)))?;
+                    .tool_context("Failed to delete user")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "User deleted successfully",
@@ -305,9 +299,7 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
             "List all roles in the Redis Enterprise cluster. Returns role names, \
              permissions (management, data_access), and database-specific role assignments.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListRolesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListRolesInput>| async move {
@@ -317,10 +309,7 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = RolesHandler::new(client);
-                let roles = handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list roles: {}", e)))?;
+                let roles = handler.list().await.tool_context("Failed to list roles")?;
 
                 wrap_list("roles", &roles)
             },
@@ -345,9 +334,7 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific role including permissions \
              and database role assignments.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRoleInput>| async move {
@@ -360,7 +347,7 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
                 let role = handler
                     .get(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get role: {}", e)))?;
+                    .tool_context("Failed to get role")?;
 
                 CallToolResult::from_serialize(&role)
             },
@@ -420,7 +407,7 @@ pub fn create_enterprise_role(state: Arc<AppState>) -> Tool {
                 let role = handler
                     .create(request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create role: {}", e)))?;
+                    .tool_context("Failed to create role")?;
 
                 CallToolResult::from_serialize(&role)
             },
@@ -482,7 +469,7 @@ pub fn update_enterprise_role(state: Arc<AppState>) -> Tool {
                 let role = handler
                     .update(input.uid, request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update role: {}", e)))?;
+                    .tool_context("Failed to update role")?;
 
                 CallToolResult::from_serialize(&role)
             },
@@ -507,6 +494,7 @@ pub fn delete_enterprise_role(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a role from the Redis Enterprise cluster. \
              Users assigned to this role will lose their permissions. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseRoleInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -527,7 +515,7 @@ pub fn delete_enterprise_role(state: Arc<AppState>) -> Tool {
                 handler
                     .delete(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete role: {}", e)))?;
+                    .tool_context("Failed to delete role")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Role deleted successfully",
@@ -557,9 +545,7 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
             "List all Redis ACLs in the Redis Enterprise cluster. Returns ACL names, \
              rules, and associated databases.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListRedisAclsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListRedisAclsInput>| async move {
@@ -569,10 +555,7 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = RedisAclHandler::new(client);
-                let acls = handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list ACLs: {}", e)))?;
+                let acls = handler.list().await.tool_context("Failed to list ACLs")?;
 
                 wrap_list("acls", &acls)
             },
@@ -597,9 +580,7 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific Redis ACL including the ACL rule string \
              and associated databases.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRedisAclInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRedisAclInput>| async move {
@@ -612,7 +593,7 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
                 let acl = handler
                     .get(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get ACL: {}", e)))?;
+                    .tool_context("Failed to get ACL")?;
 
                 CallToolResult::from_serialize(&acl)
             },
@@ -670,7 +651,7 @@ pub fn create_enterprise_acl(state: Arc<AppState>) -> Tool {
                 let acl = handler
                     .create(request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to create ACL: {}", e)))?;
+                    .tool_context("Failed to create ACL")?;
 
                 CallToolResult::from_serialize(&acl)
             },
@@ -729,7 +710,7 @@ pub fn update_enterprise_acl(state: Arc<AppState>) -> Tool {
                 let acl = handler
                     .update(input.uid, request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update ACL: {}", e)))?;
+                    .tool_context("Failed to update ACL")?;
 
                 CallToolResult::from_serialize(&acl)
             },
@@ -754,6 +735,7 @@ pub fn delete_enterprise_acl(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a Redis ACL from the cluster. \
              Databases using this ACL will lose those access controls. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseAclInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -774,7 +756,7 @@ pub fn delete_enterprise_acl(state: Arc<AppState>) -> Tool {
                 handler
                     .delete(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to delete ACL: {}", e)))?;
+                    .tool_context("Failed to delete ACL")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "ACL deleted successfully",
@@ -804,9 +786,7 @@ pub fn get_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
             "Get the LDAP configuration for the Redis Enterprise cluster including \
              server settings, bind DN, and query suffixes.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetLdapConfigInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetLdapConfigInput>| async move {
@@ -819,7 +799,7 @@ pub fn get_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
                 let config = handler
                     .get_config()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get LDAP config: {}", e)))?;
+                    .tool_context("Failed to get LDAP config")?;
 
                 CallToolResult::from_serialize(&config)
             },
@@ -863,48 +843,19 @@ pub fn update_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let config = serde_json::from_value(input.config)
-                    .map_err(|e| ToolError::new(format!("Invalid LDAP config: {}", e)))?;
+                    .tool_context("Invalid LDAP config")?;
 
                 let handler = LdapMappingHandler::new(client);
                 let result = handler
                     .update_config(config)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update LDAP config: {}", e))
-                    })?;
+                    .tool_context("Failed to update LDAP config")?;
 
                 CallToolResult::from_serialize(&result)
             },
         )
         .build()
 }
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Enterprise - Users
-- list_enterprise_users: List cluster users
-- get_enterprise_user: Get user details
-- create_enterprise_user: Create a new user [write]
-- update_enterprise_user: Update user settings [write]
-- delete_enterprise_user: Permanently delete a user [destructive]
-
-### Redis Enterprise - Roles
-- list_enterprise_roles: List all roles in the cluster
-- get_enterprise_role: Get role details and permissions
-- create_enterprise_role: Create a new role [write]
-- update_enterprise_role: Update role settings [write]
-- delete_enterprise_role: Permanently delete a role [destructive]
-
-### Redis Enterprise - ACLs
-- list_enterprise_acls: List all Redis ACLs
-- get_enterprise_acl: Get ACL details and rules
-- create_enterprise_acl: Create a new ACL [write]
-- update_enterprise_acl: Update ACL rules [write]
-- delete_enterprise_acl: Permanently delete an ACL [destructive]
-
-### Redis Enterprise - LDAP
-- get_enterprise_ldap_config: Get LDAP configuration
-- update_enterprise_ldap_config: Update LDAP configuration [write]
-"#;
 
 /// Build an MCP sub-router containing RBAC and LDAP tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

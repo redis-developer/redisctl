@@ -23,7 +23,9 @@ pub fn config_path_resource() -> Resource {
                     mime_type: Some("text/plain".to_string()),
                     text: Some(path),
                     blob: None,
+                    meta: None,
                 }],
+                meta: None,
             })
         })
         .build()
@@ -55,7 +57,9 @@ pub fn profiles_resource() -> Resource {
                     mime_type: Some("application/json".to_string()),
                     text: Some(profiles),
                     blob: None,
+                    meta: None,
                 }],
+                meta: None,
             })
         })
         .build()

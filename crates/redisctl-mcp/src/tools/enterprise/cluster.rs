@@ -10,7 +10,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::Value;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 
@@ -28,9 +28,7 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
         .description(
             "Get Redis Enterprise cluster information including name, version, and configuration",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetClusterInput>| async move {
@@ -43,7 +41,7 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
                 let cluster = handler
                     .info()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get cluster info: {}", e)))?;
+                    .tool_context("Failed to get cluster info")?;
 
                 CallToolResult::from_serialize(&cluster)
             },
@@ -70,9 +68,7 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
             "Get Redis Enterprise cluster license information including type, expiration date, \
              cluster name, owner, and enabled features",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetLicenseInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetLicenseInput>| async move {
@@ -82,10 +78,7 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = LicenseHandler::new(client);
-                let license = handler
-                    .get()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to get license: {}", e)))?;
+                let license = handler.get().await.tool_context("Failed to get license")?;
 
                 CallToolResult::from_serialize(&license)
             },
@@ -108,9 +101,7 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
             "Get Redis Enterprise cluster license utilization statistics including shards, \
              nodes, and RAM usage against license limits",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetLicenseUsageInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -124,7 +115,7 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
                 let usage = handler
                     .usage()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get license usage: {}", e)))?;
+                    .tool_context("Failed to get license usage")?;
 
                 CallToolResult::from_serialize(&usage)
             },
@@ -176,7 +167,7 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
                 let license = handler
                     .update(request)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update license: {}", e)))?;
+                    .tool_context("Failed to update license")?;
 
                 CallToolResult::from_serialize(&license)
             },
@@ -202,9 +193,7 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
              Returns license information if valid, or an error if invalid. \
              This is a dry-run that does not modify the cluster.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ValidateLicenseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -218,7 +207,7 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
                 let license = handler
                     .validate(&input.license_key)
                     .await
-                    .map_err(|e| ToolError::new(format!("License validation failed: {}", e)))?;
+                    .tool_context("License validation failed")?;
 
                 CallToolResult::from_serialize(&license)
             },
@@ -268,7 +257,7 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update(input.updates)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update cluster: {}", e)))?;
+                    .tool_context("Failed to update cluster")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -291,9 +280,7 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
             "Get Redis Enterprise cluster policy settings including default shards placement, \
              rack awareness, default Redis version, and other cluster-wide defaults.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterPolicyInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -307,7 +294,7 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
                 let policy = handler
                     .policy()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get cluster policy: {}", e)))?;
+                    .tool_context("Failed to get cluster policy")?;
 
                 CallToolResult::from_serialize(&policy)
             },
@@ -356,9 +343,7 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .policy_update(input.policy)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update cluster policy: {}", e))
-                    })?;
+                    .tool_context("Failed to update cluster policy")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -408,9 +393,7 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update(serde_json::json!({"block_cluster_changes": true}))
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to enable maintenance mode: {}", e))
-                    })?;
+                    .tool_context("Failed to enable maintenance mode")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Maintenance mode enabled",
@@ -459,9 +442,7 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update(serde_json::json!({"block_cluster_changes": false}))
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to disable maintenance mode: {}", e))
-                    })?;
+                    .tool_context("Failed to disable maintenance mode")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Maintenance mode disabled",
@@ -491,9 +472,7 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
             "Get all certificates configured on the Redis Enterprise cluster including \
              proxy certificates, syncer certificates, and API certificates.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterCertificatesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -507,7 +486,7 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
                 let certificates = handler
                     .certificates()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get certificates: {}", e)))?;
+                    .tool_context("Failed to get certificates")?;
 
                 CallToolResult::from_serialize(&certificates)
             },
@@ -552,7 +531,7 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .certificates_rotate()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to rotate certificates: {}", e)))?;
+                    .tool_context("Failed to rotate certificates")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Certificate rotation initiated",
@@ -611,7 +590,7 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_cert(body)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to update certificate: {}", e)))?;
+                    .tool_context("Failed to update certificate")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Certificate updated successfully",
@@ -639,9 +618,7 @@ pub struct ListNodesInput {
 pub fn list_nodes(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_nodes")
         .description("List all nodes in the Redis Enterprise cluster")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListNodesInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListNodesInput>| async move {
@@ -651,10 +628,7 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
                     .map_err(|e| crate::tools::credential_error("enterprise", e))?;
 
                 let handler = NodeHandler::new(client);
-                let nodes = handler
-                    .list()
-                    .await
-                    .map_err(|e| ToolError::new(format!("Failed to list nodes: {}", e)))?;
+                let nodes = handler.list().await.tool_context("Failed to list nodes")?;
 
                 crate::tools::wrap_list("nodes", &nodes)
             },
@@ -678,9 +652,7 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
         .description(
             "Get detailed information about a specific node in the Redis Enterprise cluster",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetNodeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeInput>| async move {
@@ -693,7 +665,7 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
                 let node = handler
                     .get(input.uid)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get node: {}", e)))?;
+                    .tool_context("Failed to get node")?;
 
                 CallToolResult::from_serialize(&node)
             },
@@ -727,9 +699,7 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
             "Get statistics for a specific node. By default returns the latest stats. \
              Optionally specify interval and time range for historical data.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetNodeStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeStatsInput>| async move {
@@ -753,13 +723,13 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
                     let stats = handler
                         .node(input.uid, Some(query))
                         .await
-                        .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
+                        .tool_context("Failed to get node stats")?;
                     CallToolResult::from_serialize(&stats)
                 } else {
                     let stats = handler
                         .node_last(input.uid)
                         .await
-                        .map_err(|e| ToolError::new(format!("Failed to get node stats: {}", e)))?;
+                        .tool_context("Failed to get node stats")?;
                     CallToolResult::from_serialize(&stats)
                 }
             },
@@ -809,9 +779,7 @@ pub fn enable_node_maintenance(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .execute_action(input.uid, "maintenance_on")
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to enable node maintenance: {}", e))
-                    })?;
+                    .tool_context("Failed to enable node maintenance")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Node maintenance mode enabled",
@@ -852,9 +820,7 @@ pub fn disable_node_maintenance(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .execute_action(input.uid, "maintenance_off")
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to disable node maintenance: {}", e))
-                    })?;
+                    .tool_context("Failed to disable node maintenance")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Node maintenance mode disabled",
@@ -895,7 +861,7 @@ pub fn rebalance_node(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .execute_action(input.uid, "rebalance")
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to rebalance node: {}", e)))?;
+                    .tool_context("Failed to rebalance node")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Node rebalance initiated",
@@ -936,7 +902,7 @@ pub fn drain_node(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .execute_action(input.uid, "drain")
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to drain node: {}", e)))?;
+                    .tool_context("Failed to drain node")?;
 
                 CallToolResult::from_serialize(&serde_json::json!({
                     "message": "Node drain initiated",
@@ -973,9 +939,7 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
             "Get statistics for the Redis Enterprise cluster. By default returns the latest \
              stats. Optionally specify interval and time range for historical data.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterStatsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1001,52 +965,19 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
                     let stats = handler
                         .cluster(Some(query))
                         .await
-                        .map_err(|e| {
-                            ToolError::new(format!("Failed to get cluster stats: {}", e))
-                        })?;
+                        .tool_context("Failed to get cluster stats")?;
                     CallToolResult::from_serialize(&stats)
                 } else {
                     let stats = handler
                         .cluster_last()
                         .await
-                        .map_err(|e| {
-                            ToolError::new(format!("Failed to get cluster stats: {}", e))
-                        })?;
+                        .tool_context("Failed to get cluster stats")?;
                     CallToolResult::from_serialize(&stats)
                 }
             },
         )
         .build()
 }
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Enterprise - Cluster
-- get_cluster: Get cluster information
-- get_cluster_stats: Get cluster statistics
-- get_enterprise_cluster_policy: Get cluster policy settings
-- get_enterprise_cluster_certificates: Get cluster certificates
-- update_enterprise_cluster: Update cluster configuration [write]
-- update_enterprise_cluster_policy: Update cluster policy [write]
-- enable_enterprise_maintenance_mode: Enable maintenance mode [write]
-- disable_enterprise_maintenance_mode: Disable maintenance mode [write]
-- rotate_enterprise_cluster_certificates: Rotate all certificates [write]
-- update_enterprise_cluster_certificates: Update a specific certificate [write]
-
-### Redis Enterprise - License
-- get_license: Get license information (type, expiration, features)
-- get_license_usage: Get license utilization (shards, nodes, RAM vs limits)
-- validate_enterprise_license: Validate a license key before applying
-- update_enterprise_license: Update cluster license with a new key [write]
-
-### Redis Enterprise - Nodes
-- list_nodes: List cluster nodes
-- get_node: Get node details
-- get_node_stats: Get node statistics
-- enable_enterprise_node_maintenance: Enable maintenance on a node [write]
-- disable_enterprise_node_maintenance: Disable maintenance on a node [write]
-- rebalance_enterprise_node: Rebalance shards on a node [write]
-- drain_enterprise_node: Drain all shards from a node [write]
-"#;
 
 /// Build an MCP sub-router containing cluster, license, and node tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

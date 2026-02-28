@@ -13,7 +13,7 @@ use redis_cloud::fixed::subscriptions::{
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 
@@ -35,9 +35,7 @@ pub fn list_fixed_subscriptions(state: Arc<AppState>) -> Tool {
         .description(
             "List all Redis Cloud Fixed/Essentials subscriptions in the current account.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListFixedSubscriptionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -51,7 +49,7 @@ pub fn list_fixed_subscriptions(state: Arc<AppState>) -> Tool {
                 let subscriptions = handler
                     .list()
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to list fixed subscriptions: {}", e)))?;
+                    .tool_context("Failed to list fixed subscriptions")?;
 
                 CallToolResult::from_serialize(&subscriptions)
             },
@@ -75,9 +73,7 @@ pub fn get_fixed_subscription(state: Arc<AppState>) -> Tool {
         .description(
             "Get detailed information about a specific Redis Cloud Fixed/Essentials subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -91,9 +87,7 @@ pub fn get_fixed_subscription(state: Arc<AppState>) -> Tool {
                 let subscription = handler
                     .get_by_id(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed subscription: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed subscription")?;
 
                 CallToolResult::from_serialize(&subscription)
             },
@@ -151,9 +145,10 @@ pub fn create_fixed_subscription(state: Arc<AppState>) -> Tool {
                 };
 
                 let handler = FixedSubscriptionHandler::new(client);
-                let result = handler.create(&request).await.map_err(|e| {
-                    ToolError::new(format!("Failed to create fixed subscription: {}", e))
-                })?;
+                let result = handler
+                    .create(&request)
+                    .await
+                    .tool_context("Failed to create fixed subscription")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -219,9 +214,7 @@ pub fn update_fixed_subscription(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update fixed subscription: {}", e))
-                    })?;
+                    .tool_context("Failed to update fixed subscription")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -247,6 +240,7 @@ pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
              All databases must be deleted first. This action cannot be undone. \
              Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteFixedSubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -266,9 +260,7 @@ pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_by_id(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete fixed subscription: {}", e))
-                    })?;
+                    .tool_context("Failed to delete fixed subscription")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -297,9 +289,7 @@ pub fn list_fixed_plans(state: Arc<AppState>) -> Tool {
             "List available Redis Cloud Fixed/Essentials plans. \
              Plans describe dataset size, cloud provider, region, and pricing.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListFixedPlansInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -313,9 +303,7 @@ pub fn list_fixed_plans(state: Arc<AppState>) -> Tool {
                 let plans = handler
                     .list_plans(input.provider, input.redis_flex)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to list fixed plans: {}", e))
-                    })?;
+                    .tool_context("Failed to list fixed plans")?;
 
                 CallToolResult::from_serialize(&plans)
             },
@@ -340,9 +328,7 @@ pub fn get_fixed_plans_by_subscription(state: Arc<AppState>) -> Tool {
             "Get compatible Fixed/Essentials plans for a specific subscription. \
              Useful when upgrading or changing a subscription's plan.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedPlansBySubscriptionInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -356,9 +342,7 @@ pub fn get_fixed_plans_by_subscription(state: Arc<AppState>) -> Tool {
                 let plans = handler
                     .get_plans_by_subscription_id(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed plans by subscription: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed plans by subscription")?;
 
                 CallToolResult::from_serialize(&plans)
             },
@@ -383,9 +367,7 @@ pub fn get_fixed_plan(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific Fixed/Essentials plan \
              including pricing, capacity, and feature support.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedPlanInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetFixedPlanInput>| async move {
@@ -398,7 +380,7 @@ pub fn get_fixed_plan(state: Arc<AppState>) -> Tool {
                 let plan = handler
                     .get_plan_by_id(input.plan_id)
                     .await
-                    .map_err(|e| ToolError::new(format!("Failed to get fixed plan: {}", e)))?;
+                    .tool_context("Failed to get fixed plan")?;
 
                 CallToolResult::from_serialize(&plan)
             },
@@ -422,9 +404,7 @@ pub fn get_fixed_redis_versions(state: Arc<AppState>) -> Tool {
         .description(
             "Get available Redis database versions for a specific Fixed/Essentials subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedRedisVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -438,9 +418,7 @@ pub fn get_fixed_redis_versions(state: Arc<AppState>) -> Tool {
                 let versions = handler
                     .get_redis_versions(input.subscription_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed Redis versions: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed Redis versions")?;
 
                 CallToolResult::from_serialize(&versions)
             },
@@ -474,9 +452,7 @@ pub fn list_fixed_databases(state: Arc<AppState>) -> Tool {
         .description(
             "List all databases in a Redis Cloud Fixed/Essentials subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListFixedDatabasesInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -490,9 +466,7 @@ pub fn list_fixed_databases(state: Arc<AppState>) -> Tool {
                 let databases = handler
                     .list(input.subscription_id, input.offset, input.limit)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to list fixed databases: {}", e))
-                    })?;
+                    .tool_context("Failed to list fixed databases")?;
 
                 CallToolResult::from_serialize(&databases)
             },
@@ -519,9 +493,7 @@ pub fn get_fixed_database(state: Arc<AppState>) -> Tool {
             "Get detailed information about a specific database in a \
              Redis Cloud Fixed/Essentials subscription.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -535,9 +507,7 @@ pub fn get_fixed_database(state: Arc<AppState>) -> Tool {
                 let database = handler
                     .get_by_id(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed database: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed database")?;
 
                 CallToolResult::from_serialize(&database)
             },
@@ -646,9 +616,7 @@ pub fn create_fixed_database(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .create(input.subscription_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create fixed database: {}", e))
-                    })?;
+                    .tool_context("Failed to create fixed database")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -747,9 +715,7 @@ pub fn update_fixed_database(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update fixed database: {}", e))
-                    })?;
+                    .tool_context("Failed to update fixed database")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -776,6 +742,7 @@ pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a Fixed/Essentials database and all its data. \
              This action cannot be undone. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -795,9 +762,7 @@ pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_by_id(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete fixed database: {}", e))
-                    })?;
+                    .tool_context("Failed to delete fixed database")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -825,9 +790,7 @@ pub struct GetFixedDatabaseBackupStatusInput {
 pub fn get_fixed_database_backup_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_backup_status")
         .description("Get the latest backup status for a Fixed/Essentials database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseBackupStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -841,9 +804,7 @@ pub fn get_fixed_database_backup_status(state: Arc<AppState>) -> Tool {
                 let status = handler
                     .get_backup_status(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed database backup status: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed database backup status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -900,9 +861,7 @@ pub fn backup_fixed_database(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .backup(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to backup fixed database: {}", e))
-                    })?;
+                    .tool_context("Failed to backup fixed database")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -926,9 +885,7 @@ pub struct GetFixedDatabaseImportStatusInput {
 pub fn get_fixed_database_import_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_import_status")
         .description("Get the latest import status for a Fixed/Essentials database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseImportStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -942,9 +899,7 @@ pub fn get_fixed_database_import_status(state: Arc<AppState>) -> Tool {
                 let status = handler
                     .get_import_status(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed database import status: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed database import status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -1003,9 +958,7 @@ pub fn import_fixed_database(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .import(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to import fixed database: {}", e))
-                    })?;
+                    .tool_context("Failed to import fixed database")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1032,9 +985,7 @@ pub fn get_fixed_database_slow_log(state: Arc<AppState>) -> Tool {
             "Get slow log entries for a Fixed/Essentials database. \
              Shows slow queries for debugging performance issues.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseSlowLogInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1048,9 +999,7 @@ pub fn get_fixed_database_slow_log(state: Arc<AppState>) -> Tool {
                 let log = handler
                     .get_slow_log(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed database slow log: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed database slow log")?;
 
                 CallToolResult::from_serialize(&log)
             },
@@ -1078,9 +1027,7 @@ pub struct GetFixedDatabaseTagsInput {
 pub fn get_fixed_database_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_tags")
         .description("Get tags attached to a Fixed/Essentials database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseTagsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1094,9 +1041,7 @@ pub fn get_fixed_database_tags(state: Arc<AppState>) -> Tool {
                 let tags = handler
                     .get_tags(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to get fixed database tags: {}", e))
-                    })?;
+                    .tool_context("Failed to get fixed database tags")?;
 
                 CallToolResult::from_serialize(&tags)
             },
@@ -1155,9 +1100,7 @@ pub fn create_fixed_database_tag(state: Arc<AppState>) -> Tool {
                 let tag = handler
                     .create_tag(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to create fixed database tag: {}", e))
-                    })?;
+                    .tool_context("Failed to create fixed database tag")?;
 
                 CallToolResult::from_serialize(&tag)
             },
@@ -1221,9 +1164,7 @@ pub fn update_fixed_database_tag(state: Arc<AppState>) -> Tool {
                         &request,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update fixed database tag: {}", e))
-                    })?;
+                    .tool_context("Failed to update fixed database tag")?;
 
                 CallToolResult::from_serialize(&tag)
             },
@@ -1252,6 +1193,7 @@ pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes a tag from a Fixed/Essentials database. \
              This action cannot be undone. Requires write permission.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseTagInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1271,9 +1213,7 @@ pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .delete_tag(input.subscription_id, input.database_id, input.tag_key)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to delete fixed database tag: {}", e))
-                    })?;
+                    .tool_context("Failed to delete fixed database tag")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1348,9 +1288,7 @@ pub fn update_fixed_database_tags(state: Arc<AppState>) -> Tool {
                 let result = handler
                     .update_tags(input.subscription_id, input.database_id, &request)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!("Failed to update fixed database tags: {}", e))
-                    })?;
+                    .tool_context("Failed to update fixed database tags")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1380,9 +1318,7 @@ pub fn get_fixed_database_upgrade_versions(state: Arc<AppState>) -> Tool {
         .description(
             "Get available target Redis versions that a Fixed/Essentials database can be upgraded to.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeVersionsInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1396,12 +1332,7 @@ pub fn get_fixed_database_upgrade_versions(state: Arc<AppState>) -> Tool {
                 let versions = handler
                     .get_available_target_versions(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to get fixed database upgrade versions: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to get fixed database upgrade versions")?;
 
                 CallToolResult::from_serialize(&versions)
             },
@@ -1425,9 +1356,7 @@ pub struct GetFixedDatabaseUpgradeStatusInput {
 pub fn get_fixed_database_upgrade_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_upgrade_status")
         .description("Get the latest Redis version upgrade status for a Fixed/Essentials database.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeStatusInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -1441,12 +1370,7 @@ pub fn get_fixed_database_upgrade_status(state: Arc<AppState>) -> Tool {
                 let status = handler
                     .get_upgrade_status(input.subscription_id, input.database_id)
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to get fixed database upgrade status: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to get fixed database upgrade status")?;
 
                 CallToolResult::from_serialize(&status)
             },
@@ -1499,12 +1423,7 @@ pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
                         &input.target_version,
                     )
                     .await
-                    .map_err(|e| {
-                        ToolError::new(format!(
-                            "Failed to upgrade fixed database Redis version: {}",
-                            e
-                        ))
-                    })?;
+                    .tool_context("Failed to upgrade fixed database Redis version")?;
 
                 CallToolResult::from_serialize(&result)
             },
@@ -1515,41 +1434,6 @@ pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
 // ============================================================================
 // Instructions & Router
 // ============================================================================
-
-pub(super) const INSTRUCTIONS: &str = r#"
-### Redis Cloud - Fixed/Essentials Subscription Tools
-- list_fixed_subscriptions: List all Fixed/Essentials subscriptions
-- get_fixed_subscription: Get Fixed/Essentials subscription details
-- list_fixed_plans: List available Fixed/Essentials plans (filter by provider, Redis Flex)
-- get_fixed_plans_by_subscription: Get compatible plans for a subscription
-- get_fixed_plan: Get details of a specific plan
-- get_fixed_redis_versions: Get available Redis versions for a Fixed/Essentials subscription
-
-### Redis Cloud - Fixed/Essentials Database Tools
-- list_fixed_databases: List databases in a Fixed/Essentials subscription
-- get_fixed_database: Get Fixed/Essentials database details
-- get_fixed_database_backup_status: Get backup status for a Fixed/Essentials database
-- get_fixed_database_import_status: Get import status for a Fixed/Essentials database
-- get_fixed_database_slow_log: Get slow log entries for a Fixed/Essentials database
-- get_fixed_database_tags: Get tags for a Fixed/Essentials database
-- get_fixed_database_upgrade_versions: Get available Redis upgrade versions
-- get_fixed_database_upgrade_status: Get Redis version upgrade status
-
-### Redis Cloud - Fixed/Essentials Write Operations
-- create_fixed_subscription: Create a new Fixed/Essentials subscription [write]
-- update_fixed_subscription: Update a Fixed/Essentials subscription [write]
-- create_fixed_database: Create a new Fixed/Essentials database [write]
-- update_fixed_database: Update a Fixed/Essentials database [write]
-- backup_fixed_database: Trigger a manual backup [write]
-- import_fixed_database: Import data into a Fixed/Essentials database [write]
-- create_fixed_database_tag: Create a tag on a Fixed/Essentials database [write]
-- update_fixed_database_tag: Update a tag on a Fixed/Essentials database [write]
-- update_fixed_database_tags: Update all tags on a Fixed/Essentials database [write]
-- upgrade_fixed_database_redis_version: Upgrade the Redis version [write]
-- delete_fixed_subscription: Permanently delete a Fixed/Essentials subscription [destructive]
-- delete_fixed_database: Permanently delete a Fixed/Essentials database [destructive]
-- delete_fixed_database_tag: Delete a tag from a Fixed/Essentials database [destructive]
-"#;
 
 /// Build an MCP sub-router containing all Fixed/Essentials tools
 pub fn router(state: Arc<AppState>) -> McpRouter {

@@ -6,28 +6,9 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, Tool, ToolBuilder, ToolError};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
-
-pub(super) const INSTRUCTIONS: &str = "\
-### Redis Database - Keys\n\
-- redis_keys: List keys matching pattern (SCAN)\n\
-- redis_scan: Scan keys with type filter (string, list, set, zset, hash, stream)\n\
-- redis_get: Get string value\n\
-- redis_type: Get key type\n\
-- redis_ttl: Get key TTL\n\
-- redis_exists: Check key existence\n\
-- redis_memory_usage: Get key memory usage\n\
-- redis_object_encoding: Get key internal encoding\n\
-- redis_object_freq: Get LFU access frequency counter\n\
-- redis_object_idletime: Get key idle time in seconds\n\
-- redis_object_help: Get available OBJECT subcommands\n\
-- redis_set: Set key to string value with optional expiry and conditional flags [write]\n\
-- redis_expire: Set TTL on a key in seconds [write]\n\
-- redis_rename: Rename a key [write]\n\
-- redis_del: Permanently delete one or more keys [destructive]\n\
-";
 
 /// Build a sub-router containing all key-level Redis tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
@@ -81,21 +62,18 @@ pub fn keys(state: Arc<AppState>) -> Tool {
             "List keys matching a pattern using SCAN (production-safe, non-blocking). \
              Returns up to 'limit' keys.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, KeysInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeysInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 // Use SCAN to safely iterate keys
                 let mut cursor: u64 = 0;
@@ -110,7 +88,7 @@ pub fn keys(state: Arc<AppState>) -> Tool {
                         .arg(100)
                         .query_async(&mut conn)
                         .await
-                        .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+                        .tool_context("SCAN failed")?;
 
                     all_keys.extend(keys);
                     cursor = new_cursor;
@@ -157,27 +135,24 @@ pub struct GetInput {
 pub fn get(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_get")
         .description("Get the value of a key from Redis")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let value: Option<String> = redis::cmd("GET")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("GET failed: {}", e)))?;
+                    .tool_context("GET failed")?;
 
                 match value {
                     Some(v) => Ok(CallToolResult::text(v)),
@@ -208,27 +183,24 @@ pub struct TypeInput {
 pub fn key_type(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_type")
         .description("Get the type of a key (string, list, set, zset, hash, stream)")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, TypeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TypeInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let key_type: String = redis::cmd("TYPE")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("TYPE failed: {}", e)))?;
+                    .tool_context("TYPE failed")?;
 
                 Ok(CallToolResult::text(format!("{}: {}", input.key, key_type)))
             },
@@ -253,27 +225,25 @@ pub struct TtlInput {
 pub fn ttl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_ttl")
         .description("Get the time-to-live (TTL) of a key in seconds. Returns -1 if no expiry, -2 if key doesn't exist.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, TtlInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                    .tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let ttl: i64 = redis::cmd("TTL")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("TTL failed: {}", e)))?;
+                    .tool_context("TTL failed")?;
 
                 let message = match ttl {
                     -2 => format!("{}: key does not exist", input.key),
@@ -304,21 +274,18 @@ pub struct ExistsInput {
 pub fn exists(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_exists")
         .description("Check if one or more keys exist. Returns the count of keys that exist.")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ExistsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ExistsInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let mut cmd = redis::cmd("EXISTS");
                 for key in &input.keys {
@@ -328,7 +295,7 @@ pub fn exists(state: Arc<AppState>) -> Tool {
                 let count: i64 = cmd
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("EXISTS failed: {}", e)))?;
+                    .tool_context("EXISTS failed")?;
 
                 Ok(CallToolResult::text(format!(
                     "{} of {} key(s) exist",
@@ -357,28 +324,25 @@ pub struct MemoryUsageInput {
 pub fn memory_usage(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_memory_usage")
         .description("Get the memory usage of a key in bytes")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, MemoryUsageInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryUsageInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let bytes: Option<i64> = redis::cmd("MEMORY")
                     .arg("USAGE")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("MEMORY USAGE failed: {}", e)))?;
+                    .tool_context("MEMORY USAGE failed")?;
 
                 match bytes {
                     Some(b) => Ok(CallToolResult::text(format!("{}: {} bytes", input.key, b))),
@@ -419,21 +383,18 @@ pub fn scan(state: Arc<AppState>) -> Tool {
             "Scan keys with optional type filter. More efficient than redis_keys when filtering \
              by type (string, list, set, zset, hash, stream).",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ScanInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ScanInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let mut cursor: u64 = 0;
                 let mut all_keys: Vec<String> = Vec::new();
@@ -451,10 +412,10 @@ pub fn scan(state: Arc<AppState>) -> Tool {
                         cmd.arg("TYPE").arg(key_type);
                     }
 
-                    let (new_cursor, keys): (u64, Vec<String>) =
-                        cmd.query_async(&mut conn)
-                            .await
-                            .map_err(|e| ToolError::new(format!("SCAN failed: {}", e)))?;
+                    let (new_cursor, keys): (u64, Vec<String>) = cmd
+                        .query_async(&mut conn)
+                        .await
+                        .tool_context("SCAN failed")?;
 
                     all_keys.extend(keys);
                     cursor = new_cursor;
@@ -513,9 +474,7 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
             "Get the internal encoding of a key (e.g., embstr, int, raw, quicklist, listpack, \
              hashtable, intset, skiplist). Useful for understanding memory usage patterns.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectEncodingInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -523,19 +482,19 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                    .tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let encoding: Option<String> = redis::cmd("OBJECT")
                     .arg("ENCODING")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("OBJECT ENCODING failed: {}", e)))?;
+                    .tool_context("OBJECT ENCODING failed")?;
 
                 match encoding {
                     Some(enc) => Ok(CallToolResult::text(format!("{}: {}", input.key, enc))),
@@ -569,28 +528,25 @@ pub fn object_freq(state: Arc<AppState>) -> Tool {
             "Get the LFU access frequency counter for a key using OBJECT FREQ. \
              Only works when maxmemory-policy is set to allkeys-lfu or volatile-lfu.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectFreqInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectFreqInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let freq: i64 = redis::cmd("OBJECT")
                     .arg("FREQ")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("OBJECT FREQ failed: {}", e)))?;
+                    .tool_context("OBJECT FREQ failed")?;
 
                 Ok(CallToolResult::text(format!(
                     "{}: LFU frequency counter = {}",
@@ -621,9 +577,7 @@ pub fn object_idletime(state: Arc<AppState>) -> Tool {
             "Get the idle time of a key in seconds using OBJECT IDLETIME. \
              Shows how long since the key was last accessed.",
         )
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectIdletimeInput>(
             state,
             |State(state): State<Arc<AppState>>,
@@ -631,19 +585,19 @@ pub fn object_idletime(state: Arc<AppState>) -> Tool {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
                 let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                    .tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let idle: i64 = redis::cmd("OBJECT")
                     .arg("IDLETIME")
                     .arg(&input.key)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("OBJECT IDLETIME failed: {}", e)))?;
+                    .tool_context("OBJECT IDLETIME failed")?;
 
                 Ok(CallToolResult::text(format!(
                     "{}: idle for {} seconds",
@@ -669,27 +623,24 @@ pub struct ObjectHelpInput {
 pub fn object_help(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_help")
         .description("Get available OBJECT subcommands using OBJECT HELP")
-        .read_only()
-        .idempotent()
-        .non_destructive()
+        .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectHelpInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectHelpInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let result: Vec<String> = redis::cmd("OBJECT")
                     .arg("HELP")
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("OBJECT HELP failed: {}", e)))?;
+                    .tool_context("OBJECT HELP failed")?;
 
                 Ok(CallToolResult::text(format!(
                     "OBJECT subcommands:\n{}",
@@ -749,13 +700,12 @@ pub fn set(state: Arc<AppState>) -> Tool {
 
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let mut cmd = redis::cmd("SET");
                 cmd.arg(&input.key).arg(&input.value);
@@ -776,7 +726,7 @@ pub fn set(state: Arc<AppState>) -> Tool {
                 let result: Option<String> = cmd
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("SET failed: {}", e)))?;
+                    .tool_context("SET failed")?;
 
                 match result {
                     Some(_) => Ok(CallToolResult::text(format!(
@@ -818,6 +768,7 @@ pub fn del(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Permanently deletes one or more keys and their data. \
              This action cannot be undone. Returns the number of keys removed.",
         )
+        .destructive()
         .extractor_handler_typed::<_, _, _, DelInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DelInput>| async move {
@@ -829,13 +780,12 @@ pub fn del(state: Arc<AppState>) -> Tool {
 
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let mut cmd = redis::cmd("DEL");
                 for key in &input.keys {
@@ -845,7 +795,7 @@ pub fn del(state: Arc<AppState>) -> Tool {
                 let count: i64 = cmd
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("DEL failed: {}", e)))?;
+                    .tool_context("DEL failed")?;
 
                 Ok(CallToolResult::text(format!(
                     "Deleted {} of {} key(s)",
@@ -891,20 +841,19 @@ pub fn expire(state: Arc<AppState>) -> Tool {
 
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let result: bool = redis::cmd("EXPIRE")
                     .arg(&input.key)
                     .arg(input.seconds)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("EXPIRE failed: {}", e)))?;
+                    .tool_context("EXPIRE failed")?;
 
                 if result {
                     Ok(CallToolResult::text(format!(
@@ -956,20 +905,19 @@ pub fn rename(state: Arc<AppState>) -> Tool {
 
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| ToolError::new(format!("Invalid URL: {}", e)))?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
                     .await
-                    .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))?;
+                    .tool_context("Connection failed")?;
 
                 let _: () = redis::cmd("RENAME")
                     .arg(&input.key)
                     .arg(&input.newkey)
                     .query_async(&mut conn)
                     .await
-                    .map_err(|e| ToolError::new(format!("RENAME failed: {}", e)))?;
+                    .tool_context("RENAME failed")?;
 
                 Ok(CallToolResult::text(format!(
                     "OK - renamed '{}' to '{}'",

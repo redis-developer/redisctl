@@ -58,8 +58,11 @@ Based on the results and the reported symptoms, identify the root cause and sugg
                     content: Content::Text {
                         text: prompt_text,
                         annotations: None,
+                        meta: None,
                     },
+                    meta: None,
                 }],
+                meta: None,
             })
         })
         .build()
@@ -116,8 +119,11 @@ Provide actionable recommendations with expected impact."#,
                     content: Content::Text {
                         text: prompt_text,
                         annotations: None,
+                        meta: None,
                     },
+                    meta: None,
                 }],
+                meta: None,
             })
         })
         .build()
@@ -172,8 +178,11 @@ Please help me by:
                     content: Content::Text {
                         text: prompt_text,
                         annotations: None,
+                        meta: None,
                     },
+                    meta: None,
                 }],
+                meta: None,
             })
         })
         .build()
@@ -227,8 +236,11 @@ Please help me create a migration plan by:
                     content: Content::Text {
                         text: prompt_text,
                         annotations: None,
+                        meta: None,
                     },
+                    meta: None,
                 }],
+                meta: None,
             })
         })
         .build()
