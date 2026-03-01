@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::{CommandFactory, Parser};
 use clap_complete::{generate, shells};
 use redisctl_core::{Config, ConfigError, DeploymentType};
@@ -351,6 +351,22 @@ fn maybe_inject_prefix(args: Vec<String>) -> Vec<String> {
     }
 }
 
+/// Resolve `@file` references in the `--query` flag.
+///
+/// If the query starts with `@`, treat the remainder as a file path and read
+/// its contents (trimming leading/trailing whitespace). Otherwise, pass through.
+fn resolve_query(query: Option<String>) -> Result<Option<String>> {
+    match query {
+        Some(q) if q.starts_with('@') => {
+            let path = &q[1..];
+            let contents = std::fs::read_to_string(path)
+                .with_context(|| format!("Failed to read query file: {path}"))?;
+            Ok(Some(contents.trim().to_string()))
+        }
+        other => Ok(other),
+    }
+}
+
 /// Try to load config for the prefix-inference layer. Returns None on any error.
 fn load_config_for_prefix(config_file: Option<&str>) -> Option<Config> {
     if let Some(path) = config_file {
@@ -364,7 +380,8 @@ fn load_config_for_prefix(config_file: Option<&str>) -> Option<Config> {
 async fn main() -> Result<()> {
     let args: Vec<String> = std::env::args().collect();
     let args = maybe_inject_prefix(args);
-    let cli = Cli::parse_from(args);
+    let mut cli = Cli::parse_from(args);
+    cli.query = resolve_query(cli.query)?;
 
     // Initialize tracing based on verbosity level
     init_tracing(cli.verbose);
@@ -1586,5 +1603,58 @@ mod tests {
     fn unknown_command_passthrough() {
         let input = args("redisctl foobar baz");
         assert_eq!(maybe_inject_prefix(input.clone()), input);
+    }
+
+    // --- resolve_query tests ---
+
+    #[test]
+    fn resolve_query_none_passthrough() {
+        assert_eq!(resolve_query(None).unwrap(), None);
+    }
+
+    #[test]
+    fn resolve_query_inline_passthrough() {
+        let q = Some("databases[?status==`active`]".to_string());
+        assert_eq!(
+            resolve_query(q).unwrap().as_deref(),
+            Some("databases[?status==`active`]")
+        );
+    }
+
+    #[test]
+    fn resolve_query_reads_file() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("query.jmespath");
+        std::fs::write(&path, "databases[?status==`active`]").unwrap();
+
+        let q = Some(format!("@{}", path.display()));
+        assert_eq!(
+            resolve_query(q).unwrap().as_deref(),
+            Some("databases[?status==`active`]")
+        );
+    }
+
+    #[test]
+    fn resolve_query_trims_whitespace() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("query.jmespath");
+        std::fs::write(&path, "  databases[?status==`active`]  \n").unwrap();
+
+        let q = Some(format!("@{}", path.display()));
+        assert_eq!(
+            resolve_query(q).unwrap().as_deref(),
+            Some("databases[?status==`active`]")
+        );
+    }
+
+    #[test]
+    fn resolve_query_file_not_found() {
+        let q = Some("@nonexistent/path/query.jmespath".to_string());
+        let err = resolve_query(q).unwrap_err();
+        assert!(
+            err.to_string()
+                .contains("Failed to read query file: nonexistent/path/query.jmespath"),
+            "unexpected error: {err}"
+        );
     }
 }
