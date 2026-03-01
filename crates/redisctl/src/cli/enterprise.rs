@@ -342,6 +342,9 @@ pub enum EnterpriseClusterCommands {
         /// Bootstrap configuration (JSON file or inline, overridden by other flags)
         #[arg(long, value_name = "FILE|JSON")]
         data: Option<String>,
+        /// Dry run - show bootstrap config without applying
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Join node to cluster
@@ -698,6 +701,10 @@ NOTE: First-class parameters override values in --data when both are provided.")
         /// Advanced: Full update configuration as JSON string or @file.json
         #[arg(long)]
         data: Option<String>,
+
+        /// Dry run - show what would be changed without applying
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Delete a database
@@ -707,6 +714,9 @@ NOTE: First-class parameters override values in --data when both are provided.")
         /// Skip confirmation prompt
         #[arg(long)]
         force: bool,
+        /// Dry run - show what would be deleted without deleting
+        #[arg(long)]
+        dry_run: bool,
     },
 
     /// Watch database status changes in real-time

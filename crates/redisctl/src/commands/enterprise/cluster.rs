@@ -81,6 +81,7 @@ pub async fn handle_cluster_command(
             username,
             password,
             data,
+            dry_run,
         } => {
             cluster_impl::bootstrap_cluster(
                 conn_mgr,
@@ -89,6 +90,7 @@ pub async fn handle_cluster_command(
                 username.as_deref(),
                 password.as_deref(),
                 data.as_deref(),
+                *dry_run,
                 output_format,
                 query,
             )

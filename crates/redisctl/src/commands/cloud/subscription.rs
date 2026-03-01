@@ -83,6 +83,7 @@ pub async fn handle_subscription_command(
             payment_method,
             payment_method_id,
             data,
+            dry_run,
             async_ops,
         } => {
             subscription_impl::update_subscription(
@@ -93,6 +94,7 @@ pub async fn handle_subscription_command(
                 payment_method.as_deref(),
                 *payment_method_id,
                 data.as_deref(),
+                *dry_run,
                 async_ops,
                 output_format,
                 query,
@@ -102,6 +104,7 @@ pub async fn handle_subscription_command(
         CloudSubscriptionCommands::Delete {
             id,
             force,
+            dry_run,
             async_ops,
         } => {
             subscription_impl::delete_subscription(
@@ -109,6 +112,7 @@ pub async fn handle_subscription_command(
                 profile_name,
                 *id,
                 *force,
+                *dry_run,
                 async_ops,
                 output_format,
                 query,

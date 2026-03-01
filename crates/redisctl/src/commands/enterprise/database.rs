@@ -72,6 +72,7 @@ pub async fn handle_database_command(
             proxy_policy,
             redis_password,
             data,
+            dry_run,
         } => {
             database_impl::update_database(
                 conn_mgr,
@@ -86,17 +87,19 @@ pub async fn handle_database_command(
                 proxy_policy.as_deref(),
                 redis_password.as_deref(),
                 data.as_deref(),
+                *dry_run,
                 output_format,
                 query,
             )
             .await
         }
-        EnterpriseDatabaseCommands::Delete { id, force } => {
+        EnterpriseDatabaseCommands::Delete { id, force, dry_run } => {
             database_impl::delete_database(
                 conn_mgr,
                 profile_name,
                 *id,
                 *force,
+                *dry_run,
                 output_format,
                 query,
             )
