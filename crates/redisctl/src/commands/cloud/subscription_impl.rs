@@ -158,6 +158,7 @@ pub async fn update_subscription(
     payment_method: Option<&str>,
     payment_method_id: Option<i32>,
     data: Option<&str>,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
@@ -193,6 +194,10 @@ pub async fn update_subscription(
         });
     }
 
+    if dry_run {
+        request_obj.insert("dryRun".to_string(), serde_json::json!(true));
+    }
+
     let response = client
         .put_raw(&format!("/subscriptions/{}", id), request)
         .await
@@ -211,15 +216,24 @@ pub async fn update_subscription(
 }
 
 /// Delete a subscription
+#[allow(clippy::too_many_arguments)]
 pub async fn delete_subscription(
     conn_mgr: &ConnectionManager,
     profile_name: Option<&str>,
     id: u32,
     force: bool,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
+    if dry_run {
+        eprintln!("Would delete subscription {}.", id);
+        eprintln!();
+        eprintln!("No changes were made.");
+        return Ok(());
+    }
+
     // Confirmation prompt unless --force is used
     if !force {
         use dialoguer::Confirm;

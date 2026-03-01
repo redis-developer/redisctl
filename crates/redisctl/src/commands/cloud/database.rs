@@ -61,6 +61,7 @@ pub async fn handle_database_command(
             oss_cluster,
             port,
             data,
+            dry_run,
             async_ops,
         } => {
             super::database_impl::create_database(
@@ -78,6 +79,7 @@ pub async fn handle_database_command(
                 *oss_cluster,
                 *port,
                 data.as_deref(),
+                *dry_run,
                 async_ops,
                 output_format,
                 query,
@@ -94,6 +96,7 @@ pub async fn handle_database_command(
             oss_cluster,
             regex_rules,
             data,
+            dry_run,
             async_ops,
         } => {
             super::database_impl::update_database(
@@ -108,6 +111,7 @@ pub async fn handle_database_command(
                 *oss_cluster,
                 regex_rules.as_deref(),
                 data.as_deref(),
+                *dry_run,
                 async_ops,
                 output_format,
                 query,
@@ -117,6 +121,7 @@ pub async fn handle_database_command(
         CloudDatabaseCommands::Delete {
             id,
             force,
+            dry_run,
             async_ops,
         } => {
             super::database_impl::delete_database(
@@ -124,6 +129,7 @@ pub async fn handle_database_command(
                 profile_name,
                 id,
                 *force,
+                *dry_run,
                 async_ops,
                 output_format,
                 query,

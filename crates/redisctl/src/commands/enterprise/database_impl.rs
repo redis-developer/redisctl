@@ -313,6 +313,7 @@ pub async fn update_database(
     proxy_policy: Option<&str>,
     redis_password: Option<&str>,
     data: Option<&str>,
+    dry_run: bool,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
@@ -370,6 +371,17 @@ pub async fn update_database(
         });
     }
 
+    if dry_run {
+        eprintln!("Would update database {} with:", id);
+        eprintln!(
+            "{}",
+            serde_json::to_string_pretty(&request).unwrap_or_default()
+        );
+        eprintln!();
+        eprintln!("No changes were made.");
+        return Ok(());
+    }
+
     let response = client
         .put_raw(&format!("/v1/bdbs/{}", id), request)
         .await
@@ -386,9 +398,17 @@ pub async fn delete_database(
     profile_name: Option<&str>,
     id: u32,
     force: bool,
+    dry_run: bool,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
+    if dry_run {
+        eprintln!("Would delete database {}.", id);
+        eprintln!();
+        eprintln!("No changes were made.");
+        return Ok(());
+    }
+
     if !force && !confirm_action(&format!("Delete database {}?", id))? {
         println!("Operation cancelled");
         return Ok(());

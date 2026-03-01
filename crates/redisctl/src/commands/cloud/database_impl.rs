@@ -93,13 +93,15 @@ pub async fn create_database(
     oss_cluster: bool,
     port: Option<i32>,
     data: Option<&str>,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
     // Use Layer 2 workflow for simple cases with --wait
-    // Fall back to legacy for: --data, --dataset-size, advanced options
+    // Fall back to legacy for: --data, --dataset-size, advanced options, --dry-run
     let use_layer2 = async_ops.wait
+        && !dry_run
         && data.is_none()
         && dataset_size.is_none()
         && eviction_policy == "volatile-lru"
@@ -140,6 +142,7 @@ pub async fn create_database(
             oss_cluster,
             port,
             data,
+            dry_run,
             async_ops,
             output_format,
             query,
@@ -283,6 +286,7 @@ async fn create_database_legacy(
     oss_cluster: bool,
     port: Option<i32>,
     data: Option<&str>,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
@@ -359,6 +363,10 @@ async fn create_database_legacy(
         request_obj.insert("port".to_string(), json!(port_val));
     }
 
+    if dry_run {
+        request_obj.insert("dryRun".to_string(), json!(true));
+    }
+
     let response = client
         .post_raw(
             &format!("/subscriptions/{}/databases", subscription_id),
@@ -393,14 +401,15 @@ pub async fn update_database(
     oss_cluster: Option<bool>,
     regex_rules: Option<&str>,
     data: Option<&str>,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
     let (subscription_id, database_id) = parse_database_id(id)?;
 
-    // Use Layer 2 workflow for simple cases with --wait (no --data, no regex_rules)
-    let use_layer2 = async_ops.wait && data.is_none() && regex_rules.is_none();
+    // Use Layer 2 workflow for simple cases with --wait (no --data, no regex_rules, no --dry-run)
+    let use_layer2 = async_ops.wait && !dry_run && data.is_none() && regex_rules.is_none();
 
     if use_layer2 {
         update_database_with_workflow(
@@ -433,6 +442,7 @@ pub async fn update_database(
             oss_cluster,
             regex_rules,
             data,
+            dry_run,
             async_ops,
             output_format,
             query,
@@ -579,6 +589,7 @@ async fn update_database_legacy(
     oss_cluster: Option<bool>,
     regex_rules: Option<&str>,
     data: Option<&str>,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
@@ -630,6 +641,10 @@ async fn update_database_legacy(
         });
     }
 
+    if dry_run {
+        request_obj.insert("dryRun".to_string(), json!(true));
+    }
+
     let response = client
         .put_raw(
             &format!(
@@ -654,16 +669,28 @@ async fn update_database_legacy(
 }
 
 /// Delete a database
+#[allow(clippy::too_many_arguments)]
 pub async fn delete_database(
     conn_mgr: &ConnectionManager,
     profile_name: Option<&str>,
     id: &str,
     force: bool,
+    dry_run: bool,
     async_ops: &AsyncOperationArgs,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
     let (subscription_id, database_id) = parse_database_id(id)?;
+
+    if dry_run {
+        eprintln!(
+            "Would delete database {} in subscription {}.",
+            database_id, subscription_id
+        );
+        eprintln!();
+        eprintln!("No changes were made.");
+        return Ok(());
+    }
 
     // Confirmation prompt unless --force is used
     if !force {

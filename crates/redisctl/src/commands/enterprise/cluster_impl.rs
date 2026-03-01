@@ -232,6 +232,7 @@ pub async fn bootstrap_cluster(
     username: Option<&str>,
     password: Option<&str>,
     data: Option<&str>,
+    dry_run: bool,
     output_format: OutputFormat,
     query: Option<&str>,
 ) -> CliResult<()> {
@@ -296,6 +297,17 @@ pub async fn bootstrap_cluster(
         return Err(RedisCtlError::InvalidInput {
             message: "Bootstrap requires --cluster-name, --username, and --password (or equivalent in --data)".to_string()
         });
+    }
+
+    if dry_run {
+        eprintln!("Would bootstrap cluster with:");
+        eprintln!(
+            "{}",
+            serde_json::to_string_pretty(&bootstrap_data).unwrap_or_default()
+        );
+        eprintln!();
+        eprintln!("No changes were made.");
+        return Ok(());
     }
 
     // Use raw API since BootstrapRequest doesn't have Deserialize trait

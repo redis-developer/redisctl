@@ -1927,6 +1927,10 @@ NOTE: Subscription creation requires complex nested structures for cloud provide
         #[arg(long)]
         data: Option<String>,
 
+        /// Dry run - validate without applying changes
+        #[arg(long)]
+        dry_run: bool,
+
         /// Async operation options
         #[command(flatten)]
         async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
@@ -1939,6 +1943,9 @@ NOTE: Subscription creation requires complex nested structures for cloud provide
         /// Skip confirmation prompt
         #[arg(long)]
         force: bool,
+        /// Dry run - show what would be deleted without deleting
+        #[arg(long)]
+        dry_run: bool,
         /// Async operation options
         #[command(flatten)]
         async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
@@ -2229,6 +2236,10 @@ pub enum CloudDatabaseCommands {
         #[arg(long)]
         data: Option<String>,
 
+        /// Dry run - validate without creating the database
+        #[arg(long)]
+        dry_run: bool,
+
         /// Async operation options
         #[command(flatten)]
         async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
@@ -2299,6 +2310,10 @@ pub enum CloudDatabaseCommands {
         #[arg(long)]
         data: Option<String>,
 
+        /// Dry run - validate without applying changes
+        #[arg(long)]
+        dry_run: bool,
+
         /// Async operation options
         #[command(flatten)]
         async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
@@ -2311,6 +2326,9 @@ pub enum CloudDatabaseCommands {
         /// Skip confirmation prompt
         #[arg(long)]
         force: bool,
+        /// Dry run - show what would be deleted without deleting
+        #[arg(long)]
+        dry_run: bool,
         /// Async operation options
         #[command(flatten)]
         async_ops: crate::commands::cloud::async_utils::AsyncOperationArgs,
