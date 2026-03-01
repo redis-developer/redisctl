@@ -378,6 +378,8 @@ fn load_config_for_prefix(config_file: Option<&str>) -> Option<Config> {
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    clap_complete::CompleteEnv::with_factory(cli::Cli::command).complete();
+
     let args: Vec<String> = std::env::args().collect();
     let args = maybe_inject_prefix(args);
     let mut cli = Cli::parse_from(args);
@@ -469,9 +471,14 @@ async fn execute_command(cli: &Cli, conn_mgr: &ConnectionManager) -> Result<(), 
             }
             Ok(())
         }
-        Commands::Completions { shell } => {
-            debug!("Generating completions for {:?}", shell);
-            generate_completions(*shell);
+        Commands::Completions { shell, register } => {
+            if *register {
+                debug!("Printing registration command for {:?}", shell);
+                print_registration_command(*shell);
+            } else {
+                debug!("Generating completions for {:?}", shell);
+                generate_completions(*shell);
+            }
             Ok(())
         }
 
@@ -556,11 +563,29 @@ fn generate_completions(shell: cli::Shell) {
     }
 }
 
+/// Print the shell command to register dynamic completions
+fn print_registration_command(shell: cli::Shell) {
+    let cmd = match shell {
+        cli::Shell::Bash => "source <(COMPLETE=bash redisctl)",
+        cli::Shell::Zsh => "source <(COMPLETE=zsh redisctl)",
+        cli::Shell::Fish => "source (COMPLETE=fish redisctl | psub)",
+        cli::Shell::PowerShell => "COMPLETE=powershell redisctl | Invoke-Expression",
+        cli::Shell::Elvish => "eval (E:COMPLETE=elvish redisctl)",
+    };
+    println!("{cmd}");
+}
+
 /// Format command for human-readable logging (without sensitive data)
 fn format_command(command: &Commands) -> String {
     match command {
         Commands::Version => "version".to_string(),
-        Commands::Completions { shell } => format!("completions {:?}", shell),
+        Commands::Completions { shell, register } => {
+            if *register {
+                format!("completions {:?} --register", shell)
+            } else {
+                format!("completions {:?}", shell)
+            }
+        }
         Commands::Profile(cmd) => {
             use cli::ProfileCommands::*;
             match cmd {
