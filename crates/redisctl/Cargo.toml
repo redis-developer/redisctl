@@ -50,8 +50,7 @@ flate2 = { workspace = true }
 thiserror = { workspace = true }
 serde_yaml = { workspace = true }
 comfy-table = { workspace = true }
-jmespath = { workspace = true }
-jmespath_extensions = { version = "0.8", features = ["full"] }
+jpx-core = { workspace = true }
 config = { workspace = true }
 
 # Keyring for Files.com API key storage (separate from profile credentials)
