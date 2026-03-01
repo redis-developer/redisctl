@@ -66,6 +66,9 @@ EXAMPLES:
     # Filter output with JMESPath
     redisctl database list -q 'databases[?status==`active`]'
 
+    # Filter with a query from a file
+    redisctl cloud sub list -q @queries/active-dbs.jmespath
+
     # Direct API access
     redisctl api cloud get /subscriptions
     redisctl api enterprise get /v1/cluster
@@ -86,7 +89,7 @@ pub struct Cli {
     #[arg(long, short = 'o', global = true, value_enum, default_value = "auto")]
     pub output: OutputFormat,
 
-    /// JMESPath query to filter output
+    /// JMESPath query to filter output (use @file to read from file)
     #[arg(long, short = 'q', global = true)]
     pub query: Option<String>,
 
