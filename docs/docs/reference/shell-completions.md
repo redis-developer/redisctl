@@ -2,15 +2,73 @@
 
 Enable tab completion for redisctl commands.
 
-## Generate Completions
+Supported shells: `bash`, `zsh`, `fish`, `powershell`, `elvish`
+
+## Dynamic Completions (Recommended)
+
+Dynamic completions query the `redisctl` binary at runtime, enabling context-aware
+completions such as profile names from your config file, file path hints, and URL hints.
+
+To enable, add the registration one-liner to your shell's config file. You can print
+the command with `--register`:
+
+```bash
+redisctl completions <shell> --register
+```
+
+=== "Bash"
+
+    ```bash
+    # Add to ~/.bashrc
+    source <(COMPLETE=bash redisctl)
+    ```
+
+=== "Zsh"
+
+    ```bash
+    # Add to ~/.zshrc
+    source <(COMPLETE=zsh redisctl)
+    ```
+
+=== "Fish"
+
+    ```bash
+    # Add to ~/.config/fish/config.fish
+    source (COMPLETE=fish redisctl | psub)
+    ```
+
+=== "PowerShell"
+
+    ```powershell
+    # Add to $PROFILE
+    COMPLETE=powershell redisctl | Invoke-Expression
+    ```
+
+=== "Elvish"
+
+    ```elvish
+    # Add to ~/.elvish/rc.elv
+    eval (E:COMPLETE=elvish redisctl)
+    ```
+
+Dynamic completions provide:
+
+- Profile names from your config (e.g., `--profile my<Tab>` completes to configured profiles)
+- File path hints for `--config-file` and `--ca-cert`
+- URL hints for `--url` and `--api-url`
+- Executable path hints for `--redis-cli`
+
+## Static Completions (Fallback)
+
+Static scripts complete subcommands and flags but have no awareness of runtime
+values like profile names. Use these if dynamic completions are not supported
+in your environment.
 
 ```bash
 redisctl completions <shell>
 ```
 
-Supported shells: `bash`, `zsh`, `fish`, `powershell`
-
-## Installation
+### Installation
 
 === "Bash"
 

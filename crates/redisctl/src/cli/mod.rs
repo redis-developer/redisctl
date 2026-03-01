@@ -5,7 +5,8 @@
 //! 2. Human-friendly interface (`cloud`/`enterprise` commands)
 //! 3. Workflow orchestration (`workflow` commands - future)
 
-use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueHint};
+use clap_complete::engine::{ArgValueCandidates, CompletionCandidate};
 use redisctl_core::DeploymentType;
 
 pub mod cloud;
@@ -78,11 +79,11 @@ For more help on a specific command, run:
 ")]
 pub struct Cli {
     /// Profile to use for this command
-    #[arg(long, short, global = true, env = "REDISCTL_PROFILE")]
+    #[arg(long, short, global = true, env = "REDISCTL_PROFILE", add = ArgValueCandidates::new(profile_candidates))]
     pub profile: Option<String>,
 
     /// Path to alternate configuration file
-    #[arg(long, global = true, env = "REDISCTL_CONFIG_FILE")]
+    #[arg(long, global = true, env = "REDISCTL_CONFIG_FILE", value_hint = ValueHint::FilePath)]
     pub config_file: Option<String>,
 
     /// Output format
@@ -263,6 +264,10 @@ PROFILE REQUIREMENT:
         /// Shell to generate completions for
         #[arg(value_enum)]
         shell: Shell,
+
+        /// Print dynamic completion registration command instead of static script
+        #[arg(long)]
+        register: bool,
     },
 }
 
@@ -431,11 +436,11 @@ EXAMPLES:
         api_secret: Option<String>,
 
         /// API URL (for Cloud profiles)
-        #[arg(long, default_value = "https://api.redislabs.com/v1")]
+        #[arg(long, default_value = "https://api.redislabs.com/v1", value_hint = ValueHint::Url)]
         api_url: String,
 
         /// Enterprise URL (for Enterprise profiles)
-        #[arg(long, required_if_eq("type", "enterprise"))]
+        #[arg(long, required_if_eq("type", "enterprise"), value_hint = ValueHint::Url)]
         url: Option<String>,
 
         /// Username (for Enterprise profiles)
@@ -451,7 +456,7 @@ EXAMPLES:
         insecure: bool,
 
         /// Path to custom CA certificate for TLS verification (for Enterprise/Kubernetes profiles)
-        #[arg(long)]
+        #[arg(long, value_hint = ValueHint::FilePath)]
         ca_cert: Option<String>,
 
         /// Redis host (for Database profiles)
@@ -624,11 +629,23 @@ pub enum DbCommands {
         dry_run: bool,
 
         /// Path to redis-cli binary (defaults to 'redis-cli' in PATH)
-        #[arg(long, default_value = "redis-cli")]
+        #[arg(long, default_value = "redis-cli", value_hint = ValueHint::ExecutablePath)]
         redis_cli: String,
 
         /// Additional arguments to pass to redis-cli
         #[arg(last = true)]
         args: Vec<String>,
     },
+}
+
+fn profile_candidates() -> Vec<CompletionCandidate> {
+    let config = redisctl_core::Config::load().unwrap_or_default();
+    config
+        .list_profiles()
+        .into_iter()
+        .map(|(name, profile)| {
+            CompletionCandidate::new(name.as_str())
+                .help(Some(format!("{}", profile.deployment_type).into()))
+        })
+        .collect()
 }
