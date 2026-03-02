@@ -682,7 +682,9 @@ fn print_vpc_peering_table(data: &Value) -> CliResult<()> {
 
 /// Print VPC peering list in table format
 fn print_vpc_peering_list_table(data: &Value) -> CliResult<()> {
-    use comfy_table::{Cell, Color, Table};
+    use colored::Colorize;
+    use tabled::builder::Builder;
+    use tabled::settings::Style;
 
     let peerings = if let Some(arr) = data.as_array() {
         arr.clone()
@@ -698,15 +700,8 @@ fn print_vpc_peering_list_table(data: &Value) -> CliResult<()> {
         return Ok(());
     }
 
-    let mut table = Table::new();
-    table.set_header(vec![
-        "ID",
-        "Status",
-        "VPC ID",
-        "Account ID",
-        "Region",
-        "CIDRs",
-    ]);
+    let mut builder = Builder::default();
+    builder.push_record(["ID", "Status", "VPC ID", "Account ID", "Region", "CIDRs"]);
 
     for peering in peerings {
         let id = peering
@@ -741,23 +736,23 @@ fn print_vpc_peering_list_table(data: &Value) -> CliResult<()> {
             String::new()
         };
 
-        let status_cell = match status.to_lowercase().as_str() {
-            "active" => Cell::new(status).fg(Color::Green),
-            "pending" => Cell::new(status).fg(Color::Yellow),
-            "failed" | "error" => Cell::new(status).fg(Color::Red),
-            _ => Cell::new(status),
+        let status_str = match status.to_lowercase().as_str() {
+            "active" => status.green().to_string(),
+            "pending" => status.yellow().to_string(),
+            "failed" | "error" => status.red().to_string(),
+            _ => status.to_string(),
         };
 
-        table.add_row(vec![
-            Cell::new(id),
-            status_cell,
-            Cell::new(vpc_id),
-            Cell::new(account_id),
-            Cell::new(region),
-            Cell::new(cidrs),
+        builder.push_record([
+            &id.to_string(),
+            &status_str,
+            vpc_id,
+            account_id,
+            region,
+            &cidrs,
         ]);
     }
 
-    println!("{}", table);
+    println!("{}", builder.build().with(Style::blank()));
     Ok(())
 }

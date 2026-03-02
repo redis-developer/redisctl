@@ -112,13 +112,10 @@ async fn handle_cloud_api(
 
     match result {
         Ok(response) => {
-            // Convert CLI OutputFormat to output::OutputFormat
+            // Raw API responses aren't structured for tables, resolve Auto to Json
             let format = match output_format {
-                crate::cli::OutputFormat::Auto | crate::cli::OutputFormat::Json => {
-                    crate::output::OutputFormat::Json
-                }
-                crate::cli::OutputFormat::Yaml => crate::output::OutputFormat::Yaml,
-                crate::cli::OutputFormat::Table => crate::output::OutputFormat::Table,
+                OutputFormat::Auto => OutputFormat::Json,
+                other => other,
             };
 
             print_output(response, format, query.as_deref()).map_err(|e| {
@@ -186,13 +183,10 @@ async fn handle_enterprise_api(
 
     match result {
         Ok(response) => {
-            // Convert CLI OutputFormat to output::OutputFormat
+            // Raw API responses aren't structured for tables, resolve Auto to Json
             let format = match output_format {
-                crate::cli::OutputFormat::Auto | crate::cli::OutputFormat::Json => {
-                    crate::output::OutputFormat::Json
-                }
-                crate::cli::OutputFormat::Yaml => crate::output::OutputFormat::Yaml,
-                crate::cli::OutputFormat::Table => crate::output::OutputFormat::Table,
+                OutputFormat::Auto => OutputFormat::Json,
+                other => other,
             };
 
             print_output(response, format, query.as_deref()).map_err(|e| {

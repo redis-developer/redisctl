@@ -39,8 +39,11 @@ impl Workflow for InitClusterWorkflow {
         Box::pin(async move {
             use crate::output::OutputFormat;
 
-            // Only print human-readable output for Table format
-            let is_human_output = matches!(context.output_format, OutputFormat::Table);
+            // Only print human-readable output for Table/Auto format
+            let is_human_output = matches!(
+                context.output_format,
+                OutputFormat::Table | OutputFormat::Auto
+            );
 
             if is_human_output {
                 println!("Initializing Redis Enterprise cluster...");

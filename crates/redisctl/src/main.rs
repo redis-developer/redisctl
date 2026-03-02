@@ -455,13 +455,7 @@ async fn execute_command(cli: &Cli, conn_mgr: &ConnectionManager) -> Result<(), 
                         "name": env!("CARGO_PKG_NAME"),
                     });
 
-                    let fmt = match cli.output {
-                        cli::OutputFormat::Json => output::OutputFormat::Json,
-                        cli::OutputFormat::Yaml => output::OutputFormat::Yaml,
-                        _ => output::OutputFormat::Json,
-                    };
-
-                    crate::output::print_output(&output_data, fmt, None)?;
+                    crate::output::print_output(&output_data, cli.output, None)?;
                 }
                 _ => {
                     println!("redisctl {}", env!("CARGO_PKG_VERSION"));
@@ -965,16 +959,7 @@ async fn handle_cloud_workflow_command(
                             })
                         })
                         .collect();
-                    let output_format = match output {
-                        cli::OutputFormat::Json => output::OutputFormat::Json,
-                        cli::OutputFormat::Yaml => output::OutputFormat::Yaml,
-                        _ => output::OutputFormat::Table,
-                    };
-                    crate::output::print_output(
-                        serde_json::json!(workflow_list),
-                        output_format,
-                        None,
-                    )?;
+                    crate::output::print_output(serde_json::json!(workflow_list), output, None)?;
                 }
                 _ => {
                     println!("Available Cloud Workflows:");
@@ -990,16 +975,10 @@ async fn handle_cloud_workflow_command(
             let mut workflow_args = WorkflowArgs::new();
             workflow_args.insert("args", args);
 
-            let output_format = match output {
-                cli::OutputFormat::Json => output::OutputFormat::Json,
-                cli::OutputFormat::Yaml => output::OutputFormat::Yaml,
-                cli::OutputFormat::Table | cli::OutputFormat::Auto => output::OutputFormat::Table,
-            };
-
             let context = WorkflowContext {
                 conn_mgr: conn_mgr.clone(),
                 profile_name: profile.map(String::from),
-                output_format,
+                output_format: output,
                 wait_timeout: args.wait_timeout as u64,
             };
 
@@ -1032,7 +1011,7 @@ async fn handle_cloud_workflow_command(
                         "message": result.message,
                         "outputs": result.outputs,
                     });
-                    crate::output::print_output(&result_json, output_format, None)?;
+                    crate::output::print_output(&result_json, output, None)?;
                 }
                 _ => {
                     // Human output
@@ -1070,16 +1049,7 @@ async fn handle_enterprise_workflow_command(
                             })
                         })
                         .collect();
-                    let output_format = match output {
-                        cli::OutputFormat::Json => output::OutputFormat::Json,
-                        cli::OutputFormat::Yaml => output::OutputFormat::Yaml,
-                        _ => output::OutputFormat::Table,
-                    };
-                    crate::output::print_output(
-                        serde_json::json!(workflow_list),
-                        output_format,
-                        None,
-                    )?;
+                    crate::output::print_output(serde_json::json!(workflow_list), output, None)?;
                 }
                 _ => {
                     println!("Available Enterprise Workflows:");
@@ -1112,16 +1082,10 @@ async fn handle_enterprise_workflow_command(
             args.insert("database_name", database_name);
             args.insert("database_memory_gb", database_memory_gb);
 
-            let output_format = match output {
-                cli::OutputFormat::Json => output::OutputFormat::Json,
-                cli::OutputFormat::Yaml => output::OutputFormat::Yaml,
-                cli::OutputFormat::Table | cli::OutputFormat::Auto => output::OutputFormat::Table,
-            };
-
             let context = WorkflowContext {
                 conn_mgr: conn_mgr.clone(),
                 profile_name: profile.map(String::from),
-                output_format,
+                output_format: output,
                 wait_timeout: if async_ops.wait {
                     async_ops.wait_timeout
                 } else {
@@ -1158,7 +1122,7 @@ async fn handle_enterprise_workflow_command(
                         "message": result.message,
                         "outputs": result.outputs,
                     });
-                    crate::output::print_output(&result_json, output_format, None)?;
+                    crate::output::print_output(&result_json, output, None)?;
                 }
                 _ => {
                     // Human output was already printed by the workflow
