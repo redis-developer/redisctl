@@ -1447,7 +1447,7 @@ pub async fn get_slow_log(
                 println!("No slow log entries found");
             } else {
                 let mut table = Table::new(entries);
-                table.with(Style::modern());
+                table.with(Style::blank());
                 output_with_pager(&table.to_string());
             }
         }
@@ -1508,7 +1508,7 @@ pub async fn list_tags(
                 println!("No tags found");
             } else {
                 let mut table = Table::new(entries);
-                table.with(Style::modern());
+                table.with(Style::blank());
                 println!("{}", table);
             }
         }

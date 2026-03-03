@@ -6,6 +6,8 @@ use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use anyhow::Context;
 use redis_cloud::acl::AclHandler;
+use serde_json::Value;
+use tabled::{Table, Tabled, settings::Style};
 
 use super::utils::*;
 
@@ -17,6 +19,285 @@ pub struct AclOperationParams<'a> {
     pub output_format: OutputFormat,
     pub query: Option<&'a str>,
 }
+
+// ============================================================================
+// Table row structs
+// ============================================================================
+
+#[derive(Tabled)]
+struct RedisRuleRow {
+    #[tabled(rename = "ID")]
+    id: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "ACL")]
+    acl: String,
+    #[tabled(rename = "DEFAULT")]
+    is_default: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+}
+
+#[derive(Tabled)]
+struct AclRoleRow {
+    #[tabled(rename = "ID")]
+    id: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "RULES")]
+    rules: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+}
+
+#[derive(Tabled)]
+struct AclUserRow {
+    #[tabled(rename = "ID")]
+    id: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "ROLE")]
+    role: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+}
+
+// ============================================================================
+// Table printing helpers
+// ============================================================================
+
+/// Extract items from a wrapper response or treat as direct array
+fn extract_items<'a>(data: &'a Value, wrapper_key: &str) -> Option<&'a Vec<Value>> {
+    data.get(wrapper_key)
+        .and_then(|v| v.as_array())
+        .or_else(|| data.as_array())
+}
+
+fn print_redis_rules_table(data: &Value) -> CliResult<()> {
+    let items = match extract_items(data, "redisRules") {
+        Some(arr) if !arr.is_empty() => arr,
+        _ => {
+            println!("No Redis rules found");
+            return Ok(());
+        }
+    };
+
+    let rows: Vec<RedisRuleRow> = items
+        .iter()
+        .map(|rule| RedisRuleRow {
+            id: extract_field(rule, "id", "-"),
+            name: extract_field(rule, "name", "-"),
+            acl: truncate_string(&extract_field(rule, "acl", "-"), 50),
+            is_default: extract_field(rule, "isDefault", "-"),
+            status: format_status(extract_field(rule, "status", "unknown")),
+        })
+        .collect();
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+fn print_redis_rule_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("ID", "id"),
+        ("Name", "name"),
+        ("ACL", "acl"),
+        ("Default", "isDefault"),
+        ("Status", "status"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No Redis rule information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+fn print_acl_roles_table(data: &Value) -> CliResult<()> {
+    let items = match extract_items(data, "roles") {
+        Some(arr) if !arr.is_empty() => arr,
+        _ => {
+            println!("No ACL roles found");
+            return Ok(());
+        }
+    };
+
+    let rows: Vec<AclRoleRow> = items
+        .iter()
+        .map(|role| {
+            let rules = role
+                .get("redisRules")
+                .and_then(|v| v.as_array())
+                .map(|arr| {
+                    arr.iter()
+                        .filter_map(|r| r.get("ruleName").and_then(|n| n.as_str()))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                })
+                .unwrap_or_else(|| "-".to_string());
+
+            AclRoleRow {
+                id: extract_field(role, "id", "-"),
+                name: extract_field(role, "name", "-"),
+                rules: truncate_string(&rules, 40),
+                status: format_status(extract_field(role, "status", "unknown")),
+            }
+        })
+        .collect();
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+fn print_acl_role_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [("ID", "id"), ("Name", "name"), ("Status", "status")];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if let Some(rules) = data.get("redisRules").and_then(|v| v.as_array()) {
+        let names: Vec<String> = rules
+            .iter()
+            .filter_map(|r| r.get("ruleName").and_then(|n| n.as_str()).map(String::from))
+            .collect();
+        if !names.is_empty() {
+            rows.push(DetailRow {
+                field: "Redis Rules".to_string(),
+                value: names.join(", "),
+            });
+        }
+    }
+
+    if let Some(users) = data.get("users").and_then(|v| v.as_array()) {
+        let names: Vec<String> = users
+            .iter()
+            .filter_map(|u| u.get("name").and_then(|n| n.as_str()).map(String::from))
+            .collect();
+        if !names.is_empty() {
+            rows.push(DetailRow {
+                field: "Users".to_string(),
+                value: names.join(", "),
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No ACL role information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+fn print_acl_users_table(data: &Value) -> CliResult<()> {
+    let items = match extract_items(data, "users") {
+        Some(arr) if !arr.is_empty() => arr,
+        _ => {
+            println!("No ACL users found");
+            return Ok(());
+        }
+    };
+
+    let rows: Vec<AclUserRow> = items
+        .iter()
+        .map(|user| AclUserRow {
+            id: extract_field(user, "id", "-"),
+            name: extract_field(user, "name", "-"),
+            role: extract_field(user, "role", "-"),
+            status: format_status(extract_field(user, "status", "unknown")),
+        })
+        .collect();
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+fn print_acl_user_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("ID", "id"),
+        ("Name", "name"),
+        ("Role", "role"),
+        ("Status", "status"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No ACL user information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+// ============================================================================
+// Command implementations
+// ============================================================================
 
 // Redis ACL Rules
 
@@ -33,7 +314,12 @@ pub async fn list_redis_rules(
     let rules_json = serde_json::to_value(rules).context("Failed to serialize Redis rules")?;
 
     let data = handle_output(rules_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_redis_rules_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -164,7 +450,12 @@ pub async fn list_roles(
     let roles_json = serde_json::to_value(roles).context("Failed to serialize roles")?;
 
     let data = handle_output(roles_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_acl_roles_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -300,7 +591,12 @@ pub async fn list_acl_users(
     let users_json = serde_json::to_value(users).context("Failed to serialize ACL users")?;
 
     let data = handle_output(users_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_acl_users_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -318,7 +614,12 @@ pub async fn get_acl_user(
     let user_json = serde_json::to_value(user).context("Failed to serialize ACL user")?;
 
     let data = handle_output(user_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_acl_user_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 

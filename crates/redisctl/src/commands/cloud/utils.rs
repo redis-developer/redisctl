@@ -186,7 +186,7 @@ pub fn provider_short_name(provider: &str) -> &str {
     }
 }
 
-pub use crate::output::{apply_jmespath, handle_output, print_formatted_output};
+pub use crate::output::{apply_jmespath, handle_output, print_formatted_output, resolve_auto};
 
 /// Prompts the user for confirmation
 pub fn confirm_action(message: &str) -> CliResult<bool> {

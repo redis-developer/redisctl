@@ -108,6 +108,7 @@ async fn list_tasks(
 
 /// Print tasks in table format
 fn print_tasks_table(tasks: &Value) -> CliResult<()> {
+    use super::utils::output_with_pager;
     use tabled::{Table, Tabled, settings::Style};
 
     #[derive(Tabled)]
@@ -176,8 +177,8 @@ fn print_tasks_table(tasks: &Value) -> CliResult<()> {
         .collect();
 
     let mut table = Table::new(&rows);
-    table.with(Style::rounded());
-    println!("{}", table);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
 
     Ok(())
 }
