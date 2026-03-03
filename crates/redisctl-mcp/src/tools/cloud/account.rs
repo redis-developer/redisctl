@@ -567,9 +567,9 @@ pub fn delete_acl_user(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, DeleteAclUserInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteAclUserInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -770,9 +770,9 @@ pub fn delete_acl_role(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, DeleteAclRoleInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteAclRoleInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -922,9 +922,9 @@ pub fn delete_redis_rule(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteRedisRuleInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -1426,9 +1426,9 @@ pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteCloudAccountInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 

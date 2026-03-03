@@ -247,9 +247,9 @@ pub fn delete_vpc_peering(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteVpcPeeringInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -500,9 +500,9 @@ pub fn delete_aa_vpc_peering(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaVpcPeeringInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -843,9 +843,9 @@ pub fn delete_tgw_attachment(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteTgwAttachmentInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -1213,9 +1213,9 @@ pub fn delete_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaTgwAttachmentInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -1346,9 +1346,9 @@ pub fn delete_psc_service(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeletePscServiceInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -1573,9 +1573,9 @@ pub fn delete_psc_endpoint(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeletePscEndpointInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -1785,9 +1785,9 @@ pub fn delete_aa_psc_service(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaPscServiceInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -2021,9 +2021,9 @@ pub fn delete_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaPscEndpointInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -2288,9 +2288,9 @@ pub fn delete_private_link(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeletePrivateLinkInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 

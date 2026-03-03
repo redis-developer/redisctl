@@ -2,6 +2,7 @@
 
 #[cfg(any(feature = "cloud", feature = "enterprise"))]
 use std::collections::HashMap;
+use std::sync::Arc;
 
 #[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
 use anyhow::Context;
@@ -12,6 +13,8 @@ use redis_cloud::CloudClient;
 use redis_enterprise::EnterpriseClient;
 use redisctl_core::Config;
 use tokio::sync::RwLock;
+
+use crate::policy::{Policy, SafetyTier};
 
 /// How credentials are resolved
 #[derive(Debug, Clone)]
@@ -39,8 +42,8 @@ pub struct CachedClients {
 pub struct AppState {
     /// Credential source configuration
     pub credential_source: CredentialSource,
-    /// Read-only mode flag
-    pub read_only: bool,
+    /// Resolved policy for granular tool access control
+    pub policy: Arc<Policy>,
     /// Optional Redis database URL for direct connections
     pub database_url: Option<String>,
     /// redisctl config (for profile-based auth)
@@ -56,7 +59,7 @@ impl AppState {
     /// Create new application state
     pub fn new(
         credential_source: CredentialSource,
-        read_only: bool,
+        policy: Arc<Policy>,
         database_url: Option<String>,
     ) -> Result<Self> {
         // Extract profiles list
@@ -73,7 +76,7 @@ impl AppState {
 
         Ok(Self {
             credential_source,
-            read_only,
+            policy,
             database_url,
             config,
             profiles,
@@ -356,10 +359,25 @@ impl AppState {
             .context("Failed to connect to Redis")
     }
 
-    /// Check if write operations are allowed
+    /// Check if write operations are allowed by the global policy tier.
+    ///
+    /// Returns `true` for `ReadWrite` and `Full` tiers.
+    /// Used for defense-in-depth in non-destructive write tool handlers.
     #[allow(dead_code)]
     pub fn is_write_allowed(&self) -> bool {
-        !self.read_only
+        matches!(
+            self.policy.global_tier(),
+            SafetyTier::ReadWrite | SafetyTier::Full
+        )
+    }
+
+    /// Check if destructive operations are allowed by the global policy tier.
+    ///
+    /// Returns `true` only for `Full` tier.
+    /// Used for defense-in-depth in destructive tool handlers.
+    #[allow(dead_code)]
+    pub fn is_destructive_allowed(&self) -> bool {
+        matches!(self.policy.global_tier(), SafetyTier::Full)
     }
 }
 
@@ -368,7 +386,7 @@ impl Clone for AppState {
         // Note: We don't clone the clients cache, each clone gets fresh cache
         Self {
             credential_source: self.credential_source.clone(),
-            read_only: self.read_only,
+            policy: self.policy.clone(),
             database_url: self.database_url.clone(),
             config: self.config.clone(),
             profiles: self.profiles.clone(),
@@ -385,6 +403,15 @@ impl Clone for AppState {
 /// Test helpers for creating AppState with pre-configured clients
 #[allow(dead_code)]
 impl AppState {
+    /// Create a default read-only policy for tests
+    pub fn test_policy() -> Arc<Policy> {
+        Arc::new(Policy::new(
+            crate::policy::PolicyConfig::default(),
+            std::collections::HashMap::new(),
+            "test".to_string(),
+        ))
+    }
+
     /// Create test state with a pre-configured Cloud client
     #[cfg(feature = "cloud")]
     pub fn with_cloud_client(client: CloudClient) -> Self {
@@ -392,7 +419,7 @@ impl AppState {
         cloud.insert("_default".to_string(), client);
         Self {
             credential_source: CredentialSource::Profiles(vec![]),
-            read_only: true,
+            policy: Self::test_policy(),
             database_url: None,
             config: None,
             profiles: vec![],
@@ -411,7 +438,7 @@ impl AppState {
         enterprise.insert("_default".to_string(), client);
         Self {
             credential_source: CredentialSource::Profiles(vec![]),
-            read_only: true,
+            policy: Self::test_policy(),
             database_url: None,
             config: None,
             profiles: vec![],
@@ -432,7 +459,7 @@ impl AppState {
         enterprise_map.insert("_default".to_string(), enterprise);
         Self {
             credential_source: CredentialSource::Profiles(vec![]),
-            read_only: true,
+            policy: Self::test_policy(),
             database_url: None,
             config: None,
             profiles: vec![],

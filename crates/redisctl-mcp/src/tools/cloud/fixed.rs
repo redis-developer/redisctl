@@ -245,9 +245,9 @@ pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteFixedSubscriptionInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -747,9 +747,9 @@ pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteFixedDatabaseInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
@@ -1198,9 +1198,9 @@ pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteFixedDatabaseTagInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 

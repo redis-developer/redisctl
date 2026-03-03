@@ -31,6 +31,10 @@ redis-enterprise = { workspace = true, optional = true }
 redis = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 
+# Policy configuration
+toml = { workspace = true }
+directories = { workspace = true }
+
 # Core dependencies
 anyhow = { workspace = true }
 thiserror = { workspace = true }

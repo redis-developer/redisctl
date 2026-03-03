@@ -3,7 +3,8 @@
 //! A standalone MCP server that exposes Redis management operations
 //! as tools for AI systems.
 
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -16,11 +17,13 @@ use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 mod error;
+mod policy;
 mod prompts;
 mod resources;
 mod state;
 mod tools;
 
+use policy::{Policy, PolicyConfig, SafetyTier, ToolsetKind};
 use state::{AppState, CredentialSource};
 
 /// Transport mode for the MCP server
@@ -76,9 +79,15 @@ struct Args {
     #[arg(short, long, env = "REDISCTL_PROFILE")]
     profile: Vec<String>,
 
-    /// Read-only mode (enabled by default; use --read-only=false to allow writes)
+    /// Read-only mode (enabled by default; use --read-only=false to allow writes).
+    /// Ignored when a policy file is active.
     #[arg(long, default_value = "true")]
     read_only: bool,
+
+    /// Path to MCP policy file for granular tool access control.
+    /// Overrides --read-only when set.
+    #[arg(long, env = "REDISCTL_MCP_POLICY")]
+    policy: Option<PathBuf>,
 
     /// Redis database URL for direct connections
     #[arg(long, env = "REDIS_URL")]
@@ -206,6 +215,47 @@ fn enabled_toolsets(args: &Args) -> HashSet<Toolset> {
     set
 }
 
+/// Resolve the policy configuration.
+///
+/// If a policy file is found (via `--policy`, env var, or default path), it takes precedence
+/// and `--read-only` is ignored. Otherwise, synthesize a policy from the `--read-only` flag.
+fn resolve_policy(args: &Args) -> Result<(PolicyConfig, String)> {
+    let has_explicit_policy = args.policy.is_some();
+    let has_env_policy = std::env::var("REDISCTL_MCP_POLICY").is_ok() && args.policy.is_none();
+    let has_default_policy = PolicyConfig::default_path_exists();
+
+    if has_explicit_policy || has_env_policy || has_default_policy {
+        let (config, source) = PolicyConfig::load(args.policy.as_deref())?;
+        if !args.read_only {
+            tracing::warn!(
+                "--read-only=false is ignored when a policy file is active (source: {})",
+                source
+            );
+        }
+        return Ok((config, source));
+    }
+
+    // No policy file: synthesize from --read-only flag
+    let tier = if args.read_only {
+        SafetyTier::ReadOnly
+    } else {
+        SafetyTier::Full
+    };
+    let source = if args.read_only {
+        "cli: --read-only=true (default)".to_string()
+    } else {
+        "cli: --read-only=false".to_string()
+    };
+
+    Ok((
+        PolicyConfig {
+            tier,
+            ..Default::default()
+        },
+        source,
+    ))
+}
+
 #[tokio::main]
 async fn main() -> Result<()> {
     let args = Args::parse();
@@ -219,10 +269,14 @@ async fn main() -> Result<()> {
     let enabled = enabled_toolsets(&args);
     let enabled_names: Vec<String> = enabled.iter().map(|t| t.to_string()).collect();
 
+    // Resolve policy configuration
+    let (policy_config, policy_source) = resolve_policy(&args)?;
+
     info!(
         transport = ?args.transport,
         profiles = ?args.profile,
-        read_only = args.read_only,
+        policy_tier = %policy_config.tier,
+        policy_source = %policy_source,
         toolsets = ?enabled_names,
         "Starting redisctl-mcp server"
     );
@@ -237,15 +291,21 @@ async fn main() -> Result<()> {
         CredentialSource::Profiles(args.profile.clone())
     };
 
+    // Build tool-to-toolset mapping for policy evaluation
+    let tool_toolset = build_tool_toolset_mapping(&enabled);
+
+    // Build resolved policy
+    let policy = Arc::new(Policy::new(policy_config, tool_toolset, policy_source));
+
     // Build application state
     let state = Arc::new(AppState::new(
         credential_source,
-        args.read_only,
+        policy.clone(),
         args.database_url.clone(),
     )?);
 
-    // Build router with tools and optional read-only filter
-    let router = build_router(state.clone(), args.read_only, &enabled)?;
+    // Build router with tools and policy-based filter
+    let router = build_router(state.clone(), policy, &enabled)?;
 
     match args.transport {
         Transport::Stdio => {
@@ -261,10 +321,44 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
+/// Build the tool name -> toolset kind mapping for policy evaluation.
+fn build_tool_toolset_mapping(enabled: &HashSet<Toolset>) -> HashMap<String, ToolsetKind> {
+    let mut mapping = HashMap::new();
+
+    #[cfg(feature = "cloud")]
+    if enabled.contains(&Toolset::Cloud) {
+        for name in tools::cloud::tool_names() {
+            mapping.insert(name, ToolsetKind::Cloud);
+        }
+    }
+
+    #[cfg(feature = "enterprise")]
+    if enabled.contains(&Toolset::Enterprise) {
+        for name in tools::enterprise::tool_names() {
+            mapping.insert(name, ToolsetKind::Enterprise);
+        }
+    }
+
+    #[cfg(feature = "database")]
+    if enabled.contains(&Toolset::Database) {
+        for name in tools::redis::tool_names() {
+            mapping.insert(name, ToolsetKind::Database);
+        }
+    }
+
+    if enabled.contains(&Toolset::App) {
+        for name in tools::profile::tool_names() {
+            mapping.insert(name, ToolsetKind::App);
+        }
+    }
+
+    mapping
+}
+
 /// Build the MCP router with modular sub-routers based on enabled toolsets
 fn build_router(
     state: Arc<AppState>,
-    read_only: bool,
+    policy: Arc<Policy>,
     enabled: &HashSet<Toolset>,
 ) -> Result<McpRouter> {
     let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
@@ -290,23 +384,13 @@ fn build_router(
         router = router.merge(tools::profile::router(state.clone()));
     }
 
-    // Build prefix: safety model + active safety tier
-    let safety_tier = if read_only {
-        "**Active safety tier: READ-ONLY** -- only read-only tools are available. \
-         Write and destructive tools are hidden and will return unauthorized if called directly."
-    } else {
-        "**Active safety tier: WRITE-ENABLED** -- all tools including writes are available. \
-         Destructive tools (delete, flush) are enabled. Exercise caution with destructive tools."
-    };
+    // Register the show_policy tool (always available)
+    router = router.tool(policy::show_policy_tool(policy.clone()));
 
+    // Build instructions with policy description
     let prefix = format!(
-        "# Redis Cloud and Enterprise MCP Server\n\n\
-         ## Safety Model\n\n\
-         Every tool carries MCP annotation hints that describe its safety characteristics:\n\
-         - `readOnlyHint = true` -- reads data, never modifies state\n\
-         - `destructiveHint = false` -- writes data but is non-destructive (create, update, backup)\n\
-         - `destructiveHint = true` -- irreversible operation (delete, flush)\n\n\
-         {safety_tier}\n",
+        "# Redis Cloud and Enterprise MCP Server\n\n## Safety Model\n\n{}\n",
+        policy.describe()
     );
 
     let suffix = "\n## Authentication\n\n\
@@ -315,18 +399,17 @@ fn build_router(
 
     router = router.auto_instructions_with(Some(prefix), Some(suffix));
 
-    // Apply read-only filter if enabled
-    // This hides write tools entirely from tools/list and returns "unauthorized"
+    // Apply policy-based tool filter
+    // This hides denied tools from tools/list and returns "unauthorized"
     // if they're called directly, providing defense in depth beyond handler-level checks
-    let router = if read_only {
-        info!("Applying read-only filter - write tools will be hidden");
-        router.tool_filter(
-            CapabilityFilter::<Tool>::write_guard(|_session| false)
-                .denial_behavior(DenialBehavior::Unauthorized),
-        )
-    } else {
-        router
-    };
+    let policy_for_filter = policy.clone();
+    info!(tier = %policy.global_tier(), "Applying policy filter");
+    let router = router.tool_filter(
+        CapabilityFilter::<Tool>::new(move |_session, tool: &Tool| {
+            policy_for_filter.is_tool_allowed(tool)
+        })
+        .denial_behavior(DenialBehavior::Unauthorized),
+    );
 
     Ok(router)
 }
@@ -420,6 +503,28 @@ mod tests {
             resilience: None,
             tags: vec![],
         }
+    }
+
+    fn test_state() -> Arc<AppState> {
+        Arc::new(
+            AppState::new(
+                state::CredentialSource::Profiles(vec![]),
+                AppState::test_policy(),
+                None,
+            )
+            .unwrap(),
+        )
+    }
+
+    fn test_policy_arc(tier: SafetyTier) -> Arc<Policy> {
+        Arc::new(Policy::new(
+            PolicyConfig {
+                tier,
+                ..Default::default()
+            },
+            HashMap::new(),
+            "test".to_string(),
+        ))
     }
 
     #[test]
@@ -561,10 +666,6 @@ mod tests {
             desc.starts_with("DANGEROUS:"),
             "{name}: destructive tool description should start with 'DANGEROUS:', got: {desc}"
         );
-    }
-
-    fn test_state() -> Arc<AppState> {
-        Arc::new(AppState::new(state::CredentialSource::Profiles(vec![]), true, None).unwrap())
     }
 
     // -- Profile tools --
@@ -822,9 +923,19 @@ mod tests {
         let state = test_state();
         let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
 
-        let _router = build_router(state.clone(), true, &enabled).unwrap();
-        // The router instructions are set but not publicly accessible.
+        let policy_ro = test_policy_arc(SafetyTier::ReadOnly);
+        let _router = build_router(state.clone(), policy_ro, &enabled).unwrap();
         // Verify the build succeeds (no panics) for both modes.
-        let _router_write = build_router(state.clone(), false, &enabled).unwrap();
+        let policy_full = test_policy_arc(SafetyTier::Full);
+        let _router_write = build_router(state.clone(), policy_full, &enabled).unwrap();
+    }
+
+    #[test]
+    fn show_policy_tool_is_always_registered() {
+        let state = test_state();
+        let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let policy = test_policy_arc(SafetyTier::ReadOnly);
+        // Build should succeed and include show_policy tool
+        let _router = build_router(state, policy, &enabled).unwrap();
     }
 }

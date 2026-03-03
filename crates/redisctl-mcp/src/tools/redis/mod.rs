@@ -20,6 +20,73 @@ use tower_mcp::{McpRouter, ToolError};
 
 use crate::state::AppState;
 
+/// All tool names registered by the Database (Redis) toolset.
+pub const TOOL_NAMES: &[&str] = &[
+    // server
+    "redis_ping",
+    "redis_info",
+    "redis_dbsize",
+    "redis_client_list",
+    "redis_cluster_info",
+    "redis_slowlog",
+    "redis_config_get",
+    "redis_memory_stats",
+    "redis_latency_history",
+    "redis_acl_list",
+    "redis_acl_whoami",
+    "redis_module_list",
+    "redis_config_set",
+    "redis_flushdb",
+    // diagnostics
+    "redis_health_check",
+    "redis_key_summary",
+    "redis_hotkeys",
+    "redis_connection_summary",
+    // keys
+    "redis_keys",
+    "redis_get",
+    "redis_type",
+    "redis_ttl",
+    "redis_exists",
+    "redis_memory_usage",
+    "redis_scan",
+    "redis_object_encoding",
+    "redis_object_freq",
+    "redis_object_idletime",
+    "redis_object_help",
+    "redis_set",
+    "redis_del",
+    "redis_expire",
+    "redis_rename",
+    // structures
+    "redis_hgetall",
+    "redis_lrange",
+    "redis_smembers",
+    "redis_zrange",
+    "redis_xinfo_stream",
+    "redis_xrange",
+    "redis_xlen",
+    "redis_pubsub_channels",
+    "redis_pubsub_numsub",
+    "redis_hset",
+    "redis_hdel",
+    "redis_lpush",
+    "redis_rpush",
+    "redis_lpop",
+    "redis_rpop",
+    "redis_sadd",
+    "redis_srem",
+    "redis_zadd",
+    "redis_zrem",
+    "redis_xadd",
+    "redis_xtrim",
+];
+
+/// Get all Database tool names as owned strings.
+pub fn tool_names() -> Vec<String> {
+    TOOL_NAMES.iter().map(|s| (*s).to_string()).collect()
+}
+
 /// Resolve a Redis URL from the provided inputs.
 ///
 /// Resolution order:

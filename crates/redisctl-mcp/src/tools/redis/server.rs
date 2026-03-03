@@ -721,9 +721,9 @@ pub fn flushdb(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, FlushdbInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<FlushdbInput>| async move {
-                if !state.is_write_allowed() {
+                if !state.is_destructive_allowed() {
                     return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
+                        "Destructive operations require policy tier 'full'",
                     ));
                 }
 
