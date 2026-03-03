@@ -393,7 +393,7 @@ pub async fn get_redis_versions(
                 println!("No Redis versions found");
             } else {
                 let mut table = Table::new(rows);
-                table.with(Style::modern());
+                table.with(Style::blank());
                 println!("{}", table);
             }
         }
@@ -492,7 +492,7 @@ pub async fn get_cidr_allowlist(
                 println!("No CIDR blocks configured");
             } else {
                 let mut table = Table::new(entries);
-                table.with(Style::modern());
+                table.with(Style::blank());
                 println!("{}", table);
             }
         }
@@ -625,7 +625,7 @@ pub async fn get_maintenance_windows(
                 println!("No maintenance windows configured");
             } else {
                 let mut table = Table::new(rows);
-                table.with(Style::modern());
+                table.with(Style::blank());
                 println!("{}", table);
             }
         }
@@ -805,7 +805,7 @@ pub async fn list_aa_regions(
                 println!("No Active-Active regions found");
             } else {
                 let mut table = Table::new(rows);
-                table.with(Style::modern());
+                table.with(Style::blank());
                 println!("{}", table);
             }
         }
