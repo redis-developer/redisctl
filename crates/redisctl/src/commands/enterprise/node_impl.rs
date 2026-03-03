@@ -7,8 +7,27 @@ use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use anyhow::Context;
 use redis_enterprise::nodes::NodeHandler;
+use serde_json::Value;
+use tabled::{Table, Tabled, settings::Style};
 
 use super::utils::*;
+
+/// Node row for clean table display
+#[derive(Tabled)]
+struct NodeRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "ADDRESS")]
+    addr: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+    #[tabled(rename = "SHARDS")]
+    shards: String,
+    #[tabled(rename = "MEMORY")]
+    memory: String,
+    #[tabled(rename = "RACK")]
+    rack_id: String,
+}
 
 // Node Operations
 
@@ -23,7 +42,11 @@ pub async fn list_nodes(
     let nodes = handler.list().await?;
     let nodes_json = serde_json::to_value(nodes).context("Failed to serialize nodes")?;
     let data = handle_output(nodes_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_nodes_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -39,7 +62,98 @@ pub async fn get_node(
     let node = handler.get(id).await?;
     let node_json = serde_json::to_value(node).context("Failed to serialize node")?;
     let data = handle_output(node_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_node_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
+    Ok(())
+}
+
+/// Print nodes in clean table format
+fn print_nodes_table(data: &Value) -> CliResult<()> {
+    let nodes = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No nodes found");
+            return Ok(());
+        }
+    };
+
+    if nodes.is_empty() {
+        println!("No nodes found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for node in &nodes {
+        let total_mem = node.get("total_memory").and_then(|v| v.as_u64());
+        let memory = total_mem
+            .map(format_bytes)
+            .unwrap_or_else(|| "-".to_string());
+
+        rows.push(NodeRow {
+            uid: extract_field(node, "uid", "-"),
+            addr: extract_field(node, "addr", "-"),
+            status: format_status(extract_field(node, "status", "unknown")),
+            shards: extract_field(node, "shard_count", "-"),
+            memory,
+            rack_id: extract_field(node, "rack_id", "-"),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print node detail in key-value format
+fn print_node_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Address", "addr"),
+        ("Status", "status"),
+        ("Rack ID", "rack_id"),
+        ("OS Version", "os_version"),
+        ("Software Version", "software_version"),
+        ("Shard Count", "shard_count"),
+        ("Accept Servers", "accept_servers"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if let Some(mem) = data.get("total_memory").and_then(|v| v.as_u64()) {
+        rows.push(DetailRow {
+            field: "Total Memory".to_string(),
+            value: format_bytes(mem),
+        });
+    }
+
+    if rows.is_empty() {
+        println!("No node information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
     Ok(())
 }
 

@@ -6,6 +6,7 @@ use std::time::Duration;
 
 use indicatif::{ProgressBar, ProgressStyle};
 use serde_json::Value;
+use tabled::{Table, Tabled, settings::Style};
 
 use crate::cli::OutputFormat;
 use crate::commands::cloud::async_utils::AsyncOperationArgs;
@@ -13,6 +14,184 @@ use crate::connection::ConnectionManager;
 use crate::error::{RedisCtlError, Result as CliResult};
 
 use super::utils::*;
+
+/// Database row for clean table display
+#[derive(Tabled)]
+struct DatabaseRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+    #[tabled(rename = "MEMORY")]
+    memory: String,
+    #[tabled(rename = "SHARDS")]
+    shards: String,
+    #[tabled(rename = "REPL")]
+    replication: String,
+    #[tabled(rename = "ENDPOINT")]
+    endpoint: String,
+    #[tabled(rename = "PERSIST")]
+    persistence: String,
+}
+
+/// Extract endpoint from database JSON
+fn extract_endpoint(db: &Value) -> String {
+    // Try endpoints[0].dns_name:port or endpoints[0].addr[0]:port
+    if let Some(endpoints) = db.get("endpoints").and_then(|v| v.as_array())
+        && let Some(ep) = endpoints.first()
+    {
+        let host = ep
+            .get("dns_name")
+            .and_then(|v| v.as_str())
+            .or_else(|| {
+                ep.get("addr")
+                    .and_then(|v| v.as_array())
+                    .and_then(|a| a.first())
+                    .and_then(|v| v.as_str())
+            })
+            .unwrap_or("");
+        let port = ep
+            .get("port")
+            .and_then(|v| v.as_u64())
+            .map(|p| p.to_string())
+            .unwrap_or_default();
+        if !host.is_empty() && !port.is_empty() {
+            return format!("{}:{}", host, port);
+        } else if !host.is_empty() {
+            return host.to_string();
+        }
+    }
+    // Fallback: try top-level port
+    if let Some(port) = db.get("port").and_then(|v| v.as_u64()) {
+        return format!(":{}", port);
+    }
+    "-".to_string()
+}
+
+/// Print databases in clean table format
+fn print_databases_table(data: &Value) -> CliResult<()> {
+    let databases = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No databases found");
+            return Ok(());
+        }
+    };
+
+    if databases.is_empty() {
+        println!("No databases found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for db in &databases {
+        let memory_size = db
+            .get("memory_size")
+            .and_then(|v| v.as_u64())
+            .map(format_bytes)
+            .unwrap_or_else(|| "-".to_string());
+
+        rows.push(DatabaseRow {
+            uid: extract_field(db, "uid", "-"),
+            name: truncate_string(&extract_field(db, "name", "-"), 25),
+            status: format_status(extract_field(db, "status", "unknown")),
+            memory: memory_size,
+            shards: extract_field(db, "shards_count", "-"),
+            replication: if db
+                .get("replication")
+                .and_then(|v| v.as_bool())
+                .unwrap_or(false)
+            {
+                "yes".to_string()
+            } else {
+                "no".to_string()
+            },
+            endpoint: truncate_string(&extract_endpoint(db), 30),
+            persistence: extract_field(db, "data_persistence", "-"),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print database detail in key-value format
+fn print_database_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Name", "name"),
+        ("Status", "status"),
+        ("Type", "type"),
+        ("Port", "port"),
+        ("Replication", "replication"),
+        ("Data Persistence", "data_persistence"),
+        ("Eviction Policy", "eviction_policy"),
+        ("Shards Count", "shards_count"),
+        ("Shards Placement", "shards_placement"),
+        ("Proxy Policy", "proxy_policy"),
+        ("OSS Cluster", "oss_cluster"),
+        ("Version", "version"),
+        ("Created Time", "created_time"),
+        ("Last Changed Time", "last_changed_time"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    // Memory size with formatting
+    if let Some(mem) = data.get("memory_size").and_then(|v| v.as_u64()) {
+        rows.push(DetailRow {
+            field: "Memory Size".to_string(),
+            value: format_bytes(mem),
+        });
+    }
+
+    // Used memory if available
+    if let Some(used) = data.get("used_memory").and_then(|v| v.as_u64()) {
+        rows.push(DetailRow {
+            field: "Used Memory".to_string(),
+            value: format_bytes(used),
+        });
+    }
+
+    // Endpoint
+    let endpoint = extract_endpoint(data);
+    if endpoint != "-" {
+        rows.push(DetailRow {
+            field: "Endpoint".to_string(),
+            value: endpoint,
+        });
+    }
+
+    if rows.is_empty() {
+        println!("No database information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
 
 /// Parse a module spec string into (name, version, args).
 /// Format: `name[@version][:args]`
@@ -48,7 +227,11 @@ pub async fn list_databases(
         .map_err(RedisCtlError::from)?;
 
     let data = handle_output(response, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_databases_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -67,7 +250,11 @@ pub async fn get_database(
         .map_err(RedisCtlError::from)?;
 
     let data = handle_output(response, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_database_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 

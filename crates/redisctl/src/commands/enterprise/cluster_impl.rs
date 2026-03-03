@@ -15,6 +15,7 @@ use redis_enterprise::license::LicenseHandler;
 use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::ocsp::OcspHandler;
 use redis_enterprise::shards::ShardHandler;
+use tabled::{Table, settings::Style};
 
 use super::utils::*;
 
@@ -33,7 +34,72 @@ pub async fn get_cluster(
     let info = handler.info().await?;
     let info_json = serde_json::to_value(info).context("Failed to serialize cluster info")?;
     let data = handle_output(info_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_cluster_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
+    Ok(())
+}
+
+/// Print cluster detail in key-value format
+fn print_cluster_detail(data: &serde_json::Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("Name", "name"),
+        ("Status", "status"),
+        ("Rack Aware", "rack_aware"),
+        ("License Expired", "license_expired"),
+        ("Software Version", "software_version"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                serde_json::Value::Null => continue,
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Bool(b) => b.to_string(),
+                serde_json::Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    // Node count
+    if let Some(nodes) = data.get("nodes").and_then(|v| v.as_array()) {
+        rows.push(DetailRow {
+            field: "Nodes".to_string(),
+            value: nodes.len().to_string(),
+        });
+    }
+
+    // Memory
+    if let Some(total) = data.get("total_memory").and_then(|v| v.as_u64()) {
+        rows.push(DetailRow {
+            field: "Total Memory".to_string(),
+            value: format_bytes(total),
+        });
+    }
+    if let Some(used) = data.get("used_memory").and_then(|v| v.as_u64()) {
+        rows.push(DetailRow {
+            field: "Used Memory".to_string(),
+            value: format_bytes(used),
+        });
+    }
+
+    if rows.is_empty() {
+        println!("No cluster information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
     Ok(())
 }
 
