@@ -733,6 +733,10 @@ mod tests {
                 &tools::cloud::get_vpc_peering(state.clone()),
                 "get_vpc_peering",
             );
+            assert_read_only(
+                &tools::cloud::wait_for_cloud_task(state.clone()),
+                "wait_for_cloud_task",
+            );
         }
 
         #[test]
@@ -749,6 +753,10 @@ mod tests {
             assert_non_destructive_write(
                 &tools::cloud::backup_database(state.clone()),
                 "backup_database",
+            );
+            assert_non_destructive_write(
+                &tools::cloud::update_account_user(state.clone()),
+                "update_account_user",
             );
             assert_non_destructive_write(
                 &tools::cloud::create_acl_user(state.clone()),
@@ -778,6 +786,14 @@ mod tests {
             assert_destructive(
                 &tools::cloud::flush_database(state.clone()),
                 "flush_database",
+            );
+            assert_destructive(
+                &tools::cloud::flush_crdb_database(state.clone()),
+                "flush_crdb_database",
+            );
+            assert_destructive(
+                &tools::cloud::delete_account_user(state.clone()),
+                "delete_account_user",
             );
             assert_destructive(
                 &tools::cloud::delete_acl_user(state.clone()),
