@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.2](https://github.com/redis-developer/redisctl/compare/redisctl-v0.8.1...redisctl-v0.8.2) - 2026-03-03
+
+### Added
+
+- *(enterprise)* add curated table formatters for list/get commands ([#761](https://github.com/redis-developer/redisctl/pull/761)) ([#763](https://github.com/redis-developer/redisctl/pull/763))
+- *(cli)* add dynamic shell completions and ValueHint annotations ([#758](https://github.com/redis-developer/redisctl/pull/758))
+
+### Other
+
+- *(output)* unify OutputFormat and standardize table library ([#749](https://github.com/redis-developer/redisctl/pull/749)) ([#760](https://github.com/redis-developer/redisctl/pull/760))
+
 ## [0.8.1](https://github.com/redis-developer/redisctl/compare/redisctl-v0.8.0...redisctl-v0.8.1) - 2026-02-28
 
 ### Added
