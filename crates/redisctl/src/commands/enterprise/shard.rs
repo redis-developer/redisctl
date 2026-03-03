@@ -1,9 +1,28 @@
-use crate::error::RedisCtlError;
-use clap::Subcommand;
-
 use crate::cli::OutputFormat;
+use crate::commands::enterprise::utils::{
+    DetailRow, extract_field, format_status, output_with_pager, resolve_auto,
+};
 use crate::connection::ConnectionManager;
+use crate::error::RedisCtlError;
 use crate::error::Result as CliResult;
+use clap::Subcommand;
+use serde_json::Value;
+use tabled::{Table, Tabled, settings::Style};
+
+/// Shard row for clean table display
+#[derive(Tabled)]
+struct ShardRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "DB")]
+    bdb_uid: String,
+    #[tabled(rename = "NODE")]
+    node: String,
+    #[tabled(rename = "ROLE")]
+    role: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+}
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum ShardCommands {
@@ -198,7 +217,11 @@ impl ShardCommands {
                 } else {
                     response
                 };
-                super::utils::print_formatted_output(output_data, output_format)?;
+                if matches!(resolve_auto(output_format), OutputFormat::Table) {
+                    print_shards_table(&output_data)?;
+                } else {
+                    super::utils::print_formatted_output(output_data, output_format)?;
+                }
             }
 
             ShardCommands::Get { uid } => {
@@ -212,7 +235,11 @@ impl ShardCommands {
                 } else {
                     response
                 };
-                super::utils::print_formatted_output(output_data, output_format)?;
+                if matches!(resolve_auto(output_format), OutputFormat::Table) {
+                    print_shard_detail(&output_data)?;
+                } else {
+                    super::utils::print_formatted_output(output_data, output_format)?;
+                }
             }
 
             ShardCommands::ListByDatabase { bdb_uid } => {
@@ -226,7 +253,11 @@ impl ShardCommands {
                 } else {
                     response
                 };
-                super::utils::print_formatted_output(output_data, output_format)?;
+                if matches!(resolve_auto(output_format), OutputFormat::Table) {
+                    print_shards_table(&output_data)?;
+                } else {
+                    super::utils::print_formatted_output(output_data, output_format)?;
+                }
             }
 
             ShardCommands::Failover { uid, force } => {
@@ -465,4 +496,77 @@ pub async fn handle_shard_command(
     shard_cmd
         .execute(conn_mgr, profile_name, output_format, query)
         .await
+}
+
+/// Print shards in clean table format
+fn print_shards_table(data: &Value) -> CliResult<()> {
+    let shards = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No shards found");
+            return Ok(());
+        }
+    };
+
+    if shards.is_empty() {
+        println!("No shards found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for shard in &shards {
+        rows.push(ShardRow {
+            uid: extract_field(shard, "uid", "-"),
+            bdb_uid: extract_field(shard, "bdb_uid", "-"),
+            node: extract_field(shard, "node_uid", &extract_field(shard, "node", "-")),
+            role: extract_field(shard, "role", "-"),
+            status: format_status(extract_field(shard, "status", "unknown")),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print shard detail in key-value format
+fn print_shard_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("BDB UID", "bdb_uid"),
+        ("Node UID", "node_uid"),
+        ("Role", "role"),
+        ("Status", "status"),
+        ("Loading", "loading"),
+        ("Backup", "backup"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No shard information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
 }

@@ -5,14 +5,32 @@ use crate::error::RedisCtlError;
 
 use crate::cli::OutputFormat;
 use crate::commands::enterprise::module::ModuleCommands;
+use crate::commands::enterprise::utils::{
+    DetailRow, extract_field, output_with_pager, resolve_auto, truncate_string,
+};
 use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use anyhow::Context;
 use redis_enterprise::ModuleHandler;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use std::fs;
 use std::io::{Read, Write};
 use std::path::Path;
+use tabled::{Table, Tabled, settings::Style};
+
+/// Module row for clean table display
+#[derive(Tabled)]
+struct ModuleRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "MODULE")]
+    module_name: String,
+    #[tabled(rename = "VERSION")]
+    version: String,
+    #[tabled(rename = "DISPLAY")]
+    display_name: String,
+}
 
 pub async fn handle_module_commands(
     conn_mgr: &ConnectionManager,
@@ -89,7 +107,11 @@ async fn handle_list(
         modules_json
     };
 
-    crate::commands::enterprise::utils::print_formatted_output(output_data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_modules_table(&output_data)?;
+    } else {
+        crate::commands::enterprise::utils::print_formatted_output(output_data, output_format)?;
+    }
     Ok(())
 }
 
@@ -188,7 +210,110 @@ async fn handle_get(
         module_json
     };
 
-    crate::commands::enterprise::utils::print_formatted_output(output_data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_module_detail(&output_data)?;
+    } else {
+        crate::commands::enterprise::utils::print_formatted_output(output_data, output_format)?;
+    }
+    Ok(())
+}
+
+/// Print modules in clean table format
+fn print_modules_table(data: &Value) -> CliResult<()> {
+    let modules = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No modules found");
+            return Ok(());
+        }
+    };
+
+    if modules.is_empty() {
+        println!("No modules found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for module in &modules {
+        rows.push(ModuleRow {
+            uid: extract_field(module, "uid", "-"),
+            module_name: truncate_string(&extract_field(module, "module_name", "-"), 25),
+            version: extract_field(
+                module,
+                "semantic_version",
+                &extract_field(module, "version", "-"),
+            ),
+            display_name: truncate_string(&extract_field(module, "display_name", "-"), 25),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print module detail in key-value format
+fn print_module_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Module Name", "module_name"),
+        ("Display Name", "display_name"),
+        ("Version", "version"),
+        ("Semantic Version", "semantic_version"),
+        ("Min Redis Version", "min_redis_version"),
+        ("Description", "description"),
+        ("Author", "author"),
+        ("Email", "email"),
+        ("Homepage", "homepage"),
+        ("License", "license"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    // Capabilities
+    if let Some(caps) = data.get("capabilities").and_then(|v| v.as_array()) {
+        let cap_strs: Vec<&str> = caps.iter().filter_map(|v| v.as_str()).collect();
+        if !cap_strs.is_empty() {
+            rows.push(DetailRow {
+                field: "Capabilities".to_string(),
+                value: cap_strs.join(", "),
+            });
+        }
+    }
+
+    // Commands count
+    if let Some(cmds) = data.get("commands").and_then(|v| v.as_array()) {
+        rows.push(DetailRow {
+            field: "Commands".to_string(),
+            value: cmds.len().to_string(),
+        });
+    }
+
+    if rows.is_empty() {
+        println!("No module information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
     Ok(())
 }
 

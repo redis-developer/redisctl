@@ -76,7 +76,7 @@ pub fn compile_jmespath(
 /// Resolve `Auto` format to a concrete format.
 ///
 /// `Auto` resolves to `Table` when stdout is a TTY, `Json` when piped.
-fn resolve_auto(format: OutputFormat) -> OutputFormat {
+pub fn resolve_auto(format: OutputFormat) -> OutputFormat {
     match format {
         OutputFormat::Auto => {
             if std::io::stdout().is_terminal() {

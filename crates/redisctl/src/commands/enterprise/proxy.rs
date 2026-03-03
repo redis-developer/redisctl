@@ -1,8 +1,27 @@
+use crate::cli::OutputFormat;
+use crate::commands::enterprise::utils::{
+    DetailRow, extract_field, format_status, output_with_pager, resolve_auto,
+};
+use crate::connection::ConnectionManager;
 use crate::error::RedisCtlError;
+use crate::error::Result as CliResult;
 use anyhow::Context;
 use clap::Subcommand;
+use serde_json::Value;
+use tabled::{Table, Tabled, settings::Style};
 
-use crate::{cli::OutputFormat, connection::ConnectionManager, error::Result as CliResult};
+/// Proxy row for clean table display
+#[derive(Tabled)]
+struct ProxyRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+    #[tabled(rename = "THREADS")]
+    threads: String,
+    #[tabled(rename = "MAX CONN")]
+    max_connections: String,
+}
 
 #[allow(dead_code)]
 pub async fn handle_proxy_command(
@@ -114,7 +133,11 @@ async fn handle_proxy_command_impl(
                 response
             };
 
-            super::utils::print_formatted_output(output_data, output_format)?;
+            if matches!(resolve_auto(output_format), OutputFormat::Table) {
+                print_proxies_table(&output_data)?;
+            } else {
+                super::utils::print_formatted_output(output_data, output_format)?;
+            }
         }
         ProxyCommands::Get { uid } => {
             let response: serde_json::Value = client
@@ -128,7 +151,11 @@ async fn handle_proxy_command_impl(
                 response
             };
 
-            super::utils::print_formatted_output(output_data, output_format)?;
+            if matches!(resolve_auto(output_format), OutputFormat::Table) {
+                print_proxy_detail(&output_data)?;
+            } else {
+                super::utils::print_formatted_output(output_data, output_format)?;
+            }
         }
         ProxyCommands::Update {
             uid,
@@ -201,6 +228,76 @@ async fn handle_proxy_command_impl(
         }
     }
 
+    Ok(())
+}
+
+/// Print proxies in clean table format
+fn print_proxies_table(data: &Value) -> CliResult<()> {
+    let proxies = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No proxies found");
+            return Ok(());
+        }
+    };
+
+    if proxies.is_empty() {
+        println!("No proxies found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for proxy in &proxies {
+        rows.push(ProxyRow {
+            uid: extract_field(proxy, "uid", "-"),
+            status: format_status(extract_field(proxy, "status", "unknown")),
+            threads: extract_field(proxy, "threads", "-"),
+            max_connections: extract_field(proxy, "max_connections", "-"),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print proxy detail in key-value format
+fn print_proxy_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Status", "status"),
+        ("Threads", "threads"),
+        ("Max Connections", "max_connections"),
+        ("Enabled", "enabled"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No proxy information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
     Ok(())
 }
 

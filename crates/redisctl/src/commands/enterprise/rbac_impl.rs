@@ -10,8 +10,49 @@ use redis_enterprise::ldap_mappings::LdapMappingHandler;
 use redis_enterprise::redis_acls::{CreateRedisAclRequest, RedisAclHandler};
 use redis_enterprise::roles::RolesHandler;
 use redis_enterprise::users::{AuthRequest, PasswordSet, UserHandler};
+use serde_json::Value;
+use tabled::{Table, Tabled, settings::Style};
 
 use super::utils::*;
+
+/// User row for clean table display
+#[derive(Tabled)]
+struct UserRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "EMAIL")]
+    email: String,
+    #[tabled(rename = "ROLE")]
+    role: String,
+    #[tabled(rename = "STATUS")]
+    status: String,
+    #[tabled(rename = "AUTH")]
+    auth_method: String,
+}
+
+/// Role row for clean table display
+#[derive(Tabled)]
+struct RoleRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "MANAGEMENT")]
+    management: String,
+}
+
+/// ACL row for clean table display
+#[derive(Tabled)]
+struct AclRow {
+    #[tabled(rename = "UID")]
+    uid: String,
+    #[tabled(rename = "NAME")]
+    name: String,
+    #[tabled(rename = "ACL")]
+    acl: String,
+}
 
 // ============================================================================
 // User Management Commands
@@ -28,7 +69,11 @@ pub async fn list_users(
     let users = handler.list().await?;
     let users_json = serde_json::to_value(users).context("Failed to serialize users")?;
     let data = handle_output(users_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_users_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -53,7 +98,11 @@ pub async fn get_user(
         );
     }
     let data = handle_output(user_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_user_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -363,7 +412,11 @@ pub async fn list_roles(
     let roles = handler.list().await?;
     let roles_json = serde_json::to_value(roles).context("Failed to serialize roles")?;
     let data = handle_output(roles_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_roles_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -379,7 +432,11 @@ pub async fn get_role(
     let role = handler.get(id).await?;
     let role_json = serde_json::to_value(role).context("Failed to serialize role")?;
     let data = handle_output(role_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_role_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -562,7 +619,11 @@ pub async fn list_acls(
     let acls = handler.list().await?;
     let acls_json = serde_json::to_value(acls).context("Failed to serialize ACLs")?;
     let data = handle_output(acls_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_acls_table(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -578,7 +639,11 @@ pub async fn get_acl(
     let acl = handler.get(id).await?;
     let acl_json = serde_json::to_value(acl).context("Failed to serialize ACL")?;
     let data = handle_output(acl_json, output_format, query)?;
-    print_formatted_output(data, output_format)?;
+    if matches!(resolve_auto(output_format), OutputFormat::Table) {
+        print_acl_detail(&data)?;
+    } else {
+        print_formatted_output(data, output_format)?;
+    }
     Ok(())
 }
 
@@ -991,5 +1056,248 @@ pub async fn revoke_all_user_sessions(
         });
 
     println!("All sessions for user {} revoked", user_id);
+    Ok(())
+}
+
+// ============================================================================
+// Table formatting helpers
+// ============================================================================
+
+/// Print users in clean table format
+fn print_users_table(data: &Value) -> CliResult<()> {
+    let users = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No users found");
+            return Ok(());
+        }
+    };
+
+    if users.is_empty() {
+        println!("No users found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for user in &users {
+        rows.push(UserRow {
+            uid: extract_field(user, "uid", "-"),
+            name: truncate_string(&extract_field(user, "name", "-"), 20),
+            email: truncate_string(&extract_field(user, "email", "-"), 30),
+            role: extract_field(user, "role", "-"),
+            status: format_status(extract_field(user, "status", "unknown")),
+            auth_method: extract_field(user, "auth_method", "-"),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print user detail in key-value format
+fn print_user_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Name", "name"),
+        ("Email", "email"),
+        ("Role", "role"),
+        ("Status", "status"),
+        ("Auth Method", "auth_method"),
+        ("Email Alerts", "email_alerts"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    // Role UIDs
+    if let Some(role_uids) = data.get("role_uids").and_then(|v| v.as_array()) {
+        let uids: Vec<String> = role_uids
+            .iter()
+            .filter_map(|v| v.as_u64().map(|n| n.to_string()))
+            .collect();
+        if !uids.is_empty() {
+            rows.push(DetailRow {
+                field: "Role UIDs".to_string(),
+                value: uids.join(", "),
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No user information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print roles in clean table format
+fn print_roles_table(data: &Value) -> CliResult<()> {
+    let roles = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No roles found");
+            return Ok(());
+        }
+    };
+
+    if roles.is_empty() {
+        println!("No roles found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for role in &roles {
+        rows.push(RoleRow {
+            uid: extract_field(role, "uid", "-"),
+            name: truncate_string(&extract_field(role, "name", "-"), 30),
+            management: extract_field(role, "management", "-"),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print role detail in key-value format
+fn print_role_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Name", "name"),
+        ("Management", "management"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    // Show nested data_access, bdb_roles, cluster_roles if present
+    for (label, key) in &[
+        ("Data Access", "data_access"),
+        ("BDB Roles", "bdb_roles"),
+        ("Cluster Roles", "cluster_roles"),
+    ] {
+        if let Some(val) = data.get(*key)
+            && !val.is_null()
+        {
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: val.to_string(),
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No role information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print ACLs in clean table format
+fn print_acls_table(data: &Value) -> CliResult<()> {
+    let acls = match data {
+        Value::Array(arr) => arr.clone(),
+        _ => {
+            println!("No ACLs found");
+            return Ok(());
+        }
+    };
+
+    if acls.is_empty() {
+        println!("No ACLs found");
+        return Ok(());
+    }
+
+    let mut rows = Vec::new();
+    for acl in &acls {
+        rows.push(AclRow {
+            uid: extract_field(acl, "uid", "-"),
+            name: truncate_string(&extract_field(acl, "name", "-"), 25),
+            acl: truncate_string(&extract_field(acl, "acl", "-"), 50),
+        });
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
+    Ok(())
+}
+
+/// Print ACL detail in key-value format
+fn print_acl_detail(data: &Value) -> CliResult<()> {
+    let mut rows = Vec::new();
+
+    let fields = [
+        ("UID", "uid"),
+        ("Name", "name"),
+        ("ACL", "acl"),
+        ("Description", "description"),
+    ];
+
+    for (label, key) in &fields {
+        if let Some(val) = data.get(*key) {
+            let display = match val {
+                Value::Null => continue,
+                Value::String(s) => s.clone(),
+                Value::Bool(b) => b.to_string(),
+                Value::Number(n) => n.to_string(),
+                _ => val.to_string(),
+            };
+            rows.push(DetailRow {
+                field: label.to_string(),
+                value: display,
+            });
+        }
+    }
+
+    if rows.is_empty() {
+        println!("No ACL information available");
+        return Ok(());
+    }
+
+    let mut table = Table::new(&rows);
+    table.with(Style::blank());
+    output_with_pager(&table.to_string());
     Ok(())
 }
