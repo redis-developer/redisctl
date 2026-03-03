@@ -857,6 +857,140 @@ pub fn update_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+// ============================================================================
+// User Permissions
+// ============================================================================
+
+/// Input for getting user permissions (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetUserPermissionsInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_enterprise_user_permissions tool
+pub fn get_enterprise_user_permissions(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_user_permissions")
+        .description(
+            "Get all available permission types for Redis Enterprise user management.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, GetUserPermissionsInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetUserPermissionsInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = UserHandler::new(client);
+                let permissions = handler
+                    .permissions()
+                    .await
+                    .tool_context("Failed to get user permissions")?;
+
+                CallToolResult::from_serialize(&permissions)
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// Built-in Roles
+// ============================================================================
+
+/// Input for getting built-in roles (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetBuiltinRolesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_enterprise_builtin_roles tool
+pub fn get_enterprise_builtin_roles(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_builtin_roles")
+        .description(
+            "Get the list of built-in roles available in the Redis Enterprise cluster.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, GetBuiltinRolesInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetBuiltinRolesInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = RolesHandler::new(client);
+                let roles = handler
+                    .built_in()
+                    .await
+                    .tool_context("Failed to get built-in roles")?;
+
+                wrap_list("roles", &roles)
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// ACL Validation
+// ============================================================================
+
+/// Input for validating a Redis ACL
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ValidateEnterpriseAclInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// ACL name
+    pub name: String,
+    /// ACL rule string (e.g., "+@all ~*" or "+get +set ~cache:*")
+    pub acl: String,
+    /// Description of the ACL
+    #[serde(default)]
+    pub description: Option<String>,
+}
+
+/// Build the validate_enterprise_acl tool
+pub fn validate_enterprise_acl(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("validate_enterprise_acl")
+        .description(
+            "Validate a Redis ACL rule before creating it. Returns validation results \
+             and any errors.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ValidateEnterpriseAclInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ValidateEnterpriseAclInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let request = CreateRedisAclRequest {
+                    name: input.name,
+                    acl: input.acl,
+                    description: input.description,
+                };
+
+                let handler = RedisAclHandler::new(client);
+                let result = handler
+                    .validate(request)
+                    .await
+                    .tool_context("Failed to validate ACL")?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
 /// Build an MCP sub-router containing RBAC and LDAP tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
@@ -878,6 +1012,12 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(create_enterprise_acl(state.clone()))
         .tool(update_enterprise_acl(state.clone()))
         .tool(delete_enterprise_acl(state.clone()))
+        // User Permissions
+        .tool(get_enterprise_user_permissions(state.clone()))
+        // Built-in Roles
+        .tool(get_enterprise_builtin_roles(state.clone()))
+        // ACL Validation
+        .tool(validate_enterprise_acl(state.clone()))
         // LDAP
         .tool(get_enterprise_ldap_config(state.clone()))
         .tool(update_enterprise_ldap_config(state.clone()))
