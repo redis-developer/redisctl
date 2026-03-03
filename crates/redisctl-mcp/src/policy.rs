@@ -13,6 +13,8 @@ use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder};
 
+use crate::audit::AuditConfig;
+
 /// Safety tier determining which categories of tools are allowed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
 #[serde(rename_all = "kebab-case")]
@@ -77,6 +79,9 @@ pub struct PolicyConfig {
     /// App/profile toolset overrides
     #[serde(skip_serializing_if = "Option::is_none")]
     pub app: Option<ToolsetPolicy>,
+    /// Audit logging configuration
+    #[serde(default)]
+    pub audit: AuditConfig,
 }
 
 impl Default for PolicyConfig {
@@ -90,6 +95,7 @@ impl Default for PolicyConfig {
             enterprise: None,
             database: None,
             app: None,
+            audit: AuditConfig::default(),
         }
     }
 }
@@ -734,6 +740,7 @@ mod tests {
                 deny: vec![],
             }),
             app: None,
+            audit: AuditConfig::default(),
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();

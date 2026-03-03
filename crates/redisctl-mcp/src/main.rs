@@ -12,10 +12,14 @@ use clap::{Parser, ValueEnum};
 use redisctl_core::Config;
 #[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
 use redisctl_core::DeploymentType;
-use tower_mcp::{CapabilityFilter, DenialBehavior, McpRouter, Tool, transport::StdioTransport};
+use tower_mcp::{
+    CapabilityFilter, DenialBehavior, McpRouter, Tool,
+    transport::{GenericStdioTransport, StdioTransport},
+};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
+mod audit;
 mod error;
 mod policy;
 mod prompts;
@@ -23,8 +27,10 @@ mod resources;
 mod state;
 mod tools;
 
+use audit::AuditLayer;
 use policy::{Policy, PolicyConfig, SafetyTier, ToolsetKind};
 use state::{AppState, CredentialSource};
+use tower::Layer;
 
 /// Transport mode for the MCP server
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
@@ -260,23 +266,24 @@ fn resolve_policy(args: &Args) -> Result<(PolicyConfig, String)> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    // Initialize tracing
-    tracing_subscriber::registry()
-        .with(fmt::layer().with_writer(std::io::stderr))
-        .with(EnvFilter::try_from_default_env().unwrap_or_else(|_| args.log_level.clone().into()))
-        .init();
-
     let enabled = enabled_toolsets(&args);
     let enabled_names: Vec<String> = enabled.iter().map(|t| t.to_string()).collect();
 
-    // Resolve policy configuration
+    // Resolve policy configuration (includes audit config)
     let (policy_config, policy_source) = resolve_policy(&args)?;
+    let audit_config = Arc::new(policy_config.audit.clone());
+
+    // Initialize tracing with optional audit layer
+    // App logs: human-readable text to stderr (excludes audit target)
+    // Audit logs: JSON to stderr (only audit target, when enabled)
+    init_tracing(&args.log_level, audit_config.enabled);
 
     info!(
         transport = ?args.transport,
         profiles = ?args.profile,
         policy_tier = %policy_config.tier,
         policy_source = %policy_source,
+        audit_enabled = audit_config.enabled,
         toolsets = ?enabled_names,
         "Starting redisctl-mcp server"
     );
@@ -293,6 +300,7 @@ async fn main() -> Result<()> {
 
     // Build tool-to-toolset mapping for policy evaluation
     let tool_toolset = build_tool_toolset_mapping(&enabled);
+    let tool_toolset_arc = Arc::new(tool_toolset.clone());
 
     // Build resolved policy
     let policy = Arc::new(Policy::new(policy_config, tool_toolset, policy_source));
@@ -310,15 +318,63 @@ async fn main() -> Result<()> {
     match args.transport {
         Transport::Stdio => {
             info!("Running with stdio transport");
-            StdioTransport::new(router).run().await?;
+            if audit_config.enabled {
+                info!("Audit logging enabled (level: {:?})", audit_config.level);
+                let audit_layer = AuditLayer::new(audit_config, tool_toolset_arc);
+                let service = audit_layer.layer(router);
+                GenericStdioTransport::new(service).run().await?;
+            } else {
+                StdioTransport::new(router).run().await?;
+            }
         }
         Transport::Http => {
             info!(host = %args.host, port = args.port, "Running with HTTP transport");
-            run_http_server(router, &args).await?;
+            run_http_server(router, &args, audit_config, tool_toolset_arc).await?;
         }
     }
 
     Ok(())
+}
+
+/// Initialize the tracing subscriber with optional audit logging layer.
+///
+/// When audit is enabled, adds a second JSON-formatted layer that captures only
+/// events with `target = "audit"`. The app layer excludes audit events to avoid
+/// double-logging.
+fn init_tracing(log_level: &str, audit_enabled: bool) {
+    use tracing_subscriber::filter;
+
+    if audit_enabled {
+        // Dual-layer: app (text, no audit) + audit (JSON, only audit)
+        let env_filter =
+            EnvFilter::try_from_default_env().unwrap_or_else(|_| log_level.to_string().into());
+
+        let app_layer = fmt::layer().with_writer(std::io::stderr).with_filter(
+            filter::Targets::new().with_targets(vec![
+                ("audit", filter::LevelFilter::OFF), // exclude audit from app logs
+            ]),
+        );
+
+        let audit_layer = fmt::layer()
+            .json()
+            .with_writer(std::io::stderr)
+            .with_target(true)
+            .with_filter(filter::Targets::new().with_target("audit", tracing::Level::INFO));
+
+        tracing_subscriber::registry()
+            .with(env_filter)
+            .with(app_layer)
+            .with(audit_layer)
+            .init();
+    } else {
+        // Single layer: standard app logs
+        tracing_subscriber::registry()
+            .with(fmt::layer().with_writer(std::io::stderr))
+            .with(
+                EnvFilter::try_from_default_env().unwrap_or_else(|_| log_level.to_string().into()),
+            )
+            .init();
+    }
 }
 
 /// Build the tool name -> toolset kind mapping for policy evaluation.
@@ -416,7 +472,12 @@ fn build_router(
 
 /// Run the HTTP server with middleware
 #[cfg(feature = "http")]
-async fn run_http_server(router: McpRouter, args: &Args) -> Result<()> {
+async fn run_http_server(
+    router: McpRouter,
+    args: &Args,
+    audit_config: Arc<audit::AuditConfig>,
+    tool_toolset: Arc<HashMap<String, ToolsetKind>>,
+) -> Result<()> {
     use std::time::Duration;
     use tower::limit::ConcurrencyLimitLayer;
     use tower::timeout::TimeoutLayer;
@@ -424,11 +485,19 @@ async fn run_http_server(router: McpRouter, args: &Args) -> Result<()> {
 
     let addr = format!("{}:{}", args.host, args.port);
 
-    let transport = HttpTransport::new(router)
+    let mut transport = HttpTransport::new(router)
         .layer(TimeoutLayer::new(Duration::from_secs(
             args.request_timeout_secs,
         )))
         .layer(ConcurrencyLimitLayer::new(args.max_concurrent));
+
+    if audit_config.enabled {
+        info!(
+            "Audit logging enabled for HTTP transport (level: {:?})",
+            audit_config.level
+        );
+        transport = transport.layer(AuditLayer::new(audit_config, tool_toolset));
+    }
 
     if args.oauth {
         // OAuth-enabled HTTP transport
@@ -449,7 +518,12 @@ async fn run_http_server(router: McpRouter, args: &Args) -> Result<()> {
 }
 
 #[cfg(not(feature = "http"))]
-async fn run_http_server(_router: McpRouter, _args: &Args) -> Result<()> {
+async fn run_http_server(
+    _router: McpRouter,
+    _args: &Args,
+    _audit_config: Arc<audit::AuditConfig>,
+    _tool_toolset: Arc<HashMap<String, ToolsetKind>>,
+) -> Result<()> {
     anyhow::bail!("HTTP transport requires the 'http' feature")
 }
 
