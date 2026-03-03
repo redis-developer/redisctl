@@ -109,7 +109,7 @@ mod tests {
 
     #[test]
     fn test_app_state_read_only() {
-        use policy::{Policy, PolicyConfig, SafetyTier};
+        use policy::{Policy, PolicyConfig};
         let read_only_policy = Arc::new(Policy::new(
             PolicyConfig::default(), // read-only
             std::collections::HashMap::new(),
