@@ -12,6 +12,23 @@ use tower_mcp::{
 
 use crate::state::AppState;
 
+/// All tool names registered by the App/Profile toolset.
+pub const TOOL_NAMES: &[&str] = &[
+    "profile_list",
+    "profile_show",
+    "profile_path",
+    "profile_validate",
+    "profile_set_default_cloud",
+    "profile_set_default_enterprise",
+    "profile_delete",
+    "profile_create",
+];
+
+/// Get all Profile tool names as owned strings.
+pub fn tool_names() -> Vec<String> {
+    TOOL_NAMES.iter().map(|s| (*s).to_string()).collect()
+}
+
 // ============================================================================
 // Read Operations
 // ============================================================================
@@ -687,9 +704,11 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, DeleteProfileInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteProfileInput>| async move {
-                // Check write permission
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool("Write operations require --read-only=false"));
+                // Check destructive permission
+                if !state.is_destructive_allowed() {
+                    return Err(McpError::tool(
+                        "Destructive operations require policy tier 'full'",
+                    ));
                 }
 
                 let mut config = Config::load().tool_context("Failed to load config")?;

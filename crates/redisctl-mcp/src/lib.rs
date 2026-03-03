@@ -28,12 +28,18 @@
 //! ```no_run
 //! use std::sync::Arc;
 //! use redisctl_mcp::{AppState, CredentialSource, tools};
+//! use redisctl_mcp::policy::{Policy, PolicyConfig};
 //! use tower_mcp::McpRouter;
 //!
 //! # async fn example() -> anyhow::Result<()> {
+//! let policy = Arc::new(Policy::new(
+//!     PolicyConfig::default(), // read-only
+//!     std::collections::HashMap::new(),
+//!     "default".to_string(),
+//! ));
 //! let state = Arc::new(AppState::new(
 //!     CredentialSource::Profiles(vec!["default".to_string()]),
-//!     true, // read-only
+//!     policy,
 //!     None, // no database URL
 //! )?);
 //!
@@ -47,6 +53,7 @@
 //! ```
 
 pub mod error;
+pub mod policy;
 pub mod prompts;
 pub mod resources;
 pub mod state;
@@ -102,24 +109,30 @@ mod tests {
 
     #[test]
     fn test_app_state_read_only() {
-        let state = AppState::new(
-            CredentialSource::Profiles(vec![]),
-            true, // read-only
-            None,
-        )
-        .unwrap();
+        use policy::{Policy, PolicyConfig};
+        let read_only_policy = Arc::new(Policy::new(
+            PolicyConfig::default(), // read-only
+            std::collections::HashMap::new(),
+            "test".to_string(),
+        ));
+        let state =
+            AppState::new(CredentialSource::Profiles(vec![]), read_only_policy, None).unwrap();
 
         assert!(!state.is_write_allowed());
     }
 
     #[test]
     fn test_app_state_write_allowed() {
-        let state = AppState::new(
-            CredentialSource::Profiles(vec![]),
-            false, // not read-only
-            None,
-        )
-        .unwrap();
+        use policy::{Policy, PolicyConfig, SafetyTier};
+        let write_policy = Arc::new(Policy::new(
+            PolicyConfig {
+                tier: SafetyTier::Full,
+                ..Default::default()
+            },
+            std::collections::HashMap::new(),
+            "test".to_string(),
+        ));
+        let state = AppState::new(CredentialSource::Profiles(vec![]), write_policy, None).unwrap();
 
         assert!(state.is_write_allowed());
     }
@@ -128,7 +141,7 @@ mod tests {
     fn test_app_state_database_url() {
         let state = AppState::new(
             CredentialSource::Profiles(vec![]),
-            true,
+            AppState::test_policy(),
             Some("redis://localhost:6379".to_string()),
         )
         .unwrap();
@@ -146,7 +159,7 @@ mod tests {
                 "cluster-west".to_string(),
                 "cluster-east".to_string(),
             ]),
-            true,
+            AppState::test_policy(),
             None,
         )
         .unwrap();
@@ -160,8 +173,14 @@ mod tests {
     #[cfg(feature = "cloud")]
     #[test]
     fn test_cloud_tools_build() {
-        let state =
-            Arc::new(AppState::new(CredentialSource::Profiles(vec![]), true, None).unwrap());
+        let state = Arc::new(
+            AppState::new(
+                CredentialSource::Profiles(vec![]),
+                AppState::test_policy(),
+                None,
+            )
+            .unwrap(),
+        );
 
         // Verify all cloud tools build successfully
         // Subscriptions & Databases
@@ -202,8 +221,14 @@ mod tests {
     #[cfg(feature = "enterprise")]
     #[test]
     fn test_enterprise_tools_build() {
-        let state =
-            Arc::new(AppState::new(CredentialSource::Profiles(vec![]), true, None).unwrap());
+        let state = Arc::new(
+            AppState::new(
+                CredentialSource::Profiles(vec![]),
+                AppState::test_policy(),
+                None,
+            )
+            .unwrap(),
+        );
 
         // Verify all enterprise tools build successfully
         // Cluster
@@ -255,8 +280,14 @@ mod tests {
 
     #[test]
     fn test_profile_tools_build() {
-        let state =
-            Arc::new(AppState::new(CredentialSource::Profiles(vec![]), true, None).unwrap());
+        let state = Arc::new(
+            AppState::new(
+                CredentialSource::Profiles(vec![]),
+                AppState::test_policy(),
+                None,
+            )
+            .unwrap(),
+        );
 
         // Verify profile tools build successfully
         let _ = tools::profile::list_profiles(state.clone());
