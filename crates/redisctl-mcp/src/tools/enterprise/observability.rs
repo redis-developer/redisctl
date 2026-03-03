@@ -3,7 +3,7 @@
 use std::sync::Arc;
 
 use redis_enterprise::alerts::AlertHandler;
-use redis_enterprise::debuginfo::DebugInfoHandler;
+use redis_enterprise::debuginfo::{DebugInfoHandler, DebugInfoRequest};
 use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use redis_enterprise::modules::ModuleHandler;
 use redis_enterprise::shards::ShardHandler;
@@ -11,7 +11,7 @@ use redis_enterprise::stats::StatsHandler;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, McpRouter, ResultExt, Tool, ToolBuilder};
+use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 use crate::tools::wrap_list;
@@ -516,11 +516,209 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+// ============================================================================
+// Filtered Shard tools
+// ============================================================================
+
+/// Input for listing shards by database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListShardsByDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Database UID to list shards for
+    pub bdb_uid: u32,
+}
+
+/// Build the list_shards_by_database tool
+pub fn list_shards_by_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_shards_by_database")
+        .description(
+            "List all shards for a specific database. Returns shard details including role, \
+             status, and node assignment.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ListShardsByDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ListShardsByDatabaseInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = ShardHandler::new(client);
+                let shards = handler
+                    .list_by_database(input.bdb_uid)
+                    .await
+                    .tool_context("Failed to list shards by database")?;
+
+                wrap_list("shards", &shards)
+            },
+        )
+        .build()
+}
+
+/// Input for listing shards by node
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ListShardsByNodeInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Node UID to list shards for
+    pub node_uid: u32,
+}
+
+/// Build the list_shards_by_node tool
+pub fn list_shards_by_node(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("list_shards_by_node")
+        .description(
+            "List all shards on a specific node. Useful for understanding shard distribution \
+             and planning rebalance operations.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ListShardsByNodeInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ListShardsByNodeInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = ShardHandler::new(client);
+                let shards = handler
+                    .list_by_node(input.node_uid)
+                    .await
+                    .tool_context("Failed to list shards by node")?;
+
+                wrap_list("shards", &shards)
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// Alert Acknowledge
+// ============================================================================
+
+/// Input for acknowledging an alert
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AcknowledgeAlertInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Alert UID to acknowledge
+    pub alert_uid: String,
+}
+
+/// Build the acknowledge_enterprise_alert tool
+pub fn acknowledge_enterprise_alert(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("acknowledge_enterprise_alert")
+        .description(
+            "Acknowledge (clear) a specific alert by ID. The alert will be marked as resolved.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, AcknowledgeAlertInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<AcknowledgeAlertInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = AlertHandler::new(client);
+                handler
+                    .clear(&input.alert_uid)
+                    .await
+                    .tool_context("Failed to acknowledge alert")?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Alert acknowledged successfully",
+                    "alert_uid": input.alert_uid
+                }))
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// Debug Info Create
+// ============================================================================
+
+/// Input for creating a debug info collection task
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateDebugInfoInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List of node UIDs to collect debug info from (if not specified, collects from all nodes)
+    #[serde(default)]
+    pub node_uids: Option<Vec<u32>>,
+    /// List of database UIDs to collect debug info for (if not specified, collects for all databases)
+    #[serde(default)]
+    pub bdb_uids: Option<Vec<u32>>,
+}
+
+/// Build the create_debug_info tool
+pub fn create_debug_info(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_debug_info")
+        .description(
+            "Start a debug information collection task. Specify node and/or database IDs to \
+             scope the collection. Returns task status for tracking.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, CreateDebugInfoInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateDebugInfoInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let request = DebugInfoRequest {
+                    node_uids: input.node_uids,
+                    bdb_uids: input.bdb_uids,
+                    include_logs: None,
+                    include_metrics: None,
+                    include_configs: None,
+                    time_range: None,
+                };
+
+                let handler = DebugInfoHandler::new(client);
+                let status = handler
+                    .create(request)
+                    .await
+                    .tool_context("Failed to create debug info collection")?;
+
+                CallToolResult::from_serialize(&status)
+            },
+        )
+        .build()
+}
+
 /// Build an MCP sub-router containing observability tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
         // Alerts
         .tool(list_alerts(state.clone()))
+        .tool(acknowledge_enterprise_alert(state.clone()))
         // Logs
         .tool(list_logs(state.clone()))
         // Aggregate Stats
@@ -531,9 +729,12 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         // Shards
         .tool(list_shards(state.clone()))
         .tool(get_shard(state.clone()))
+        .tool(list_shards_by_database(state.clone()))
+        .tool(list_shards_by_node(state.clone()))
         // Debug Info
         .tool(list_debug_info_tasks(state.clone()))
         .tool(get_debug_info_status(state.clone()))
+        .tool(create_debug_info(state.clone()))
         // Modules
         .tool(list_modules(state.clone()))
         .tool(get_module(state.clone()))

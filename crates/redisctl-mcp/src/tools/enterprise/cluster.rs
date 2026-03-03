@@ -915,6 +915,145 @@ pub fn drain_node(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+// ============================================================================
+// Node Update/Remove Operations
+// ============================================================================
+
+/// Input for updating a node
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateNodeInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Node UID
+    pub uid: u32,
+    /// JSON object with node settings to update
+    pub updates: Value,
+}
+
+/// Build the update_enterprise_node tool
+pub fn update_enterprise_node(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_node")
+        .description(
+            "Update a node's configuration in the Redis Enterprise cluster. \
+             Pass the fields to update as JSON.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, UpdateNodeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<UpdateNodeInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = NodeHandler::new(client);
+                let node = handler
+                    .update(input.uid, input.updates)
+                    .await
+                    .tool_context("Failed to update node")?;
+
+                CallToolResult::from_serialize(&node)
+            },
+        )
+        .build()
+}
+
+/// Input for removing a node
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RemoveNodeInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Node UID
+    pub uid: u32,
+}
+
+/// Build the remove_enterprise_node tool
+pub fn remove_enterprise_node(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("remove_enterprise_node")
+        .description(
+            "DANGEROUS: Permanently removes a node from the Redis Enterprise cluster. \
+             All shards must be drained first. This action cannot be undone.",
+        )
+        .destructive()
+        .extractor_handler_typed::<_, _, _, RemoveNodeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<RemoveNodeInput>| async move {
+                // Check destructive permission
+                if !state.is_destructive_allowed() {
+                    return Err(McpError::tool(
+                        "Destructive operations require policy tier 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = NodeHandler::new(client);
+                handler
+                    .remove(input.uid)
+                    .await
+                    .tool_context("Failed to remove node")?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "Node removed successfully",
+                    "uid": input.uid
+                }))
+            },
+        )
+        .build()
+}
+
+// ============================================================================
+// Cluster Services
+// ============================================================================
+
+/// Input for getting cluster services (no required parameters)
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetClusterServicesInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the get_enterprise_cluster_services tool
+pub fn get_enterprise_cluster_services(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("get_enterprise_cluster_services")
+        .description(
+            "Get the list of services running on the Redis Enterprise cluster.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, GetClusterServicesInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<GetClusterServicesInput>| async move {
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = ClusterHandler::new(client);
+                let services = handler
+                    .services_configuration()
+                    .await
+                    .tool_context("Failed to get cluster services")?;
+
+                CallToolResult::from_serialize(&services)
+            },
+        )
+        .build()
+}
+
 /// Input for getting cluster stats
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GetClusterStatsInput {
@@ -1006,4 +1145,8 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(disable_node_maintenance(state.clone()))
         .tool(rebalance_node(state.clone()))
         .tool(drain_node(state.clone()))
+        .tool(update_enterprise_node(state.clone()))
+        .tool(remove_enterprise_node(state.clone()))
+        // Cluster Services
+        .tool(get_enterprise_cluster_services(state.clone()))
 }

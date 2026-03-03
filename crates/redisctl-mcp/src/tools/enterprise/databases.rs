@@ -4,7 +4,7 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use redis_enterprise::alerts::AlertHandler;
-use redis_enterprise::bdb::{CreateDatabaseRequest, DatabaseHandler};
+use redis_enterprise::bdb::{CreateDatabaseRequest, DatabaseHandler, DatabaseUpgradeRequest};
 use redis_enterprise::crdb::CrdbHandler;
 use redis_enterprise::stats::{StatsHandler, StatsQuery};
 use redisctl_core::enterprise::{
@@ -619,6 +619,165 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// Input for exporting an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ExportEnterpriseDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Database UID to export
+    pub uid: u32,
+    /// Export location (e.g., S3 URL or FTP path)
+    pub export_location: String,
+}
+
+/// Build the export_enterprise_database tool
+pub fn export_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("export_enterprise_database")
+        .description(
+            "Export a Redis Enterprise database to a specified location (e.g., S3, FTP). \
+             Returns an action reference for tracking.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, ExportEnterpriseDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ExportEnterpriseDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations require policy tier 'read-write' or 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let response = handler
+                    .export(input.uid, &input.export_location)
+                    .await
+                    .tool_context("Failed to export database")?;
+
+                CallToolResult::from_serialize(&response)
+            },
+        )
+        .build()
+}
+
+/// Input for restoring an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RestoreEnterpriseDatabaseInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Database UID to restore
+    pub uid: u32,
+    /// Optional backup UID to restore from (uses latest if not specified)
+    #[serde(default)]
+    pub backup_uid: Option<String>,
+}
+
+/// Build the restore_enterprise_database tool
+pub fn restore_enterprise_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("restore_enterprise_database")
+        .description(
+            "Restore a Redis Enterprise database from a backup. \
+             Returns an action reference for tracking.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, RestoreEnterpriseDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<RestoreEnterpriseDatabaseInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations require policy tier 'read-write' or 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let response = handler
+                    .restore(input.uid, input.backup_uid.as_deref())
+                    .await
+                    .tool_context("Failed to restore database")?;
+
+                CallToolResult::from_serialize(&response)
+            },
+        )
+        .build()
+}
+
+/// Input for upgrading Redis version of an Enterprise database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpgradeEnterpriseDatabaseRedisInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Database UID to upgrade
+    pub uid: u32,
+    /// Target Redis version (defaults to latest if not specified)
+    #[serde(default)]
+    pub redis_version: Option<String>,
+    /// Restart shards even if no version change
+    #[serde(default)]
+    pub force_restart: Option<bool>,
+    /// Allow data loss in non-replicated, non-persistent databases
+    #[serde(default)]
+    pub may_discard_data: Option<bool>,
+}
+
+/// Build the upgrade_enterprise_database_redis tool
+pub fn upgrade_enterprise_database_redis(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("upgrade_enterprise_database_redis")
+        .description(
+            "Upgrade the Redis version of a database. Pass redis_version for the target version. \
+             Returns an action reference.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, UpgradeEnterpriseDatabaseRedisInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpgradeEnterpriseDatabaseRedisInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations require policy tier 'read-write' or 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let request = DatabaseUpgradeRequest {
+                    redis_version: input.redis_version,
+                    force_restart: input.force_restart,
+                    may_discard_data: input.may_discard_data,
+                    ..Default::default()
+                };
+
+                let handler = DatabaseHandler::new(client);
+                let response = handler
+                    .upgrade_redis_version(input.uid, request)
+                    .await
+                    .tool_context("Failed to upgrade database Redis version")?;
+
+                CallToolResult::from_serialize(&response)
+            },
+        )
+        .build()
+}
+
 // ============================================================================
 // CRDB (Active-Active) tools
 // ============================================================================
@@ -732,6 +891,148 @@ pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// Input for creating an Active-Active (CRDB) database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CreateEnterpriseCrdbInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Full CRDB configuration as JSON (name, memory_size, instances, etc.)
+    pub request: Value,
+}
+
+/// Build the create_enterprise_crdb tool
+pub fn create_enterprise_crdb(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("create_enterprise_crdb")
+        .description(
+            "Create a new Active-Active (CRDB) database across multiple clusters. \
+             Pass the full CRDB configuration as JSON.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, CreateEnterpriseCrdbInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<CreateEnterpriseCrdbInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations require policy tier 'read-write' or 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let crdb: Value = client
+                    .post("/v1/crdbs", &input.request)
+                    .await
+                    .tool_context("Failed to create CRDB")?;
+
+                CallToolResult::from_serialize(&crdb)
+            },
+        )
+        .build()
+}
+
+/// Input for updating an Active-Active (CRDB) database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateEnterpriseCrdbInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// CRDB GUID (globally unique identifier)
+    pub guid: String,
+    /// JSON object with fields to update
+    pub updates: Value,
+}
+
+/// Build the update_enterprise_crdb tool
+pub fn update_enterprise_crdb(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_enterprise_crdb")
+        .description(
+            "Update an existing Active-Active (CRDB) database configuration. \
+             Pass the fields to update as JSON.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, UpdateEnterpriseCrdbInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateEnterpriseCrdbInput>| async move {
+                // Check write permission
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations require policy tier 'read-write' or 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = CrdbHandler::new(client);
+                let crdb = handler
+                    .update(&input.guid, input.updates)
+                    .await
+                    .tool_context("Failed to update CRDB")?;
+
+                CallToolResult::from_serialize(&crdb)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting an Active-Active (CRDB) database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteEnterpriseCrdbInput {
+    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// CRDB GUID (globally unique identifier) to delete
+    pub guid: String,
+}
+
+/// Build the delete_enterprise_crdb tool
+pub fn delete_enterprise_crdb(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_enterprise_crdb")
+        .description(
+            "DANGEROUS: Permanently deletes an Active-Active (CRDB) database across all \
+             participating clusters. This action cannot be undone.",
+        )
+        .destructive()
+        .extractor_handler_typed::<_, _, _, DeleteEnterpriseCrdbInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteEnterpriseCrdbInput>| async move {
+                // Check destructive permission
+                if !state.is_destructive_allowed() {
+                    return Err(McpError::tool(
+                        "Destructive operations require policy tier 'full'",
+                    ));
+                }
+
+                let client = state
+                    .enterprise_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+
+                let handler = CrdbHandler::new(client);
+                handler
+                    .delete(&input.guid)
+                    .await
+                    .tool_context("Failed to delete CRDB")?;
+
+                CallToolResult::from_serialize(&serde_json::json!({
+                    "message": "CRDB deleted successfully",
+                    "guid": input.guid
+                }))
+            },
+        )
+        .build()
+}
+
 /// Build an MCP sub-router containing database tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
@@ -745,6 +1046,10 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(list_enterprise_crdbs(state.clone()))
         .tool(get_enterprise_crdb(state.clone()))
         .tool(get_enterprise_crdb_tasks(state.clone()))
+        // CRDB Write Operations
+        .tool(create_enterprise_crdb(state.clone()))
+        .tool(update_enterprise_crdb(state.clone()))
+        .tool(delete_enterprise_crdb(state.clone()))
         // Database Write Operations
         .tool(backup_enterprise_database(state.clone()))
         .tool(import_enterprise_database(state.clone()))
@@ -752,4 +1057,7 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(update_enterprise_database(state.clone()))
         .tool(delete_enterprise_database(state.clone()))
         .tool(flush_enterprise_database(state.clone()))
+        .tool(export_enterprise_database(state.clone()))
+        .tool(restore_enterprise_database(state.clone()))
+        .tool(upgrade_enterprise_database_redis(state.clone()))
 }
