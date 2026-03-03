@@ -1,12 +1,19 @@
 #![allow(dead_code)]
 
 use anyhow::{Context, Result};
-use comfy_table::Table;
 use jpx_core::Runtime;
 use regex::Regex;
 use serde::Serialize;
 use serde_json::Value;
+use std::io::IsTerminal;
 use std::sync::OnceLock;
+use tabled::builder::Builder;
+use tabled::settings::Style;
+
+use crate::error::{RedisCtlError, Result as CliResult};
+
+/// Re-export the single OutputFormat enum from cli.
+pub use crate::cli::OutputFormat;
 
 /// Global JMESPath runtime with extended functions
 static JMESPATH_RUNTIME: OnceLock<Runtime> = OnceLock::new();
@@ -66,21 +73,19 @@ pub fn compile_jmespath(
     get_jmespath_runtime().compile(&normalized)
 }
 
-#[derive(Debug, Clone, Copy, clap::ValueEnum, Default)]
-pub enum OutputFormat {
-    #[default]
-    Json,
-    Yaml,
-    Table,
-}
-
-impl OutputFormat {
-    pub fn is_json(&self) -> bool {
-        matches!(self, Self::Json)
-    }
-
-    pub fn is_yaml(&self) -> bool {
-        matches!(self, Self::Yaml)
+/// Resolve `Auto` format to a concrete format.
+///
+/// `Auto` resolves to `Table` when stdout is a TTY, `Json` when piped.
+fn resolve_auto(format: OutputFormat) -> OutputFormat {
+    match format {
+        OutputFormat::Auto => {
+            if std::io::stdout().is_terminal() {
+                OutputFormat::Table
+            } else {
+                OutputFormat::Json
+            }
+        }
+        other => other,
     }
 }
 
@@ -98,8 +103,9 @@ pub fn print_output<T: Serialize>(
         json_value = expr.search(&json_value).context("JMESPath query failed")?;
     }
 
-    match format {
-        OutputFormat::Json => {
+    let resolved = resolve_auto(format);
+    match resolved {
+        OutputFormat::Json | OutputFormat::Auto => {
             println!("{}", serde_json::to_string_pretty(&json_value)?);
         }
         OutputFormat::Yaml => {
@@ -113,15 +119,46 @@ pub fn print_output<T: Serialize>(
     Ok(())
 }
 
+/// Apply JMESPath query to JSON data (using extended runtime with 400+ functions)
+pub fn apply_jmespath(data: &Value, query: &str) -> CliResult<Value> {
+    let expr = compile_jmespath(query)
+        .with_context(|| format!("Invalid JMESPath expression: {}", query))?;
+    expr.search(data)
+        .with_context(|| format!("Failed to apply JMESPath query: {}", query))
+        .map_err(Into::into)
+}
+
+/// Handle output with optional JMESPath query
+pub fn handle_output(
+    data: Value,
+    _output_format: OutputFormat,
+    query: Option<&str>,
+) -> CliResult<Value> {
+    if let Some(q) = query {
+        apply_jmespath(&data, q)
+    } else {
+        Ok(data)
+    }
+}
+
+/// Print data in the requested output format, mapping errors to `RedisCtlError::OutputError`.
+pub fn print_formatted_output(data: Value, output_format: OutputFormat) -> CliResult<()> {
+    let resolved = resolve_auto(output_format);
+    print_output(data, resolved, None).map_err(|e| RedisCtlError::OutputError {
+        message: e.to_string(),
+    })?;
+    Ok(())
+}
+
 fn print_as_table(value: &Value) -> Result<()> {
     match value {
         Value::Array(arr) if !arr.is_empty() => {
-            let mut table = Table::new();
+            let mut builder = Builder::default();
 
             // Get headers from first object
             if let Value::Object(first) = &arr[0] {
                 let headers: Vec<String> = first.keys().cloned().collect();
-                table.set_header(&headers);
+                builder.push_record(&headers);
 
                 // Add rows
                 for item in arr {
@@ -130,28 +167,28 @@ fn print_as_table(value: &Value) -> Result<()> {
                             .iter()
                             .map(|h| format_value(obj.get(h).unwrap_or(&Value::Null)))
                             .collect();
-                        table.add_row(row);
+                        builder.push_record(row);
                     }
                 }
             } else {
                 // Simple array of values
-                table.set_header(vec!["Value"]);
+                builder.push_record(["Value"]);
                 for item in arr {
-                    table.add_row(vec![format_value(item)]);
+                    builder.push_record([format_value(item)]);
                 }
             }
 
-            println!("{}", table);
+            println!("{}", builder.build().with(Style::blank()));
         }
         Value::Object(obj) => {
-            let mut table = Table::new();
-            table.set_header(vec!["Key", "Value"]);
+            let mut builder = Builder::default();
+            builder.push_record(["Key", "Value"]);
 
             for (key, val) in obj {
-                table.add_row(vec![key.clone(), format_value(val)]);
+                builder.push_record([key.clone(), format_value(val)]);
             }
 
-            println!("{}", table);
+            println!("{}", builder.build().with(Style::blank()));
         }
         _ => {
             println!("{}", format_value(value));

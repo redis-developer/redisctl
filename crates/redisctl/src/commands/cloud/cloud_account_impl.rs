@@ -7,9 +7,11 @@ use crate::connection::ConnectionManager;
 use crate::error::{RedisCtlError, Result as CliResult};
 
 use anyhow::Context;
-use comfy_table::{Cell, Color, Table};
+use colored::Colorize;
 use redis_cloud::CloudClient;
 use serde_json::{Value, json};
+use tabled::builder::Builder;
+use tabled::settings::Style;
 
 /// Parameters for cloud account operations that support async operations
 pub struct CloudAccountOperationParams<'a> {
@@ -69,12 +71,12 @@ pub async fn handle_list(
         .context("Failed to list cloud accounts")?;
 
     // For table output, create a formatted table
-    if matches!(output_format, OutputFormat::Table)
+    if matches!(output_format, OutputFormat::Table | OutputFormat::Auto)
         && query.is_none()
         && let Some(accounts) = result.get("cloudAccounts").and_then(|a| a.as_array())
     {
-        let mut table = Table::new();
-        table.set_header(vec!["ID", "Name", "Provider", "Status", "Created"]);
+        let mut builder = Builder::default();
+        builder.push_record(["ID", "Name", "Provider", "Status", "Created"]);
 
         for account in accounts {
             let id = account.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
@@ -89,22 +91,22 @@ pub async fn handle_list(
                 .and_then(|v| v.as_str())
                 .unwrap_or("");
 
-            let status_cell = match status {
-                "active" => Cell::new(status).fg(Color::Green),
-                "inactive" => Cell::new(status).fg(Color::Red),
-                _ => Cell::new(status),
+            let status_str = match status {
+                "active" => status.green().to_string(),
+                "inactive" => status.red().to_string(),
+                _ => status.to_string(),
             };
 
-            table.add_row(vec![
-                Cell::new(id),
-                Cell::new(name),
-                Cell::new(provider),
-                status_cell,
-                Cell::new(created_timestamp),
+            builder.push_record([
+                &id.to_string(),
+                name,
+                provider,
+                &status_str,
+                created_timestamp,
             ]);
         }
 
-        println!("{}", table);
+        println!("{}", builder.build().with(Style::blank()));
         return Ok(());
     }
 
@@ -125,9 +127,9 @@ pub async fn handle_get(
         .context("Failed to get cloud account")?;
 
     // For table output, create a detailed view
-    if matches!(output_format, OutputFormat::Table) && query.is_none() {
-        let mut table = Table::new();
-        table.set_header(vec!["Field", "Value"]);
+    if matches!(output_format, OutputFormat::Table | OutputFormat::Auto) && query.is_none() {
+        let mut builder = Builder::default();
+        builder.push_record(["Field", "Value"]);
 
         if let Some(obj) = result.as_object() {
             for (key, value) in obj {
@@ -141,11 +143,11 @@ pub async fn handle_get(
                             _ => value.to_string(),
                         }
                     };
-                table.add_row(vec![Cell::new(key), Cell::new(display_value)]);
+                builder.push_record([key.as_str(), &display_value]);
             }
         }
 
-        println!("{}", table);
+        println!("{}", builder.build().with(Style::blank()));
         return Ok(());
     }
 

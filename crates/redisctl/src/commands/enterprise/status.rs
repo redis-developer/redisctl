@@ -10,13 +10,14 @@ use crate::connection::ConnectionManager;
 use crate::error::Result as CliResult;
 use anyhow::Context;
 use colored::Colorize;
-use comfy_table::{Cell, Color, Table};
 use redis_enterprise::bdb::BdbHandler;
 use redis_enterprise::cluster::ClusterHandler;
 use redis_enterprise::nodes::NodeHandler;
 use redis_enterprise::shards::ShardHandler;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
+use tabled::builder::Builder;
+use tabled::settings::Style;
 
 use super::utils::*;
 
@@ -305,26 +306,26 @@ fn print_status_tables(
 
 fn print_cluster_table(cluster: &Value) {
     println!("{}", "CLUSTER".bold());
-    let mut table = Table::new();
-    table.set_header(vec!["Field", "Value"]);
+    let mut builder = Builder::default();
+    builder.push_record(["Field", "Value"]);
 
     let name = cluster.get("name").and_then(|v| v.as_str()).unwrap_or("-");
-    table.add_row(vec![Cell::new("Name"), Cell::new(name)]);
+    builder.push_record(["Name", name]);
 
     if let Some(status) = cluster.get("status").and_then(|v| v.as_str()) {
-        table.add_row(vec![Cell::new("Status"), status_cell(status)]);
+        builder.push_record(["Status", &status_colored(status)]);
     }
 
     if let Some(rack_aware) = cluster.get("rack_aware").and_then(|v| v.as_bool()) {
         let label = if rack_aware { "Yes" } else { "No" };
-        table.add_row(vec![Cell::new("Rack Aware"), Cell::new(label)]);
+        builder.push_record(["Rack Aware", label]);
     }
 
     if let Some(exp) = cluster.get("license_expire_time").and_then(|v| v.as_str()) {
-        table.add_row(vec![Cell::new("License Expires"), Cell::new(exp)]);
+        builder.push_record(["License Expires", exp]);
     }
 
-    println!("{table}");
+    println!("{}", builder.build().with(Style::blank()));
     println!();
 }
 
@@ -332,10 +333,8 @@ fn print_nodes_table(nodes: &Value) {
     let empty_vec = vec![];
     let nodes_array = nodes.as_array().unwrap_or(&empty_vec);
     println!("{}", "NODES".bold());
-    let mut table = Table::new();
-    table.set_header(vec![
-        "UID", "Address", "Status", "Shards", "Memory", "Rack ID",
-    ]);
+    let mut builder = Builder::default();
+    builder.push_record(["UID", "Address", "Status", "Shards", "Memory", "Rack ID"]);
 
     for node in nodes_array {
         let uid = node
@@ -359,17 +358,17 @@ fn print_nodes_table(nodes: &Value) {
             .unwrap_or(0.0);
         let rack_id = node.get("rack_id").and_then(|v| v.as_str()).unwrap_or("-");
 
-        table.add_row(vec![
-            Cell::new(&uid),
-            Cell::new(addr),
-            status_cell(status),
-            Cell::new(&shard_count),
-            Cell::new(format_bytes(total_memory)),
-            Cell::new(rack_id),
+        builder.push_record([
+            uid.as_str(),
+            addr,
+            &status_colored(status),
+            &shard_count,
+            &format_bytes(total_memory),
+            rack_id,
         ]);
     }
 
-    println!("{table}");
+    println!("{}", builder.build().with(Style::blank()));
     println!();
 }
 
@@ -377,8 +376,8 @@ fn print_databases_table(databases: &Value) {
     let empty_vec = vec![];
     let databases_array = databases.as_array().unwrap_or(&empty_vec);
     println!("{}", "DATABASES".bold());
-    let mut table = Table::new();
-    table.set_header(vec![
+    let mut builder = Builder::default();
+    builder.push_record([
         "UID",
         "Name",
         "Status",
@@ -440,18 +439,18 @@ fn print_databases_table(databases: &Value) {
             })
             .unwrap_or_else(|| "-".to_string());
 
-        table.add_row(vec![
-            Cell::new(&uid),
-            Cell::new(name),
-            status_cell(status),
-            Cell::new(&memory),
-            Cell::new(&shard_count),
-            Cell::new(replication),
-            Cell::new(&endpoint),
+        builder.push_record([
+            uid.as_str(),
+            name,
+            &status_colored(status),
+            &memory,
+            &shard_count,
+            replication,
+            &endpoint,
         ]);
     }
 
-    println!("{table}");
+    println!("{}", builder.build().with(Style::blank()));
     println!();
 }
 
@@ -459,8 +458,8 @@ fn print_shards_table(shards: &Value) {
     let empty_vec = vec![];
     let shards_array = shards.as_array().unwrap_or(&empty_vec);
     println!("{}", "SHARDS".bold());
-    let mut table = Table::new();
-    table.set_header(vec!["UID", "DB", "Node", "Role", "Status"]);
+    let mut builder = Builder::default();
+    builder.push_record(["UID", "DB", "Node", "Role", "Status"]);
 
     for shard in shards_array {
         let uid = shard
@@ -484,16 +483,16 @@ fn print_shards_table(shards: &Value) {
             .and_then(|v| v.as_str())
             .unwrap_or("unknown");
 
-        table.add_row(vec![
-            Cell::new(&uid),
-            Cell::new(&bdb_uid),
-            Cell::new(&node_uid),
-            Cell::new(role),
-            status_cell(status),
+        builder.push_record([
+            uid.as_str(),
+            &bdb_uid,
+            &node_uid,
+            role,
+            &status_colored(status),
         ]);
     }
 
-    println!("{table}");
+    println!("{}", builder.build().with(Style::blank()));
     println!();
 }
 
@@ -501,13 +500,13 @@ fn print_shards_table(shards: &Value) {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Create a colored cell based on status value
-fn status_cell(status: &str) -> Cell {
+/// Return a colored string based on status value
+fn status_colored(status: &str) -> String {
     match status.to_lowercase().as_str() {
-        "active" | "ok" | "healthy" => Cell::new(status).fg(Color::Green),
-        "degraded" | "pending" | "importing" | "recovery" => Cell::new(status).fg(Color::Yellow),
-        "critical" | "failed" | "error" | "inactive" | "down" => Cell::new(status).fg(Color::Red),
-        _ => Cell::new(status),
+        "active" | "ok" | "healthy" => status.green().to_string(),
+        "degraded" | "pending" | "importing" | "recovery" => status.yellow().to_string(),
+        "critical" | "failed" | "error" | "inactive" | "down" => status.red().to_string(),
+        _ => status.to_string(),
     }
 }
 
@@ -607,12 +606,12 @@ mod tests {
     }
 
     #[test]
-    fn test_status_cell_colors() {
+    fn test_status_colored() {
         // Just verify these don't panic
-        let _ = status_cell("active");
-        let _ = status_cell("degraded");
-        let _ = status_cell("critical");
-        let _ = status_cell("something-else");
+        let _ = status_colored("active");
+        let _ = status_colored("degraded");
+        let _ = status_colored("critical");
+        let _ = status_colored("something-else");
     }
 
     #[test]

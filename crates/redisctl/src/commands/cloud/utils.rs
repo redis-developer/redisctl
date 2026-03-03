@@ -11,10 +11,7 @@ use unicode_segmentation::UnicodeSegmentation;
 
 use std::io::IsTerminal;
 
-use crate::cli::OutputFormat;
-
 use crate::error::{RedisCtlError, Result as CliResult};
-use crate::output::print_output;
 
 /// Row structure for vertical table display (used by get commands)
 #[derive(Tabled)]
@@ -189,50 +186,7 @@ pub fn provider_short_name(provider: &str) -> &str {
     }
 }
 
-/// Apply JMESPath query to JSON data (using extended runtime with 400+ functions)
-pub fn apply_jmespath(data: &Value, query: &str) -> CliResult<Value> {
-    let expr = crate::output::compile_jmespath(query)
-        .with_context(|| format!("Invalid JMESPath expression: {}", query))?;
-
-    expr.search(data)
-        .with_context(|| format!("Failed to apply JMESPath query: {}", query))
-        .map_err(Into::into)
-}
-
-/// Handle output formatting for different formats
-pub fn handle_output(
-    data: Value,
-    _output_format: OutputFormat,
-    query: Option<&str>,
-) -> CliResult<Value> {
-    if let Some(q) = query {
-        apply_jmespath(&data, q)
-    } else {
-        Ok(data)
-    }
-}
-
-/// Print data in requested output format
-pub fn print_formatted_output(data: Value, output_format: OutputFormat) -> CliResult<()> {
-    match output_format {
-        OutputFormat::Json => {
-            print_output(data, crate::output::OutputFormat::Json, None).map_err(|e| {
-                RedisCtlError::OutputError {
-                    message: e.to_string(),
-                }
-            })?;
-        }
-        OutputFormat::Yaml => {
-            print_output(data, crate::output::OutputFormat::Yaml, None).map_err(|e| {
-                RedisCtlError::OutputError {
-                    message: e.to_string(),
-                }
-            })?;
-        }
-        _ => {} // Table format handled by individual commands
-    }
-    Ok(())
-}
+pub use crate::output::{apply_jmespath, handle_output, print_formatted_output};
 
 /// Prompts the user for confirmation
 pub fn confirm_action(message: &str) -> CliResult<bool> {

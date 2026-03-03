@@ -1,62 +1,10 @@
 //! Utility functions for Enterprise commands
-use crate::error::RedisCtlError;
-
-use crate::cli::OutputFormat;
 use crate::error::Result as CliResult;
-use crate::output::print_output;
 use anyhow::Context;
 use dialoguer::Confirm;
 use serde_json::Value;
 
-/// Apply JMESPath query to JSON data (using extended runtime with 400+ functions)
-pub fn apply_jmespath(data: &Value, query: &str) -> CliResult<Value> {
-    let expr = crate::output::compile_jmespath(query)
-        .with_context(|| format!("Invalid JMESPath expression: {}", query))?;
-    expr.search(data)
-        .with_context(|| format!("Failed to apply JMESPath query: {}", query))
-        .map_err(Into::into)
-}
-
-/// Handle output with optional JMESPath query
-pub fn handle_output(
-    data: Value,
-    _output_format: OutputFormat,
-    query: Option<&str>,
-) -> CliResult<Value> {
-    if let Some(q) = query {
-        apply_jmespath(&data, q)
-    } else {
-        Ok(data)
-    }
-}
-
-/// Print formatted output based on format type
-pub fn print_formatted_output(data: Value, output_format: OutputFormat) -> CliResult<()> {
-    match output_format {
-        OutputFormat::Json => {
-            print_output(data, crate::output::OutputFormat::Json, None).map_err(|e| {
-                RedisCtlError::OutputError {
-                    message: e.to_string(),
-                }
-            })?;
-        }
-        OutputFormat::Yaml => {
-            print_output(data, crate::output::OutputFormat::Yaml, None).map_err(|e| {
-                RedisCtlError::OutputError {
-                    message: e.to_string(),
-                }
-            })?;
-        }
-        OutputFormat::Table | OutputFormat::Auto => {
-            print_output(data, crate::output::OutputFormat::Table, None).map_err(|e| {
-                RedisCtlError::OutputError {
-                    message: e.to_string(),
-                }
-            })?;
-        }
-    }
-    Ok(())
-}
+pub use crate::output::{apply_jmespath, handle_output, print_formatted_output};
 
 /// Confirm an action with the user
 pub fn confirm_action(message: &str) -> CliResult<bool> {

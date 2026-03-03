@@ -135,6 +135,16 @@ pub enum OutputFormat {
     Table,
 }
 
+impl OutputFormat {
+    pub fn is_json(&self) -> bool {
+        matches!(self, Self::Json)
+    }
+
+    pub fn is_yaml(&self) -> bool {
+        matches!(self, Self::Yaml)
+    }
+}
+
 /// Top-level commands
 #[derive(Subcommand, Debug)]
 pub enum Commands {

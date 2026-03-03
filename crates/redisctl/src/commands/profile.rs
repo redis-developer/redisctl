@@ -164,13 +164,7 @@ async fn handle_list(
                 "count": profiles.len()
             });
 
-            let fmt = match output_format {
-                OutputFormat::Json => output::OutputFormat::Json,
-                OutputFormat::Yaml => output::OutputFormat::Yaml,
-                _ => output::OutputFormat::Json,
-            };
-
-            output::print_output(&output_data, fmt, None)?;
+            output::print_output(&output_data, output_format, None)?;
         }
         _ => {
             // Show config file path at the top
@@ -305,13 +299,7 @@ async fn handle_path(output_format: OutputFormat) -> Result<(), RedisCtlError> {
                 "config_path": config_path.to_str()
             });
 
-            let fmt = match output_format {
-                OutputFormat::Json => output::OutputFormat::Json,
-                OutputFormat::Yaml => output::OutputFormat::Yaml,
-                _ => output::OutputFormat::Json,
-            };
-
-            output::print_output(&output_data, fmt, None)?;
+            output::print_output(&output_data, output_format, None)?;
         }
         _ => {
             println!("{}", config_path.display());
@@ -1753,12 +1741,7 @@ fn output_validation(
 ) -> Result<(), RedisCtlError> {
     match output_format {
         OutputFormat::Json | OutputFormat::Yaml => {
-            let fmt = match output_format {
-                OutputFormat::Json => output::OutputFormat::Json,
-                OutputFormat::Yaml => output::OutputFormat::Yaml,
-                _ => output::OutputFormat::Json,
-            };
-            output::print_output(&result, fmt, None)?;
+            output::print_output(&result, output_format, None)?;
         }
         _ => {
             print_validation_human(&result);
