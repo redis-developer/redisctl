@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 use tower_mcp::{CallToolResult, Error as McpError, Tool, ToolBuilder};
 
 use crate::audit::AuditConfig;
+use crate::presets::ToolsConfig;
 
 /// Safety tier determining which categories of tools are allowed.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Deserialize, Serialize)]
@@ -82,6 +83,9 @@ pub struct PolicyConfig {
     /// Audit logging configuration
     #[serde(default)]
     pub audit: AuditConfig,
+    /// Tool visibility presets
+    #[serde(default)]
+    pub tools: ToolsConfig,
 }
 
 impl Default for PolicyConfig {
@@ -96,6 +100,7 @@ impl Default for PolicyConfig {
             database: None,
             app: None,
             audit: AuditConfig::default(),
+            tools: ToolsConfig::default(),
         }
     }
 }
@@ -764,6 +769,7 @@ mod tests {
             }),
             app: None,
             audit: AuditConfig::default(),
+            tools: ToolsConfig::default(),
         };
 
         let toml_str = toml::to_string_pretty(&config).unwrap();
@@ -981,5 +987,49 @@ allow = ["redis_set", "redis_expire"]
         assert!(desc.contains("cloud_raw_api"));
         assert!(desc.contains("enterprise_raw_api"));
         assert!(desc.contains("redis_command"));
+    }
+
+    // -- [tools] section TOML tests --
+
+    #[test]
+    fn toml_no_tools_section_defaults_to_all() {
+        let config: PolicyConfig = toml::from_str("tier = \"full\"").unwrap();
+        assert!(config.tools.is_all());
+        assert!(config.tools.include.is_empty());
+        assert!(config.tools.exclude.is_empty());
+    }
+
+    #[test]
+    fn toml_empty_tools_section_defaults_to_all() {
+        let config: PolicyConfig = toml::from_str("[tools]\n").unwrap();
+        assert!(config.tools.is_all());
+    }
+
+    #[test]
+    fn toml_tools_with_preset() {
+        let config: PolicyConfig = toml::from_str("[tools]\npreset = \"essentials\"\n").unwrap();
+        assert_eq!(config.tools.preset, "essentials");
+        assert!(!config.tools.is_all());
+    }
+
+    #[test]
+    fn toml_tools_with_include_exclude() {
+        let toml_str = r#"
+tier = "read-only"
+
+[tools]
+preset = "essentials"
+include = ["enterprise_raw_api", "get_enterprise_crdb"]
+exclude = ["flush_database"]
+"#;
+        let config: PolicyConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.tools.preset, "essentials");
+        assert_eq!(
+            config.tools.include,
+            vec!["enterprise_raw_api", "get_enterprise_crdb"]
+        );
+        assert_eq!(config.tools.exclude, vec!["flush_database"]);
+        // Other fields still parse correctly
+        assert_eq!(config.tier, SafetyTier::ReadOnly);
     }
 }
