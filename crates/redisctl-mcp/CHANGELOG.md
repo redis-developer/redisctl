@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.5.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.4.0...redisctl-mcp-v0.5.0) - 2026-03-04
+
+### Added
+
+- *(mcp)* add sub-module syntax for --tools CLI flag ([#783](https://github.com/redis-developer/redisctl/pull/783)) ([#790](https://github.com/redis-developer/redisctl/pull/790))
+- *(mcp)* add `enabled = false` per toolset in policy file ([#782](https://github.com/redis-developer/redisctl/pull/782)) ([#788](https://github.com/redis-developer/redisctl/pull/788))
+- *(mcp)* add tool visibility presets for manageable tool surfaces ([#786](https://github.com/redis-developer/redisctl/pull/786)) ([#787](https://github.com/redis-developer/redisctl/pull/787))
+- *(mcp)* add raw API passthrough tools ([#785](https://github.com/redis-developer/redisctl/pull/785))
+- *(mcp)* add 27 Enterprise tools for coverage parity (#769, #770, #771, #772) ([#779](https://github.com/redis-developer/redisctl/pull/779))
+- *(mcp)* close Cloud tool coverage gaps ([#773](https://github.com/redis-developer/redisctl/pull/773)) ([#778](https://github.com/redis-developer/redisctl/pull/778))
+- *(mcp)* add audit logging for tool invocations ([#767](https://github.com/redis-developer/redisctl/pull/767)) ([#777](https://github.com/redis-developer/redisctl/pull/777))
+- *(mcp)* add granular allow/deny policy configuration ([#776](https://github.com/redis-developer/redisctl/pull/776))
+
+### Other
+
+- *(mcp)* optimize tool descriptions for token efficiency ([#784](https://github.com/redis-developer/redisctl/pull/784)) ([#792](https://github.com/redis-developer/redisctl/pull/792))
+
 ## [0.4.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.3.0...redisctl-mcp-v0.4.0) - 2026-02-28
 
 ### Added
