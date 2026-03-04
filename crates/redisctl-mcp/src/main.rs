@@ -223,6 +223,19 @@ fn enabled_toolsets(args: &Args) -> HashSet<Toolset> {
     set
 }
 
+/// Map a CLI `Toolset` to its corresponding `ToolsetKind` for policy lookup.
+fn toolset_to_kind(t: &Toolset) -> ToolsetKind {
+    match t {
+        #[cfg(feature = "cloud")]
+        Toolset::Cloud => ToolsetKind::Cloud,
+        #[cfg(feature = "enterprise")]
+        Toolset::Enterprise => ToolsetKind::Enterprise,
+        #[cfg(feature = "database")]
+        Toolset::Database => ToolsetKind::Database,
+        Toolset::App => ToolsetKind::App,
+    }
+}
+
 /// Resolve the policy configuration.
 ///
 /// If a policy file is found (via `--policy`, env var, or default path), it takes precedence
@@ -268,11 +281,20 @@ fn resolve_policy(args: &Args) -> Result<(PolicyConfig, String)> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let enabled = enabled_toolsets(&args);
-    let enabled_names: Vec<String> = enabled.iter().map(|t| t.to_string()).collect();
+    let mut enabled = enabled_toolsets(&args);
 
     // Resolve policy configuration (includes audit config)
     let (policy_config, policy_source) = resolve_policy(&args)?;
+
+    // Apply policy-based toolset disabling (only when --tools was not explicit)
+    if args.tools.is_none() {
+        let disabled = policy_config.disabled_toolsets();
+        if !disabled.is_empty() {
+            enabled.retain(|t| !disabled.contains(&toolset_to_kind(t)));
+        }
+    }
+
+    let enabled_names: Vec<String> = enabled.iter().map(|t| t.to_string()).collect();
     let audit_config = Arc::new(policy_config.audit.clone());
 
     // Initialize tracing with optional audit layer
@@ -1134,5 +1156,48 @@ mod tests {
         };
         // Build should succeed with essentials preset
         let _router = build_router(state, policy, &enabled, tools_config, &tool_toolset).unwrap();
+    }
+
+    #[test]
+    fn policy_disabled_toolset_removes_from_enabled() {
+        use policy::ToolsetPolicy;
+
+        let config = PolicyConfig {
+            enterprise: Some(ToolsetPolicy {
+                enabled: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let disabled = config.disabled_toolsets();
+
+        let mut enabled: HashSet<Toolset> = HashSet::new();
+        #[cfg(feature = "cloud")]
+        enabled.insert(Toolset::Cloud);
+        #[cfg(feature = "enterprise")]
+        enabled.insert(Toolset::Enterprise);
+        enabled.insert(Toolset::App);
+
+        enabled.retain(|t| !disabled.contains(&toolset_to_kind(t)));
+
+        #[cfg(feature = "cloud")]
+        assert!(enabled.contains(&Toolset::Cloud));
+        #[cfg(feature = "enterprise")]
+        assert!(!enabled.contains(&Toolset::Enterprise));
+        assert!(enabled.contains(&Toolset::App));
+    }
+
+    #[test]
+    fn toolset_to_kind_mapping() {
+        #[cfg(feature = "cloud")]
+        assert_eq!(toolset_to_kind(&Toolset::Cloud), ToolsetKind::Cloud);
+        #[cfg(feature = "enterprise")]
+        assert_eq!(
+            toolset_to_kind(&Toolset::Enterprise),
+            ToolsetKind::Enterprise
+        );
+        #[cfg(feature = "database")]
+        assert_eq!(toolset_to_kind(&Toolset::Database), ToolsetKind::Database);
+        assert_eq!(toolset_to_kind(&Toolset::App), ToolsetKind::App);
     }
 }

@@ -43,6 +43,10 @@ impl fmt::Display for SafetyTier {
 #[derive(Debug, Clone, Default, Deserialize, Serialize)]
 #[serde(default)]
 pub struct ToolsetPolicy {
+    /// Whether this toolset is enabled. `None` or `Some(true)` = enabled,
+    /// `Some(false)` = disabled (tools are never registered).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
     /// Safety tier for this toolset (overrides the global tier)
     pub tier: Option<SafetyTier>,
     /// Explicit tool names to allow (evaluated after tier)
@@ -112,6 +116,24 @@ pub const RAW_TOOL_DENY_DEFAULTS: &[&str] =
     &["cloud_raw_api", "enterprise_raw_api", "redis_command"];
 
 impl PolicyConfig {
+    /// Return the set of toolsets explicitly disabled via `enabled = false`.
+    pub fn disabled_toolsets(&self) -> HashSet<ToolsetKind> {
+        let mut disabled = HashSet::new();
+        for (kind, policy) in [
+            (ToolsetKind::Cloud, &self.cloud),
+            (ToolsetKind::Enterprise, &self.enterprise),
+            (ToolsetKind::Database, &self.database),
+            (ToolsetKind::App, &self.app),
+        ] {
+            if let Some(tp) = policy
+                && tp.enabled == Some(false)
+            {
+                disabled.insert(kind);
+            }
+        }
+        disabled
+    }
+
     /// Build the synthesized default policy (used when no config file exists).
     /// This adds raw API passthrough tools to the deny list.
     pub fn synthesized_default() -> Self {
@@ -412,6 +434,16 @@ impl Policy {
             ));
         }
 
+        let disabled = self.config.disabled_toolsets();
+        if !disabled.is_empty() {
+            let mut names: Vec<String> = disabled.iter().map(|k| k.to_string()).collect();
+            names.sort();
+            desc.push_str(&format!(
+                "\n\nDisabled toolsets (tools not registered): {}",
+                names.join(", ")
+            ));
+        }
+
         if !self.config.deny.is_empty() {
             desc.push_str(&format!(
                 "\n\nExplicitly denied tools: {}",
@@ -481,6 +513,8 @@ pub struct PolicySummary {
 #[derive(Debug, Serialize)]
 pub struct ToolsetPolicySummary {
     #[serde(skip_serializing_if = "Option::is_none")]
+    pub enabled: Option<bool>,
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tier: Option<String>,
     #[serde(skip_serializing_if = "Vec::is_empty")]
     pub allow: Vec<String>,
@@ -491,6 +525,7 @@ pub struct ToolsetPolicySummary {
 impl From<&ToolsetPolicy> for ToolsetPolicySummary {
     fn from(tp: &ToolsetPolicy) -> Self {
         Self {
+            enabled: tp.enabled,
             tier: tp.tier.map(|t| t.to_string()),
             allow: tp.allow.clone(),
             deny: tp.deny.clone(),
@@ -765,7 +800,7 @@ mod tests {
             database: Some(ToolsetPolicy {
                 tier: Some(SafetyTier::ReadOnly),
                 allow: vec!["redis_set".to_string()],
-                deny: vec![],
+                ..Default::default()
             }),
             app: None,
             audit: AuditConfig::default(),
@@ -1031,5 +1066,117 @@ exclude = ["flush_database"]
         assert_eq!(config.tools.exclude, vec!["flush_database"]);
         // Other fields still parse correctly
         assert_eq!(config.tier, SafetyTier::ReadOnly);
+    }
+
+    // -- Toolset enabled/disabled tests --
+
+    #[test]
+    fn toml_enabled_false_parses() {
+        let toml_str = r#"
+tier = "read-only"
+
+[enterprise]
+enabled = false
+
+[database]
+enabled = false
+"#;
+        let config: PolicyConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.enterprise.as_ref().unwrap().enabled, Some(false));
+        assert_eq!(config.database.as_ref().unwrap().enabled, Some(false));
+        // Cloud not mentioned: should be None
+        assert!(config.cloud.is_none());
+    }
+
+    #[test]
+    fn toml_enabled_true_parses() {
+        let toml_str = r#"
+[cloud]
+enabled = true
+tier = "read-write"
+"#;
+        let config: PolicyConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.cloud.as_ref().unwrap().enabled, Some(true));
+    }
+
+    #[test]
+    fn toml_enabled_omitted_defaults_to_none() {
+        let toml_str = r#"
+[cloud]
+tier = "read-write"
+"#;
+        let config: PolicyConfig = toml::from_str(toml_str).unwrap();
+        assert_eq!(config.cloud.as_ref().unwrap().enabled, None);
+    }
+
+    #[test]
+    fn disabled_toolsets_returns_correct_set() {
+        let config = PolicyConfig {
+            enterprise: Some(ToolsetPolicy {
+                enabled: Some(false),
+                ..Default::default()
+            }),
+            database: Some(ToolsetPolicy {
+                enabled: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        let disabled = config.disabled_toolsets();
+        assert!(disabled.contains(&ToolsetKind::Enterprise));
+        assert!(disabled.contains(&ToolsetKind::Database));
+        assert!(!disabled.contains(&ToolsetKind::Cloud));
+        assert!(!disabled.contains(&ToolsetKind::App));
+    }
+
+    #[test]
+    fn disabled_toolsets_empty_when_all_enabled() {
+        let config = PolicyConfig {
+            cloud: Some(ToolsetPolicy {
+                enabled: Some(true),
+                ..Default::default()
+            }),
+            ..Default::default()
+        };
+        assert!(config.disabled_toolsets().is_empty());
+    }
+
+    #[test]
+    fn disabled_toolsets_empty_when_no_overrides() {
+        let config = PolicyConfig::default();
+        assert!(config.disabled_toolsets().is_empty());
+    }
+
+    #[test]
+    fn describe_mentions_disabled_toolsets() {
+        let policy = policy_with_config(PolicyConfig {
+            enterprise: Some(ToolsetPolicy {
+                enabled: Some(false),
+                ..Default::default()
+            }),
+            ..Default::default()
+        });
+        let desc = policy.describe();
+        assert!(desc.contains("Disabled toolsets"));
+        assert!(desc.contains("enterprise"));
+    }
+
+    #[test]
+    fn describe_omits_disabled_when_none() {
+        let policy = policy_with_config(PolicyConfig::default());
+        let desc = policy.describe();
+        assert!(!desc.contains("Disabled toolsets"));
+    }
+
+    #[test]
+    fn enabled_false_serializes_in_summary() {
+        let tp = ToolsetPolicy {
+            enabled: Some(false),
+            tier: Some(SafetyTier::ReadOnly),
+            ..Default::default()
+        };
+        let summary = ToolsetPolicySummary::from(&tp);
+        assert_eq!(summary.enabled, Some(false));
+        assert_eq!(summary.tier, Some("read-only".to_string()));
     }
 }
