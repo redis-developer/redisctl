@@ -32,7 +32,7 @@ With the MCP server, you can:
 
     ---
 
-    ~100 tools covering Redis Cloud, Redis Enterprise, and direct database operations.
+    300+ tools covering Redis Cloud, Redis Enterprise, and direct database operations.
 
 -   :material-cog:{ .lg .middle } **IDE Integration**
 
@@ -72,6 +72,7 @@ Once configured, interact naturally with your Redis infrastructure:
 Ready to set up MCP? Choose your path:
 
 - **[Getting Started](getting-started.md)** - Full installation and configuration guide
+- **[Configuration](configuration.md)** - Tool selection, safety tiers, and presets
 - **[Cloud Quickstart](cloud-quickstart.md)** - Redis Cloud users: get running in 5 minutes
 - **[Enterprise Quickstart](enterprise-quickstart.md)** - Redis Enterprise users: includes multi-cluster setup
 

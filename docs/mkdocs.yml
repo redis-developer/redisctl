@@ -167,6 +167,7 @@ nav:
   - MCP:
       - mcp/index.md
       - Getting Started: mcp/getting-started.md
+      - Configuration: mcp/configuration.md
       - Cloud Quickstart: mcp/cloud-quickstart.md
       - Enterprise Quickstart: mcp/enterprise-quickstart.md
       - Tools Reference: mcp/tools-reference.md

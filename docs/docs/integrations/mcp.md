@@ -131,6 +131,22 @@ Add to your project's `.mcp.json` or global MCP settings:
 }
 ```
 
+To load only specific toolsets, add `--tools`:
+
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": [
+        "--profile", "my-profile",
+        "--tools", "cloud:subscriptions,cloud:account"
+      ]
+    }
+  }
+}
+```
+
 ## Configuring Cursor
 
 Add to your Cursor MCP configuration file:
@@ -211,6 +227,23 @@ Add to your Zed settings (`~/.config/zed/settings.json` on Linux/macOS):
   }
 }
 ```
+
+## Tool Selection
+
+By default the MCP server loads all compiled-in toolsets (300+ tools). Use `--tools` to load only what you need:
+
+```bash
+# Cloud tools only
+redisctl-mcp --profile my-cloud --tools cloud
+
+# Specific sub-modules
+redisctl-mcp --profile my-cloud --tools cloud:subscriptions,cloud:account
+
+# Enterprise monitoring subset
+redisctl-mcp --profile my-re --tools enterprise:cluster,enterprise:observability
+```
+
+See [Configuration](../mcp/configuration.md) for the full `--tools` syntax, safety tiers, and presets.
 
 ## Available Tools
 

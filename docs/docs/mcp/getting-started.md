@@ -98,7 +98,13 @@ redisctl-mcp --profile my-profile --database-url redis://localhost:6379
 
 # Full access: Cloud/Enterprise management + database operations + writes
 redisctl-mcp --profile my-profile --read-only=false --database-url redis://localhost:6379
+
+# Load only specific toolsets or sub-modules
+redisctl-mcp --profile my-profile --tools cloud
+redisctl-mcp --profile my-profile --tools cloud:subscriptions,cloud:account
 ```
+
+See [Configuration](configuration.md) for the full CLI reference, `--tools` syntax, safety tiers, and presets.
 
 ### Database Connection Options
 
@@ -383,6 +389,7 @@ Want a faster path to try things out? Check out our quickstart guides:
 
 ## Next Steps
 
+- [Configuration](configuration.md) - Tool selection, safety tiers, and presets
 - [Tools Reference](tools-reference.md) - Complete list of available tools
 - [Advanced Usage](advanced-usage.md) - JMESPath integration and analytics
 - [Workflows](workflows.md) - Real-world use cases and examples

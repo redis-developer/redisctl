@@ -1,479 +1,279 @@
 # Tools Reference
 
-The redisctl MCP server exposes **~100 tools** for managing Redis Cloud, Redis Enterprise, and direct database operations.
+The redisctl MCP server exposes **309 tools** across 4 toolsets and 2 system tools for managing Redis Cloud, Redis Enterprise, and direct database operations.
 
-Tools marked with *(write)* require `--read-only=false` flag. Database tools require a `--database-url` connection.
+Tools are organized into **toolsets** (Cloud, Enterprise, Database, App) and further into **sub-modules** that can be selectively loaded with the [`--tools` flag](configuration.md#the-tools-flag).
 
-!!! warning "Documentation Update in Progress"
-    The detailed tool listing below is being updated. For the most accurate list, start `redisctl-mcp` and check the tools your AI assistant discovers, or inspect the source code.
+Tools that modify state require `--read-only=false` or an appropriate [safety tier](configuration.md#safety-tiers). Database tools require a `--database-url` connection.
 
-## Redis Cloud Tools (29 tools)
+!!! tip "Runtime Discovery"
+    Use the `list_available_tools` system tool at runtime to see exactly which tools are active in your current configuration, grouped by toolset. This is the most accurate way to discover available tools.
 
-### Account & Infrastructure
+## System Tools (2 tools)
 
-| Tool | Description |
-|------|-------------|
-| `cloud_account_get` | Get account information |
-| `cloud_account_get_by_id` | Get cloud provider account by ID |
-| `cloud_accounts_list` | List all cloud provider accounts |
-| `cloud_account_delete` | Delete a cloud provider account *(write)* |
-| `cloud_payment_methods_get` | List all payment methods |
-| `cloud_database_modules_get` | List available database modules |
-| `cloud_regions_get` | Get available regions (AWS, GCP, Azure) |
-
-### Pro Subscriptions
+These tools are always available regardless of `--tools` selection or visibility presets.
 
 | Tool | Description |
 |------|-------------|
-| `cloud_subscriptions_list` | List all Pro subscriptions |
-| `cloud_subscription_get` | Get Pro subscription details |
-| `cloud_pro_subscription_create` | Create a new Pro subscription *(write)* |
-| `cloud_pro_subscription_delete` | Delete a Pro subscription *(write)* |
+| `list_available_tools` | List all available tools grouped by toolset, showing active vs. hidden |
+| `show_policy` | Show the active safety tier, per-toolset overrides, and allow/deny lists |
 
-### Essentials Subscriptions
+## Cloud Toolset (151 tools)
 
-| Tool | Description |
-|------|-------------|
-| `cloud_essentials_subscriptions_list` | List all Essentials subscriptions |
-| `cloud_essentials_subscription_get` | Get Essentials subscription details |
-| `cloud_essentials_subscription_create` | Create Essentials subscription *(write)* |
-| `cloud_essentials_subscription_delete` | Delete Essentials subscription *(write)* |
-| `cloud_essentials_plans_list` | List available Essentials plans |
-| `cloud_essentials_databases_list` | List databases in Essentials subscription |
-| `cloud_essentials_database_get` | Get Essentials database details |
-| `cloud_essentials_database_delete` | Delete Essentials database *(write)* |
+Redis Cloud management tools. Select with `--tools cloud` or target specific sub-modules.
 
-### Database & Task Operations
+### `cloud:subscriptions` (37 tools)
 
-| Tool | Description |
-|------|-------------|
-| `cloud_databases_list` | List databases in a subscription |
-| `cloud_database_get` | Get database details |
-| `cloud_tasks_list` | List recent async tasks |
-| `cloud_task_get` | Get task status |
+Manages flexible subscriptions and their databases -- creation, configuration, backup/import, tagging, CIDR allowlists, maintenance windows, Active-Active regions, and version upgrades.
 
-### Networking
+| Representative Tools | Description |
+|---------------------|-------------|
+| `list_subscriptions` | List all Pro subscriptions |
+| `get_subscription` | Get subscription details |
+| `list_databases` | List databases in a subscription |
+| `get_database` | Get database details |
+| `create_database` | Create a new database *(write)* |
+| `update_database` | Update database configuration *(write)* |
+| `get_backup_status` | Get database backup status |
+| `get_database_tags` | Get database tags |
 
-| Tool | Description |
-|------|-------------|
-| `cloud_vpc_peerings_get` | Get VPC peerings for subscription |
-| `cloud_vpc_peering_delete` | Delete a VPC peering *(write)* |
-| `cloud_private_link_get` | Get AWS PrivateLink configuration |
-| `cloud_private_link_delete` | Delete PrivateLink configuration *(write)* |
-| `cloud_transit_gateway_attachments_get` | Get Transit Gateway attachments |
-| `cloud_transit_gateway_attachment_delete` | Delete Transit Gateway attachment *(write)* |
+### `cloud:account` (34 tools)
 
-## Redis Enterprise Tools (83 tools)
+Account management -- users, ACL users/roles/rules, cloud provider accounts, payment methods, cost reports, and task tracking.
 
-### Cluster Operations
+| Representative Tools | Description |
+|---------------------|-------------|
+| `get_account` | Get account information |
+| `get_system_logs` | Get system event logs |
+| `get_regions` | Get available regions by provider |
+| `get_modules` | List available database modules |
+| `list_account_users` | List account users |
+| `list_acl_users` | List ACL users |
+| `list_cost_reports` | List cost reports |
+| `list_tasks` | List recent async tasks |
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_cluster_get` | Get cluster information |
-| `enterprise_cluster_stats` | Get cluster statistics |
-| `enterprise_cluster_settings` | Get cluster settings |
-| `enterprise_cluster_topology` | Get cluster topology |
-| `enterprise_cluster_suffixes_get` | Get cluster DNS suffixes |
-| `enterprise_cluster_update` | Update cluster configuration *(write)* |
+### `cloud:networking` (52 tools)
 
-### Database Operations
+Network connectivity -- VPC peering, Transit Gateway, Private Service Connect (PSC), and AWS PrivateLink for both standard and Active-Active subscriptions.
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_databases_list` | List all databases |
-| `enterprise_database_get` | Get database details |
-| `enterprise_database_stats` | Get database statistics |
-| `enterprise_database_metrics` | Get database metrics |
-| `enterprise_database_create` | Create a new database *(write)* |
-| `enterprise_database_update` | Update database configuration *(write)* |
-| `enterprise_database_delete` | Delete a database *(write)* |
-| `enterprise_database_flush` | Flush all data *(write)* |
-| `enterprise_database_export` | Export database *(write)* |
-| `enterprise_database_import` | Import data *(write)* |
-| `enterprise_database_backup` | Trigger backup *(write)* |
-| `enterprise_database_restore` | Restore from backup *(write)* |
+| Representative Tools | Description |
+|---------------------|-------------|
+| `get_vpc_peering` | Get VPC peering details |
+| `create_vpc_peering` | Create VPC peering *(write)* |
+| `get_aa_vpc_peering` | Get Active-Active VPC peering |
+| `get_transit_gateway` | Get Transit Gateway attachment |
+| `create_transit_gateway` | Create Transit Gateway *(write)* |
+| `get_private_service_connect` | Get PSC configuration |
+| `get_private_link` | Get PrivateLink configuration |
+| `create_private_link` | Create PrivateLink *(write)* |
 
-### Node Operations
+### `cloud:fixed` (27 tools)
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_nodes_list` | List all nodes |
-| `enterprise_node_get` | Get node details |
-| `enterprise_node_stats` | Get node statistics |
-| `enterprise_node_update` | Update node configuration *(write)* |
-| `enterprise_node_remove` | Remove node *(write)* |
+Essentials/Fixed tier subscriptions and databases -- plans, backup, import, tagging, and version upgrades.
 
-### Shard & Endpoint Operations
+| Representative Tools | Description |
+|---------------------|-------------|
+| `list_fixed_subscriptions` | List Essentials subscriptions |
+| `get_fixed_subscription` | Get Essentials subscription details |
+| `create_fixed_subscription` | Create Essentials subscription *(write)* |
+| `list_fixed_plans` | List available Essentials plans |
+| `list_fixed_databases` | List databases in subscription |
+| `get_fixed_database` | Get Essentials database details |
+| `create_fixed_database` | Create Essentials database *(write)* |
+| `get_fixed_database_backup_status` | Get backup status |
+
+### `cloud:raw` (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `enterprise_shards_list` | List all shards |
-| `enterprise_shard_get` | Get shard details |
-| `enterprise_endpoints_list` | List all endpoints |
-| `enterprise_endpoints_by_database` | List endpoints for database |
-| `enterprise_endpoint_get` | Get endpoint details |
-| `enterprise_endpoint_stats` | Get endpoint statistics |
+| `cloud_raw_api` | Execute arbitrary Redis Cloud REST API requests |
 
-### Proxy Operations
+## Enterprise Toolset (92 tools)
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_proxies_list` | List all proxies |
-| `enterprise_proxies_by_database` | List proxies for database |
-| `enterprise_proxy_get` | Get proxy details |
-| `enterprise_proxy_stats` | Get proxy statistics |
+Redis Enterprise cluster management tools. Select with `--tools enterprise` or target specific sub-modules.
 
-### Alert Operations
+### `enterprise:cluster` (24 tools)
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_alerts_list` | List active alerts |
-| `enterprise_alert_get` | Get alert details |
+Cluster-level configuration -- license management, cluster policies, maintenance mode, TLS certificates, services, and node lifecycle.
 
-### User Management
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_users_list` | List all users |
-| `enterprise_user_get` | Get user details |
-| `enterprise_user_create` | Create a user *(write)* |
-| `enterprise_user_delete` | Delete a user *(write)* |
-
-### Role Management
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_roles_list` | List all roles |
-| `enterprise_role_get` | Get role details |
-| `enterprise_role_create` | Create a role *(write)* |
-| `enterprise_role_delete` | Delete a role *(write)* |
-
-### ACL Management
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_acls_list` | List all Redis ACLs |
-| `enterprise_acl_get` | Get ACL details |
-| `enterprise_acl_create` | Create a Redis ACL *(write)* |
-| `enterprise_acl_delete` | Delete a Redis ACL *(write)* |
-
-### LDAP Mappings
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_ldap_mappings_list` | List LDAP mappings |
-| `enterprise_ldap_mapping_get` | Get LDAP mapping details |
-| `enterprise_ldap_mapping_create` | Create LDAP mapping *(write)* |
-| `enterprise_ldap_mapping_delete` | Delete LDAP mapping *(write)* |
-
-### License Management
-
-| Tool | Description |
-|------|-------------|
-| `get_license` | Get license information |
-| `get_license_usage` | Get license utilization stats |
-| `update_enterprise_license` | Update cluster license *(write)* |
-| `validate_enterprise_license` | Validate license before applying |
-
-### Cluster Configuration
-
-| Tool | Description |
-|------|-------------|
+| Representative Tools | Description |
+|---------------------|-------------|
 | `get_cluster` | Get cluster information |
-| `get_cluster_stats` | Get cluster statistics |
-| `update_enterprise_cluster` | Update cluster settings *(write)* |
+| `get_license` | Get license information |
+| `update_enterprise_license` | Update cluster license *(write)* |
 | `get_enterprise_cluster_policy` | Get cluster policy settings |
 | `update_enterprise_cluster_policy` | Update cluster policy *(write)* |
 | `enable_enterprise_maintenance_mode` | Enable maintenance mode *(write)* |
-| `disable_enterprise_maintenance_mode` | Disable maintenance mode *(write)* |
+| `list_nodes` | List all cluster nodes |
+| `get_node` | Get node details |
 
-### Certificate Management
+### `enterprise:databases` (20 tools)
 
-| Tool | Description |
-|------|-------------|
-| `get_enterprise_cluster_certificates` | Get all certificates |
-| `rotate_enterprise_cluster_certificates` | Rotate certificates *(write)* |
-| `update_enterprise_cluster_certificates` | Update certificate *(write)* |
+Database and Active-Active CRDB management -- CRUD, backup/import/export/restore, stats, endpoints, alerts, and version upgrades.
 
-### Modules
+| Representative Tools | Description |
+|---------------------|-------------|
+| `list_enterprise_databases` | List all databases |
+| `get_enterprise_database` | Get database details |
+| `get_database_stats` | Get database statistics |
+| `get_database_endpoints` | Get database endpoints |
+| `create_enterprise_database` | Create a database *(write)* |
+| `update_enterprise_database` | Update database config *(write)* |
+| `backup_enterprise_database` | Trigger backup *(write)* |
+| `list_enterprise_crdbs` | List Active-Active databases |
 
-| Tool | Description |
-|------|-------------|
-| `list_modules` | List available modules |
-| `get_module` | Get module details |
+### `enterprise:rbac` (20 tools)
 
-### Active-Active (CRDB)
+Role-based access control -- users, roles, ACL rules, built-in roles, and LDAP configuration.
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_crdbs_list` | List Active-Active databases |
-| `enterprise_crdb_get` | Get CRDB details |
-| `enterprise_crdb_update` | Update CRDB *(write)* |
-| `enterprise_crdb_delete` | Delete CRDB *(write)* |
-| `enterprise_crdb_tasks_list` | List all CRDB tasks |
-| `enterprise_crdb_tasks_by_crdb` | List tasks for specific CRDB |
-| `enterprise_crdb_task_get` | Get CRDB task details |
-| `enterprise_crdb_task_cancel` | Cancel CRDB task *(write)* |
+| Representative Tools | Description |
+|---------------------|-------------|
+| `list_enterprise_users` | List all users |
+| `get_enterprise_user` | Get user details |
+| `create_enterprise_user` | Create a user *(write)* |
+| `list_enterprise_roles` | List all roles |
+| `get_enterprise_role` | Get role details |
+| `create_enterprise_role` | Create a role *(write)* |
+| `list_enterprise_acl_rules` | List ACL rules |
+| `get_enterprise_ldap_config` | Get LDAP configuration |
 
-### Database Groups
+### `enterprise:observability` (16 tools)
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_bdb_groups_list` | List database groups |
-| `enterprise_bdb_group_get` | Get database group details |
-| `enterprise_bdb_group_delete` | Delete database group *(write)* |
+Monitoring -- alerts, audit logs, aggregate stats for nodes/databases/shards, debug info, and module listing.
 
-### DNS Suffixes
+| Representative Tools | Description |
+|---------------------|-------------|
+| `list_alerts` | List active alerts |
+| `acknowledge_enterprise_alert` | Acknowledge an alert *(write)* |
+| `list_logs` | Get cluster event logs |
+| `get_all_nodes_stats` | Get aggregate node statistics |
+| `get_all_databases_stats` | Get aggregate database statistics |
+| `list_shards` | List all shards |
+| `get_shard_stats` | Get shard statistics |
+| `list_enterprise_modules` | List available modules |
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_suffixes_list` | List DNS suffixes |
-| `enterprise_suffix_get` | Get suffix details |
-| `enterprise_suffix_delete` | Delete DNS suffix *(write)* |
+### `enterprise:proxy` (4 tools)
 
-### Jobs & Scheduling
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_jobs_list` | List scheduled jobs |
-| `enterprise_job_get` | Get job details |
-| `enterprise_job_history` | Get job execution history |
-| `enterprise_job_trigger` | Trigger job immediately *(write)* |
-
-### OCSP
+Proxy management -- list, inspect, stats, and configuration updates.
 
 | Tool | Description |
 |------|-------------|
-| `enterprise_ocsp_config_get` | Get OCSP configuration |
-| `enterprise_ocsp_status_get` | Get OCSP status |
-| `enterprise_ocsp_test` | Test OCSP connectivity |
+| `list_enterprise_proxies` | List all proxy instances |
+| `get_enterprise_proxy` | Get proxy details |
+| `get_enterprise_proxy_stats` | Get proxy statistics |
+| `update_enterprise_proxy` | Update proxy configuration *(write)* |
 
-### Logs & Diagnostics
+### `enterprise:services` (7 tools)
 
-| Tool | Description |
-|------|-------------|
-| `enterprise_logs_get` | Get cluster event logs |
-| `enterprise_diagnostics_run` | Run diagnostics *(write)* |
-| `enterprise_diagnostic_checks_list` | List diagnostic checks |
-| `enterprise_diagnostic_reports_list` | List diagnostic reports |
-| `enterprise_diagnostic_report_get` | Get diagnostic report |
-| `enterprise_diagnostic_report_last` | Get most recent report |
-| `enterprise_debuginfo_list` | List debug info tasks |
-| `enterprise_debuginfo_status` | Get debug info status |
-
-## Database Tools (125 tools)
-
-Direct Redis database operations. Requires `--database-url` connection string.
-
-### Server & Keys
+System service lifecycle -- list, inspect, start, stop, restart, and status checks.
 
 | Tool | Description |
 |------|-------------|
-| `database_ping` | Ping Redis server |
-| `database_info` | Get server information |
-| `database_dbsize` | Get number of keys |
-| `database_scan` | Scan keys by pattern |
-| `database_type` | Get key type |
-| `database_exists` | Check if key exists |
-| `database_ttl` | Get key TTL |
-| `database_memory_usage` | Get key memory usage |
-| `database_rename` | Rename a key *(write)* |
-| `database_del` | Delete keys *(write)* |
-| `database_expire` | Set key expiration *(write)* |
-| `database_persist` | Remove key expiration *(write)* |
+| `list_enterprise_services` | List system services |
+| `get_enterprise_service` | Get service details |
+| `get_enterprise_service_status` | Get service status |
+| `update_enterprise_service` | Update service configuration *(write)* |
+| `start_enterprise_service` | Start a service *(write)* |
+| `stop_enterprise_service` | Stop a service *(write)* |
+| `restart_enterprise_service` | Restart a service *(write)* |
 
-### Strings
+### `enterprise:raw` (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `database_get` | Get string value |
-| `database_set` | Set string value *(write)* |
-| `database_incr` | Increment by 1 *(write)* |
-| `database_decr` | Decrement by 1 *(write)* |
-| `database_incrby` | Increment by amount *(write)* |
+| `enterprise_raw_api` | Execute arbitrary Redis Enterprise REST API requests |
 
-### Hashes
+## Database Toolset (56 tools)
 
-| Tool | Description |
-|------|-------------|
-| `database_hgetall` | Get all hash fields |
-| `database_hget` | Get hash field |
-| `database_hlen` | Get hash length |
-| `database_hset` | Set hash field *(write)* |
-| `database_hset_multiple` | Set multiple hash fields *(write)* |
-| `database_hdel` | Delete hash fields *(write)* |
+Direct Redis database operations. Requires `--database-url` connection. Select with `--tools database` or target specific sub-modules.
 
-### Lists
+### `database:server` (14 tools)
 
-| Tool | Description |
-|------|-------------|
-| `database_lrange` | Get list range |
-| `database_lindex` | Get element by index |
-| `database_llen` | Get list length |
-| `database_lpush` | Push to head *(write)* |
-| `database_rpush` | Push to tail *(write)* |
-| `database_lpop` | Pop from head *(write)* |
-| `database_rpop` | Pop from tail *(write)* |
-| `database_lset` | Set element at index *(write)* |
+Server-level operations -- connectivity, server info, client listing, slow log, memory stats, latency, ACL inspection, and config management.
 
-### Sets
+| Representative Tools | Description |
+|---------------------|-------------|
+| `redis_ping` | Ping the server |
+| `redis_info` | Get server information |
+| `redis_dbsize` | Get number of keys |
+| `redis_client_list` | List connected clients |
+| `redis_slowlog` | Get slow log entries |
+| `redis_memory_stats` | Get memory statistics |
+| `redis_config_get` | Get config values |
+| `redis_config_set` | Set config values *(write)* |
 
-| Tool | Description |
-|------|-------------|
-| `database_smembers` | Get all members |
-| `database_sismember` | Check membership |
-| `database_scard` | Get set size |
-| `database_sadd` | Add members *(write)* |
-| `database_srem` | Remove members *(write)* |
+### `database:keys` (15 tools)
 
-### Sorted Sets
+Key-space operations -- listing, scanning, get/set, type inspection, TTL, existence checks, memory usage, and key mutation.
 
-| Tool | Description |
-|------|-------------|
-| `database_zrange` | Get range (low to high) |
-| `database_zrevrange` | Get range (high to low) |
-| `database_zrange_withscores` | Get range with scores |
-| `database_zrevrange_withscores` | Get reverse range with scores |
-| `database_zrangebyscore` | Get by score range |
-| `database_zscore` | Get member score |
-| `database_zrank` | Get member rank |
-| `database_zrevrank` | Get reverse rank |
-| `database_zcard` | Get sorted set size |
-| `database_zadd` | Add members with scores *(write)* |
-| `database_zrem` | Remove members *(write)* |
-| `database_zincrby` | Increment member score *(write)* |
+| Representative Tools | Description |
+|---------------------|-------------|
+| `redis_keys` | List keys matching a pattern |
+| `redis_scan` | Scan keys with cursor |
+| `redis_get` | Get string value |
+| `redis_set` | Set string value *(write)* |
+| `redis_type` | Get key type |
+| `redis_ttl` | Get key TTL |
+| `redis_del` | Delete keys *(write)* |
+| `redis_expire` | Set key expiration *(write)* |
 
-### Monitoring & Config
+### `database:structures` (22 tools)
+
+Data structure operations -- hashes, lists, sets, sorted sets, streams, and pub/sub inspection.
+
+| Representative Tools | Description |
+|---------------------|-------------|
+| `redis_hgetall` | Get all hash fields |
+| `redis_lrange` | Get list range |
+| `redis_smembers` | Get all set members |
+| `redis_zrange` | Get sorted set range |
+| `redis_xinfo_stream` | Get stream info |
+| `redis_xrange` | Get stream entries by ID range |
+| `redis_xlen` | Get stream length |
+| `redis_pubsub_channels` | List active pub/sub channels |
+
+### `database:diagnostics` (4 tools)
+
+Higher-level diagnostic tools that aggregate information from multiple Redis commands.
 
 | Tool | Description |
 |------|-------------|
-| `database_slowlog` | Get slow log entries |
-| `database_slowlog_len` | Get slow log length |
-| `database_client_list` | List connected clients |
-| `database_config_get` | Get config values |
-| `database_module_list` | List loaded modules |
+| `redis_health_check` | Comprehensive health check |
+| `redis_key_summary` | Key distribution summary |
+| `redis_hotkeys` | Hot key detection |
+| `redis_connection_summary` | Connection pool summary |
 
-### Generic & Pipeline
-
-| Tool | Description |
-|------|-------------|
-| `database_execute` | Execute any Redis command |
-| `database_pipeline` | Execute multiple commands in pipeline |
-
-### RediSearch
+### `database:raw` (1 tool)
 
 | Tool | Description |
 |------|-------------|
-| `database_ft_list` | List all indexes |
-| `database_ft_info` | Get index information |
-| `database_ft_search` | Search an index |
-| `database_ft_aggregate` | Run aggregation query |
-| `database_ft_create` | Create an index *(write)* |
-| `database_ft_alter` | Add field to index *(write)* |
-| `database_ft_dropindex` | Delete an index *(write)* |
-| `database_ft_aliasadd` | Create index alias *(write)* |
-| `database_ft_aliasupdate` | Update index alias *(write)* |
-| `database_ft_aliasdel` | Delete index alias *(write)* |
-| `database_ft_synupdate` | Update synonym group *(write)* |
-| `database_ft_syndump` | Dump synonym groups |
-| `database_ft_spellcheck` | Get spelling suggestions |
-| `database_ft_explain` | Explain query execution plan |
-| `database_ft_tagvals` | Get unique tag values |
-| `database_ft_sugadd` | Add autocomplete suggestion *(write)* |
-| `database_ft_sugget` | Get autocomplete suggestions |
-| `database_ft_sugdel` | Delete autocomplete suggestion *(write)* |
-| `database_ft_suglen` | Get suggestion count |
+| `redis_command` | Execute arbitrary Redis commands |
 
-### RedisJSON
+## App Toolset (8 tools)
+
+Profile and configuration management tools. Always compiled in; no sub-modules.
 
 | Tool | Description |
 |------|-------------|
-| `database_json_get` | Get JSON value |
-| `database_json_mget` | Get JSON from multiple keys |
-| `database_json_set` | Set JSON value *(write)* |
-| `database_json_del` | Delete JSON path *(write)* |
-| `database_json_type` | Get JSON value type |
-| `database_json_arrappend` | Append to JSON array *(write)* |
-| `database_json_arrinsert` | Insert into JSON array *(write)* |
-| `database_json_arrindex` | Find index in JSON array |
-| `database_json_arrlen` | Get JSON array length |
-| `database_json_arrpop` | Pop from JSON array *(write)* |
-| `database_json_arrtrim` | Trim JSON array *(write)* |
-| `database_json_objkeys` | Get JSON object keys |
-| `database_json_objlen` | Get JSON object length |
-| `database_json_numincrby` | Increment JSON number *(write)* |
-| `database_json_toggle` | Toggle JSON boolean *(write)* |
-| `database_json_clear` | Clear JSON container *(write)* |
-| `database_json_strlen` | Get JSON string length |
+| `profile_list` | List all configured profiles |
+| `profile_show` | Show profile details |
+| `profile_path` | Show config file path |
+| `profile_validate` | Validate profile credentials |
+| `profile_set_default_cloud` | Set default Cloud profile |
+| `profile_set_default_enterprise` | Set default Enterprise profile |
+| `profile_delete` | Delete a profile *(write)* |
+| `profile_create` | Create a new profile *(write)* |
 
-### RedisTimeSeries
+## Summary
 
-| Tool | Description |
-|------|-------------|
-| `database_ts_create` | Create time series *(write)* |
-| `database_ts_add` | Add sample *(write)* |
-| `database_ts_get` | Get latest sample |
-| `database_ts_range` | Query time range |
-| `database_ts_info` | Get time series info |
-
-### RedisBloom
-
-| Tool | Description |
-|------|-------------|
-| `database_bf_reserve` | Create Bloom filter *(write)* |
-| `database_bf_add` | Add to Bloom filter *(write)* |
-| `database_bf_madd` | Add multiple to Bloom filter *(write)* |
-| `database_bf_exists` | Check Bloom filter |
-| `database_bf_mexists` | Check multiple in Bloom filter |
-| `database_bf_info` | Get Bloom filter info |
-
-### Redis Streams
-
-| Tool | Description |
-|------|-------------|
-| `database_xadd` | Add entry to stream *(write)* |
-| `database_xread` | Read from streams |
-| `database_xrange` | Get entries by ID range |
-| `database_xrevrange` | Get entries in reverse |
-| `database_xlen` | Get stream length |
-| `database_xinfo_stream` | Get stream info |
-| `database_xinfo_groups` | List consumer groups |
-| `database_xinfo_consumers` | List consumers in group |
-| `database_xgroup_create` | Create consumer group *(write)* |
-| `database_xgroup_destroy` | Delete consumer group *(write)* |
-| `database_xgroup_delconsumer` | Remove consumer *(write)* |
-| `database_xgroup_setid` | Set group last ID *(write)* |
-| `database_xreadgroup` | Read as consumer group |
-| `database_xack` | Acknowledge entries *(write)* |
-| `database_xdel` | Delete entries *(write)* |
-| `database_xtrim` | Trim stream *(write)* |
-| `database_xpending` | Get pending entries |
-| `database_xclaim` | Claim pending entries *(write)* |
-| `database_xautoclaim` | Auto-claim pending entries *(write)* |
-
-### Pub/Sub
-
-| Tool | Description |
-|------|-------------|
-| `database_publish` | Publish message *(write)* |
-| `database_pubsub_channels` | List active channels |
-| `database_pubsub_numsub` | Get subscriber counts |
-| `database_pubsub_numpat` | Get pattern subscription count |
-
-## Tool Categories Summary
-
-| Category | Read | Write | Total |
-|----------|------|-------|-------|
-| **Redis Cloud** | 19 | 10 | 29 |
-| **Redis Enterprise** | 56 | 27 | 83 |
-| **Database - Core** | 18 | 24 | 42 |
-| **Database - RediSearch** | 9 | 10 | 19 |
-| **Database - RedisJSON** | 6 | 11 | 17 |
-| **Database - RedisTimeSeries** | 3 | 2 | 5 |
-| **Database - RedisBloom** | 3 | 3 | 6 |
-| **Database - Streams** | 7 | 12 | 19 |
-| **Database - Pub/Sub** | 3 | 1 | 4 |
-| **Total** | **124** | **100** | **237** |
+| Toolset | Sub-modules | Tools |
+|---------|-------------|-------|
+| Cloud | `subscriptions` (37), `account` (34), `networking` (52), `fixed` (27), `raw` (1) | **151** |
+| Enterprise | `cluster` (24), `databases` (20), `rbac` (20), `observability` (16), `proxy` (4), `services` (7), `raw` (1) | **92** |
+| Database | `server` (14), `keys` (15), `structures` (22), `diagnostics` (4), `raw` (1) | **56** |
+| App | *(flat)* | **8** |
+| System | *(always on)* | **2** |
+| **Total** | | **309** |
 
 ## Example Tool Usage
 
@@ -481,7 +281,7 @@ Direct Redis database operations. Requires `--database-url` connection string.
 
 > **You**: Add a user to my users hash with name "Alice" and email "alice@example.com"
 >
-> **AI**: *uses `database_hset_multiple`*
+> **AI**: *uses `redis_hgetall` to check existing fields, then `redis_set` or hash mutation tools*
 >
 > Added 2 fields to hash `user:123`:
 > - name: Alice
@@ -491,7 +291,7 @@ Direct Redis database operations. Requires `--database-url` connection string.
 
 > **You**: Show me the top 5 players on the leaderboard
 >
-> **AI**: *uses `database_zrevrange_withscores` with key="leaderboard", start=0, stop=4*
+> **AI**: *uses `redis_zrange` with reverse ordering, start=0, stop=4*
 >
 > | Rank | Player | Score |
 > |------|--------|-------|
@@ -505,30 +305,18 @@ Direct Redis database operations. Requires `--database-url` connection string.
 
 > **You**: Search for products containing "wireless headphones" under $100
 >
-> **AI**: *uses `database_ft_search` with index="products", query="@name:wireless headphones @price:[0 100]"*
+> **AI**: *uses database tools with RediSearch commands*
 >
 > Found 3 products:
 > - Sony WH-1000XM4 - $89.99
 > - JBL Tune 500BT - $49.99
 > - Anker Soundcore - $39.99
 
-### Stream Processing
-
-> **You**: Show me the last 5 events from my orders stream
->
-> **AI**: *uses `database_xrevrange` with key="orders", end="+", start="-", count=5*
->
-> Recent orders:
-> - 1705432100000-0: order_id=ORD-789, status=shipped
-> - 1705431900000-0: order_id=ORD-788, status=processing
-> - 1705431700000-0: order_id=ORD-787, status=completed
-> ...
-
 ### Infrastructure Management
 
 > **You**: What's the cluster health?
 >
-> **AI**: *uses `enterprise_cluster_get`, `enterprise_cluster_stats`, `enterprise_nodes_list`*
+> **AI**: *uses `get_cluster`, `get_all_nodes_stats`, `list_enterprise_databases`*
 >
 > **Cluster**: docker-cluster (v8.0.2-17)
 >
@@ -538,4 +326,4 @@ Direct Redis database operations. Requires `--database-url` connection string.
 > | Memory Available | 7.81 GB |
 > | Nodes | 1 active |
 > | Databases | 1 active |
-| Alerts | None |
+> | Alerts | None |
