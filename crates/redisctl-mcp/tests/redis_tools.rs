@@ -181,11 +181,7 @@ async fn test_server_tools() {
     assert!(text.contains("redis_version"), "info: {}", text);
 
     // redis_info with section
-    let text = call_tool_text(
-        &redis::info(state.clone()),
-        json!({"section": "server"}),
-    )
-    .await;
+    let text = call_tool_text(&redis::info(state.clone()), json!({"section": "server"})).await;
     assert!(text.contains("redis_version"), "info server: {}", text);
 
     // redis_dbsize (just verify it returns a number, other tests may add keys)
@@ -753,11 +749,7 @@ async fn test_hash_read_tools() {
     assert!(text.contains("nil"), "hmget nil: {}", text);
 
     // redis_hlen
-    let text = call_tool_text(
-        &redis::hlen(state.clone()),
-        json!({"key": format!("{p}h")}),
-    )
-    .await;
+    let text = call_tool_text(&redis::hlen(state.clone()), json!({"key": format!("{p}h")})).await;
     assert!(text.contains("3"), "hlen: {}", text);
 
     // redis_hexists
@@ -875,11 +867,7 @@ async fn test_list_read_tools() {
     assert!(text.contains("3 elements"), "lrange: {}", text);
 
     // redis_llen
-    let text = call_tool_text(
-        &redis::llen(state.clone()),
-        json!({"key": format!("{p}l")}),
-    )
-    .await;
+    let text = call_tool_text(&redis::llen(state.clone()), json!({"key": format!("{p}l")})).await;
     assert!(text.contains("3"), "llen: {}", text);
 
     // redis_lindex
@@ -929,19 +917,11 @@ async fn test_list_write_tools() {
     assert!(text.contains("3 elements"), "lrange verify: {}", text);
 
     // redis_lpop
-    let text = call_tool_text(
-        &redis::lpop(state.clone()),
-        json!({"key": format!("{p}l")}),
-    )
-    .await;
+    let text = call_tool_text(&redis::lpop(state.clone()), json!({"key": format!("{p}l")})).await;
     assert!(text.contains("LPOP"), "lpop: {}", text);
 
     // redis_rpop
-    let text = call_tool_text(
-        &redis::rpop(state.clone()),
-        json!({"key": format!("{p}l")}),
-    )
-    .await;
+    let text = call_tool_text(&redis::rpop(state.clone()), json!({"key": format!("{p}l")})).await;
     assert!(text.contains("RPOP"), "rpop: {}", text);
 
     cleanup(&mut conn, p).await;
@@ -1209,11 +1189,7 @@ async fn test_stream_tools() {
     .await;
 
     // redis_xlen
-    let text = call_tool_text(
-        &redis::xlen(state.clone()),
-        json!({"key": format!("{p}s")}),
-    )
-    .await;
+    let text = call_tool_text(&redis::xlen(state.clone()), json!({"key": format!("{p}s")})).await;
     assert!(text.contains("2"), "xlen: {}", text);
 
     // redis_xinfo_stream
@@ -1258,11 +1234,7 @@ async fn test_pubsub_tools() {
     let state = make_state(ctx.port);
 
     // redis_pubsub_channels (no active channels expected)
-    let text = call_tool_text(
-        &redis::pubsub_channels(state.clone()),
-        json!({}),
-    )
-    .await;
+    let text = call_tool_text(&redis::pubsub_channels(state.clone()), json!({})).await;
     assert!(
         text.contains("No active") || text.contains("channels"),
         "pubsub_channels: {}",
@@ -1340,11 +1312,7 @@ async fn test_diagnostics_tools() {
     );
 
     // redis_connection_summary
-    let text = call_tool_text(
-        &redis::connection_summary(state.clone()),
-        json!({}),
-    )
-    .await;
+    let text = call_tool_text(&redis::connection_summary(state.clone()), json!({})).await;
     assert!(
         text.contains("Connection Summary"),
         "connection_summary: {}",
@@ -1446,19 +1414,14 @@ async fn test_policy_enforcement() {
     assert!(result.is_error, "del should fail in read-write");
 
     // Destructive tool (flushdb) should fail with read-write policy
-    let result = redis::flushdb(rw_state.clone())
-        .call(json!({}))
-        .await;
+    let result = redis::flushdb(rw_state.clone()).call(json!({})).await;
     assert!(result.is_error, "flushdb should fail in read-write");
 
     // redis_command should fail without full tier
     let result = redis::redis_command(rw_state.clone())
         .call(json!({"command": "PING", "args": []}))
         .await;
-    assert!(
-        result.is_error,
-        "redis_command should fail in read-write"
-    );
+    assert!(result.is_error, "redis_command should fail in read-write");
 
     // Verify original data unchanged
     let text = call_tool_text(
