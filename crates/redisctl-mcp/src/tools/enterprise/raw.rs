@@ -43,9 +43,8 @@ pub struct EnterpriseRawApiInput {
 pub fn enterprise_raw_api(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("enterprise_raw_api")
         .description(
-            "DANGEROUS: Execute a raw HTTP request against the Redis Enterprise REST API. \
-             Use this escape hatch to reach any Enterprise API endpoint not covered by a dedicated tool. \
-             GET requires read-write tier; POST/PUT/PATCH/DELETE require full tier.",
+            "DANGEROUS: Execute a raw REST API request against the Enterprise API. \
+             Escape hatch for endpoints not covered by dedicated tools.",
         )
         .destructive()
         .extractor_handler_typed::<_, _, _, EnterpriseRawApiInput>(

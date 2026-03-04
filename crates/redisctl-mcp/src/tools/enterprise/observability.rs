@@ -31,7 +31,7 @@ pub struct ListAlertsInput {
 /// Build the list_alerts tool
 pub fn list_alerts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_alerts")
-        .description("List all active alerts in the Redis Enterprise cluster")
+        .description("List all active alerts.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAlertsInput>(
             state,
@@ -80,11 +80,7 @@ pub struct ListLogsInput {
 /// Build the list_logs tool
 pub fn list_logs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_logs")
-        .description(
-            "List cluster event logs from Redis Enterprise. Logs include events like database \
-             changes, node status updates, configuration modifications, and alerts. Supports \
-             filtering by time range and pagination.",
-        )
+        .description("List cluster event logs. Supports filtering by time range and pagination.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListLogsInput>(
             state,
@@ -138,10 +134,7 @@ pub struct GetAllNodesStatsInput {
 /// Build the get_all_nodes_stats tool
 pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_all_nodes_stats")
-        .description(
-            "Get current statistics for all nodes in the Redis Enterprise cluster in a single \
-             call. Returns aggregated stats per node including CPU, memory, and network metrics.",
-        )
+        .description("Get current statistics for all nodes including CPU, memory, and network metrics.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAllNodesStatsInput>(
             state,
@@ -176,9 +169,7 @@ pub struct GetAllDatabasesStatsInput {
 pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_all_databases_stats")
         .description(
-            "Get current statistics for all databases in the Redis Enterprise cluster in a \
-             single call. Returns aggregated stats per database including latency, throughput, \
-             and memory usage.",
+            "Get current statistics for all databases including latency, throughput, and memory usage.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAllDatabasesStatsInput>(
@@ -212,7 +203,7 @@ pub struct GetShardStatsInput {
 /// Build the get_shard_stats tool
 pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_shard_stats")
-        .description("Get current statistics for a specific shard in the Redis Enterprise cluster")
+        .description("Get current statistics for a specific shard.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetShardStatsInput>(
             state,
@@ -245,10 +236,7 @@ pub struct GetAllShardsStatsInput {
 /// Build the get_all_shards_stats tool
 pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_all_shards_stats")
-        .description(
-            "Get current statistics for all shards in the Redis Enterprise cluster in a single \
-             call. Returns aggregated stats per shard.",
-        )
+        .description("Get current statistics for all shards.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAllShardsStatsInput>(
             state,
@@ -289,9 +277,7 @@ pub struct ListShardsInput {
 /// Build the list_shards tool
 pub fn list_shards(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_shards")
-        .description(
-            "List all shards in the Redis Enterprise cluster. Optionally filter by database UID.",
-        )
+        .description("List all shards. Optionally filter by database UID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListShardsInput>(
             state,
@@ -331,8 +317,7 @@ pub struct GetShardInput {
 pub fn get_shard(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_shard")
         .description(
-            "Get detailed information about a specific shard in the Redis Enterprise cluster \
-             including role (master/replica), status, and assigned node.",
+            "Get shard details including role (master/replica), status, and assigned node.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetShardInput>(
@@ -370,11 +355,7 @@ pub struct ListDebugInfoTasksInput {
 /// Build the list_debug_info_tasks tool
 pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_debug_info_tasks")
-        .description(
-            "List all debug info collection tasks in the Redis Enterprise cluster. Returns task \
-             IDs, statuses (queued, running, completed, failed), and download URLs for completed \
-             collections.",
-        )
+        .description("List all debug info collection tasks and their statuses.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDebugInfoTasksInput>(
             state,
@@ -410,11 +391,7 @@ pub struct GetDebugInfoStatusInput {
 /// Build the get_debug_info_status tool
 pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_debug_info_status")
-        .description(
-            "Get the status of a debug info collection task. Returns status (queued, running, \
-             completed, failed), progress percentage, download URL (when completed), and error \
-             message (if failed).",
-        )
+        .description("Get the status of a debug info collection task by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDebugInfoStatusInput>(
             state,
@@ -452,11 +429,7 @@ pub struct ListModulesInput {
 /// Build the list_modules tool
 pub fn list_modules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_modules")
-        .description(
-            "List all Redis modules installed on the Redis Enterprise cluster. Returns module \
-             names, versions, descriptions, and capabilities (e.g., RedisJSON, RediSearch, \
-             RedisTimeSeries).",
-        )
+        .description("List all installed Redis modules.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListModulesInput>(
             state,
@@ -491,10 +464,7 @@ pub struct GetModuleInput {
 /// Build the get_module tool
 pub fn get_module(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_module")
-        .description(
-            "Get detailed information about a specific Redis module including version, \
-             description, author, license, capabilities, and platform compatibility.",
-        )
+        .description("Get details of a specific Redis module by UID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetModuleInput>(
             state,
@@ -533,10 +503,7 @@ pub struct ListShardsByDatabaseInput {
 /// Build the list_shards_by_database tool
 pub fn list_shards_by_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_shards_by_database")
-        .description(
-            "List all shards for a specific database. Returns shard details including role, \
-             status, and node assignment.",
-        )
+        .description("List all shards for a specific database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListShardsByDatabaseInput>(
             state,
@@ -572,10 +539,7 @@ pub struct ListShardsByNodeInput {
 /// Build the list_shards_by_node tool
 pub fn list_shards_by_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_shards_by_node")
-        .description(
-            "List all shards on a specific node. Useful for understanding shard distribution \
-             and planning rebalance operations.",
-        )
+        .description("List all shards on a specific node.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListShardsByNodeInput>(
             state,
@@ -615,9 +579,7 @@ pub struct AcknowledgeAlertInput {
 /// Build the acknowledge_enterprise_alert tool
 pub fn acknowledge_enterprise_alert(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("acknowledge_enterprise_alert")
-        .description(
-            "Acknowledge (clear) a specific alert by ID. The alert will be marked as resolved.",
-        )
+        .description("Acknowledge (clear) a specific alert by ID.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, AcknowledgeAlertInput>(
             state,
@@ -671,10 +633,7 @@ pub struct CreateDebugInfoInput {
 /// Build the create_debug_info tool
 pub fn create_debug_info(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_debug_info")
-        .description(
-            "Start a debug information collection task. Specify node and/or database IDs to \
-             scope the collection. Returns task status for tracking.",
-        )
+        .description("Start a debug info collection task. Optionally scope to specific nodes or databases.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateDebugInfoInput>(
             state,

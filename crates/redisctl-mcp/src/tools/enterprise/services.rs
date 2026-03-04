@@ -23,7 +23,7 @@ pub struct ListServicesInput {
 /// Build the list_enterprise_services tool
 pub fn list_services(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_services")
-        .description("List all services running on the Redis Enterprise cluster.")
+        .description("List all cluster services.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListServicesInput>(
             state,
@@ -58,7 +58,7 @@ pub struct GetServiceInput {
 /// Build the get_enterprise_service tool
 pub fn get_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_service")
-        .description("Get detailed information about a specific cluster service by ID.")
+        .description("Get service details by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetServiceInput>(
             state,
@@ -93,7 +93,7 @@ pub struct GetServiceStatusInput {
 /// Build the get_enterprise_service_status tool
 pub fn get_service_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_service_status")
-        .description("Get the current status of a specific cluster service, including per-node status.")
+        .description("Get service status including per-node status.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetServiceStatusInput>(
             state,
@@ -131,10 +131,7 @@ pub struct UpdateServiceInput {
 /// Build the update_enterprise_service tool
 pub fn update_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_service")
-        .description(
-            "Update a cluster service's configuration. Pass the configuration fields as JSON. \
-             Requires write permission.",
-        )
+        .description("Update a service's configuration. Pass fields as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateServiceInput>(
             state,
@@ -177,9 +174,7 @@ pub struct ServiceActionInput {
 /// Build the start_enterprise_service tool
 pub fn start_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("start_enterprise_service")
-        .description(
-            "Start a cluster service that is currently stopped. Requires write permission.",
-        )
+        .description("Start a stopped service.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ServiceActionInput>(
             state,
@@ -210,7 +205,7 @@ pub fn start_service(state: Arc<AppState>) -> Tool {
 /// Build the stop_enterprise_service tool
 pub fn stop_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("stop_enterprise_service")
-        .description("Stop a running cluster service. Requires write permission.")
+        .description("Stop a running service.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ServiceActionInput>(
             state,
@@ -241,10 +236,7 @@ pub fn stop_service(state: Arc<AppState>) -> Tool {
 /// Build the restart_enterprise_service tool
 pub fn restart_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("restart_enterprise_service")
-        .description(
-            "Restart a cluster service. The service will be stopped and started. \
-             Requires write permission.",
-        )
+        .description("Restart a service (stop then start).")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ServiceActionInput>(
             state,

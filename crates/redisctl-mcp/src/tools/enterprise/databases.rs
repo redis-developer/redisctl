@@ -36,10 +36,7 @@ pub struct ListDatabasesInput {
 /// Build the list_databases tool
 pub fn list_databases(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_databases")
-        .description(
-            "List all databases on the Redis Enterprise cluster. Supports filtering by name \
-             (case-insensitive substring match) and status.",
-        )
+        .description("List all databases. Supports filtering by name and status.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
             state,
@@ -96,7 +93,7 @@ pub struct GetDatabaseInput {
 /// Build the get_database tool
 pub fn get_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_database")
-        .description("Get detailed information about a specific Redis Enterprise database")
+        .description("Get database details by UID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
             state,
@@ -141,8 +138,8 @@ pub struct GetDatabaseStatsInput {
 pub fn get_database_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_stats")
         .description(
-            "Get statistics for a specific database. By default returns the latest stats. \
-             Optionally specify interval and time range for historical data.",
+            "Get statistics for a specific database. Optionally specify interval and time range \
+             for historical data.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseStatsInput>(
@@ -196,9 +193,7 @@ pub struct GetDatabaseEndpointsInput {
 /// Build the get_database_endpoints tool
 pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_endpoints")
-        .description(
-            "Get connection endpoints for a specific database in the Redis Enterprise cluster",
-        )
+        .description("Get connection endpoints for a specific database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetDatabaseEndpointsInput>(
             state,
@@ -234,7 +229,7 @@ pub struct ListDatabaseAlertsInput {
 /// Build the list_database_alerts tool
 pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_database_alerts")
-        .description("List all alerts for a specific database in the Redis Enterprise cluster")
+        .description("List all alerts for a specific database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListDatabaseAlertsInput>(
             state,
@@ -281,10 +276,7 @@ pub struct BackupDatabaseInput {
 /// Build the backup_enterprise_database tool
 pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("backup_enterprise_database")
-        .description(
-            "Trigger a backup of a Redis Enterprise database and wait for completion. \
-             Requires write permission.",
-        )
+        .description("Trigger a database backup and wait for completion.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
             state,
@@ -343,9 +335,8 @@ pub struct ImportDatabaseInput {
 pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("import_enterprise_database")
         .description(
-            "Import data into a Redis Enterprise database from an external source and wait for completion. \
-             WARNING: If flush is true, existing data will be deleted before import. \
-             Requires write permission.",
+            "Import data into a database from an external source and wait for completion. \
+             WARNING: If flush is true, existing data will be deleted before import.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
@@ -415,10 +406,7 @@ pub struct CreateEnterpriseDatabaseInput {
 /// Build the create_enterprise_database tool
 pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_database")
-        .description(
-            "Create a new database in the Redis Enterprise cluster. \
-             Returns the created database details. Requires write permission.",
-        )
+        .description("Create a new database.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseDatabaseInput>(
             state,
@@ -481,10 +469,7 @@ pub struct UpdateEnterpriseDatabaseInput {
 /// Build the update_enterprise_database tool
 pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_database")
-        .description(
-            "Update configuration of an existing Redis Enterprise database. \
-             Pass a JSON object with the fields to update. Requires write permission.",
-        )
+        .description("Update database configuration. Pass fields to update as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseDatabaseInput>(
             state,
@@ -527,10 +512,7 @@ pub struct DeleteEnterpriseDatabaseInput {
 /// Build the delete_enterprise_database tool
 pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_database")
-        .description(
-            "DANGEROUS: Permanently deletes a database from the Redis Enterprise cluster \
-             and all its data. This action cannot be undone. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a database and all its data.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseDatabaseInput>(
             state,
@@ -579,10 +561,7 @@ pub struct FlushEnterpriseDatabaseInput {
 /// Build the flush_enterprise_database tool
 pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("flush_enterprise_database")
-        .description(
-            "DANGEROUS: Removes all data from a Redis Enterprise database. \
-             This action cannot be undone. Requires write permission.",
-        )
+        .description("DANGEROUS: Flush all data from a database.")
         .destructive()
         .extractor_handler_typed::<_, _, _, FlushEnterpriseDatabaseInput>(
             state,
@@ -634,10 +613,7 @@ pub struct ExportEnterpriseDatabaseInput {
 /// Build the export_enterprise_database tool
 pub fn export_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("export_enterprise_database")
-        .description(
-            "Export a Redis Enterprise database to a specified location (e.g., S3, FTP). \
-             Returns an action reference for tracking.",
-        )
+        .description("Export a database to a specified location (e.g., S3, FTP).")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ExportEnterpriseDatabaseInput>(
             state,
@@ -683,10 +659,7 @@ pub struct RestoreEnterpriseDatabaseInput {
 /// Build the restore_enterprise_database tool
 pub fn restore_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("restore_enterprise_database")
-        .description(
-            "Restore a Redis Enterprise database from a backup. \
-             Returns an action reference for tracking.",
-        )
+        .description("Restore a database from a backup.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, RestoreEnterpriseDatabaseInput>(
             state,
@@ -738,10 +711,7 @@ pub struct UpgradeEnterpriseDatabaseRedisInput {
 /// Build the upgrade_enterprise_database_redis tool
 pub fn upgrade_enterprise_database_redis(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("upgrade_enterprise_database_redis")
-        .description(
-            "Upgrade the Redis version of a database. Pass redis_version for the target version. \
-             Returns an action reference.",
-        )
+        .description("Upgrade the Redis version of a database.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpgradeEnterpriseDatabaseRedisInput>(
             state,
@@ -793,10 +763,7 @@ pub struct ListCrdbsInput {
 /// Build the list_enterprise_crdbs tool
 pub fn list_enterprise_crdbs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_crdbs")
-        .description(
-            "List all Active-Active (CRDB) databases in the Redis Enterprise cluster. \
-             Returns database names, GUIDs, status, and instance information.",
-        )
+        .description("List all Active-Active (CRDB) databases.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListCrdbsInput>(
             state,
@@ -828,10 +795,7 @@ pub struct GetCrdbInput {
 /// Build the get_enterprise_crdb tool
 pub fn get_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_crdb")
-        .description(
-            "Get detailed information about a specific Active-Active (CRDB) database \
-             including instances, replication status, and configuration.",
-        )
+        .description("Get details of a specific Active-Active (CRDB) database by GUID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCrdbInput>(
             state,
@@ -866,10 +830,7 @@ pub struct GetCrdbTasksInput {
 /// Build the get_enterprise_crdb_tasks tool
 pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_crdb_tasks")
-        .description(
-            "Get tasks for a specific Active-Active (CRDB) database. \
-             Returns pending and completed tasks related to CRDB operations.",
-        )
+        .description("Get tasks for a specific Active-Active (CRDB) database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCrdbTasksInput>(
             state,
@@ -904,10 +865,7 @@ pub struct CreateEnterpriseCrdbInput {
 /// Build the create_enterprise_crdb tool
 pub fn create_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_crdb")
-        .description(
-            "Create a new Active-Active (CRDB) database across multiple clusters. \
-             Pass the full CRDB configuration as JSON.",
-        )
+        .description("Create a new Active-Active (CRDB) database. Pass full configuration as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseCrdbInput>(
             state,
@@ -951,10 +909,7 @@ pub struct UpdateEnterpriseCrdbInput {
 /// Build the update_enterprise_crdb tool
 pub fn update_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_crdb")
-        .description(
-            "Update an existing Active-Active (CRDB) database configuration. \
-             Pass the fields to update as JSON.",
-        )
+        .description("Update an Active-Active (CRDB) database. Pass fields to update as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseCrdbInput>(
             state,
@@ -997,10 +952,7 @@ pub struct DeleteEnterpriseCrdbInput {
 /// Build the delete_enterprise_crdb tool
 pub fn delete_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_crdb")
-        .description(
-            "DANGEROUS: Permanently deletes an Active-Active (CRDB) database across all \
-             participating clusters. This action cannot be undone.",
-        )
+        .description("DANGEROUS: Delete an Active-Active (CRDB) database across all participating clusters.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseCrdbInput>(
             state,

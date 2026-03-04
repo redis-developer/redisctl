@@ -79,7 +79,7 @@ pub struct HgetallInput {
 /// Build the hgetall tool
 pub fn hgetall(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hgetall")
-        .description("Get all fields and values from a hash")
+        .description("Get all fields and values of a hash.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, HgetallInput>(
             state,
@@ -149,7 +149,7 @@ fn default_stop() -> i64 {
 /// Build the lrange tool
 pub fn lrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lrange")
-        .description("Get a range of elements from a list. Use start=0, stop=-1 for all elements.")
+        .description("Get a range of elements from a list (start=0, stop=-1 for all).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, LrangeInput>(
             state,
@@ -212,7 +212,7 @@ pub struct SmembersInput {
 /// Build the smembers tool
 pub fn smembers(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_smembers")
-        .description("Get all members of a set")
+        .description("Get all members of a set.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, SmembersInput>(
             state,
@@ -275,15 +275,14 @@ pub struct ZrangeInput {
 /// Build the zrange tool
 pub fn zrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zrange")
-        .description("Get a range of members from a sorted set by index. Use withscores=true to include scores.")
+        .description("Get a range of members from a sorted set by index.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ZrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZrangeInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
@@ -371,10 +370,7 @@ pub struct XinfoStreamInput {
 /// Build the xinfo_stream tool
 pub fn xinfo_stream(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xinfo_stream")
-        .description(
-            "Get stream metadata using XINFO STREAM, including length, consumer groups, \
-             first and last entry, and other stream details.",
-        )
+        .description("Get stream metadata including length, consumer groups, and entry details (XINFO STREAM).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, XinfoStreamInput>(
             state,
@@ -438,10 +434,7 @@ fn default_xrange_end() -> String {
 /// Build the xrange tool
 pub fn xrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xrange")
-        .description(
-            "Get stream entries in a range using XRANGE. Use start=\"-\" and end=\"+\" \
-             for all entries. Optionally limit with count.",
-        )
+        .description("Get stream entries in a range. Use \"-\" to \"+\" for all entries.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, XrangeInput>(
             state,
@@ -506,7 +499,7 @@ pub struct XlenInput {
 /// Build the xlen tool
 pub fn xlen(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xlen")
-        .description("Get the number of entries in a stream using XLEN")
+        .description("Get the number of entries in a stream.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, XlenInput>(
             state,
@@ -552,10 +545,7 @@ pub struct PubsubChannelsInput {
 /// Build the pubsub_channels tool
 pub fn pubsub_channels(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_pubsub_channels")
-        .description(
-            "List active pub/sub channels using PUBSUB CHANNELS. \
-             Optionally filter with a glob-style pattern.",
-        )
+        .description("List active pub/sub channels, optionally filtered by pattern.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, PubsubChannelsInput>(
             state,
@@ -614,10 +604,7 @@ pub struct PubsubNumsubInput {
 /// Build the pubsub_numsub tool
 pub fn pubsub_numsub(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_pubsub_numsub")
-        .description(
-            "Get subscriber counts for pub/sub channels using PUBSUB NUMSUB. \
-             Provide channel names to query specific channels.",
-        )
+        .description("Get subscriber counts for pub/sub channels.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, PubsubNumsubInput>(
             state,
@@ -685,10 +672,7 @@ pub struct HsetInput {
 /// Build the hset tool
 pub fn hset(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hset")
-        .description(
-            "Set one or more field-value pairs in a hash. Creates the hash if it does not \
-             exist. Returns the number of fields that were added (not updated).",
-        )
+        .description("Set one or more field-value pairs in a hash. Creates the hash if needed.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, HsetInput>(
             state,
@@ -748,9 +732,7 @@ pub struct HdelInput {
 /// Build the hdel tool
 pub fn hdel(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hdel")
-        .description(
-            "Delete one or more fields from a hash. Returns the number of fields that were removed.",
-        )
+        .description("Delete one or more fields from a hash.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, HdelInput>(
             state,
@@ -763,8 +745,7 @@ pub fn hdel(state: Arc<AppState>) -> Tool {
 
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
@@ -811,10 +792,7 @@ pub struct LpushInput {
 /// Build the lpush tool
 pub fn lpush(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lpush")
-        .description(
-            "Push one or more elements to the head (left) of a list. Creates the list \
-             if it does not exist. Returns the new list length.",
-        )
+        .description("Push elements to the head (left) of a list. Creates the list if needed.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, LpushInput>(
             state,
@@ -874,10 +852,7 @@ pub struct RpushInput {
 /// Build the rpush tool
 pub fn rpush(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_rpush")
-        .description(
-            "Push one or more elements to the tail (right) of a list. Creates the list \
-             if it does not exist. Returns the new list length.",
-        )
+        .description("Push elements to the tail (right) of a list. Creates the list if needed.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, RpushInput>(
             state,
@@ -938,10 +913,7 @@ pub struct LpopInput {
 /// Build the lpop tool
 pub fn lpop(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lpop")
-        .description(
-            "Pop one or more elements from the head (left) of a list. Returns the \
-             popped element(s), or nil if the list is empty.",
-        )
+        .description("Pop elements from the head (left) of a list.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, LpopInput>(
             state,
@@ -1001,10 +973,7 @@ pub struct RpopInput {
 /// Build the rpop tool
 pub fn rpop(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_rpop")
-        .description(
-            "Pop one or more elements from the tail (right) of a list. Returns the \
-             popped element(s), or nil if the list is empty.",
-        )
+        .description("Pop elements from the tail (right) of a list.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, RpopInput>(
             state,
@@ -1063,10 +1032,7 @@ pub struct SaddInput {
 /// Build the sadd tool
 pub fn sadd(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_sadd")
-        .description(
-            "Add one or more members to a set. Creates the set if it does not exist. \
-             Returns the number of members that were added (not already present).",
-        )
+        .description("Add one or more members to a set. Creates the set if needed.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, SaddInput>(
             state,
@@ -1126,10 +1092,7 @@ pub struct SremInput {
 /// Build the srem tool
 pub fn srem(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_srem")
-        .description(
-            "Remove one or more members from a set. Returns the number of members \
-             that were removed.",
-        )
+        .description("Remove one or more members from a set.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, SremInput>(
             state,
@@ -1214,9 +1177,8 @@ pub struct ZaddInput {
 pub fn zadd(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zadd")
         .description(
-            "Add one or more members to a sorted set with scores. Creates the set if it \
-             does not exist. Supports NX (only add new), XX (only update existing), \
-             GT/LT (score comparison), and CH (count changed) flags.",
+            "Add members with scores to a sorted set. Creates the set if needed. \
+             Supports NX, XX, GT, LT, and CH flags.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ZaddInput>(
@@ -1293,10 +1255,7 @@ pub struct ZremInput {
 /// Build the zrem tool
 pub fn zrem(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zrem")
-        .description(
-            "Remove one or more members from a sorted set. Returns the number of \
-             members that were removed.",
-        )
+        .description("Remove one or more members from a sorted set.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ZremInput>(
             state,
@@ -1372,9 +1331,7 @@ pub struct XaddInput {
 pub fn xadd(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xadd")
         .description(
-            "Append an entry to a stream. Auto-generates an ID by default (\"*\"). \
-             Supports NOMKSTREAM, MAXLEN, and MINID trimming options. \
-             Returns the ID of the added entry.",
+            "Append an entry to a stream. Supports NOMKSTREAM, MAXLEN, and MINID trimming.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, XaddInput>(
@@ -1461,9 +1418,8 @@ pub struct XtrimInput {
 pub fn xtrim(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xtrim")
         .description(
-            "Trim a stream to a given length (MAXLEN) or minimum ID (MINID). \
-             Use approximate=true for better performance with near-exact trimming. \
-             Returns the number of entries removed.",
+            "Trim a stream by length (MAXLEN) or minimum ID (MINID). \
+             Use approximate=true for better performance.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, XtrimInput>(

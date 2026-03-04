@@ -23,7 +23,7 @@ pub struct ListProxiesInput {
 /// Build the list_enterprise_proxies tool
 pub fn list_proxies(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_proxies")
-        .description("List all proxy instances in the Redis Enterprise cluster with their status and configuration.")
+        .description("List all proxy instances.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListProxiesInput>(
             state,
@@ -58,7 +58,7 @@ pub struct GetProxyInput {
 /// Build the get_enterprise_proxy tool
 pub fn get_proxy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_proxy")
-        .description("Get detailed information about a specific proxy instance by UID.")
+        .description("Get proxy details by UID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetProxyInput>(
             state,
@@ -93,7 +93,9 @@ pub struct GetProxyStatsInput {
 /// Build the get_enterprise_proxy_stats tool
 pub fn get_proxy_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_proxy_stats")
-        .description("Get statistics for a specific proxy instance including connection counts and throughput.")
+        .description(
+            "Get statistics for a specific proxy including connection counts and throughput.",
+        )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetProxyStatsInput>(
             state,
@@ -130,10 +132,7 @@ pub struct UpdateProxyInput {
 /// Build the update_enterprise_proxy tool
 pub fn update_proxy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_proxy")
-        .description(
-            "Update a proxy instance's configuration. Pass the fields to update as JSON \
-             (e.g., max_connections, threads). Requires write permission.",
-        )
+        .description("Update a proxy's configuration. Pass fields to update as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateProxyInput>(
             state,

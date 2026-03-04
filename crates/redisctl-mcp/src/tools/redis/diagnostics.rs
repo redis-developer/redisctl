@@ -99,9 +99,8 @@ pub struct HealthCheckInput {
 pub fn health_check(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_health_check")
         .description(
-            "Comprehensive Redis health check combining PING, INFO (server, memory, stats), \
-             and DBSIZE into a single structured summary. Returns connectivity, version, \
-             uptime, memory usage, operations rate, and key count.",
+            "Comprehensive health check combining PING, INFO, and DBSIZE into a single summary \
+             covering connectivity, version, uptime, memory, ops rate, and key count.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, HealthCheckInput>(
@@ -243,9 +242,7 @@ pub struct KeySummaryInput {
 pub fn key_summary(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_key_summary")
         .description(
-            "Get a complete metadata summary for a single key combining TYPE, TTL, \
-             MEMORY USAGE, and OBJECT ENCODING into one result. Gracefully handles \
-             cases where MEMORY USAGE or OBJECT ENCODING are unavailable.",
+            "Get metadata summary for a key combining TYPE, TTL, MEMORY USAGE, and OBJECT ENCODING.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, KeySummaryInput>(
@@ -364,9 +361,7 @@ pub struct HotkeysInput {
 pub fn hotkeys(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hotkeys")
         .description(
-            "Sample keys to identify the largest by memory usage and show type distribution. \
-             Uses SCAN to iterate keys, then TYPE and MEMORY USAGE on each sampled key. \
-             Returns top 20 keys by memory, type counts, and total memory sampled. \
+            "Sample keys to find the largest by memory and show type distribution. \
              Capped at sample_size (default 1000, max 10000) to limit impact.",
         )
         .read_only_safe()
@@ -509,9 +504,7 @@ pub struct ConnectionSummaryInput {
 pub fn connection_summary(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_connection_summary")
         .description(
-            "Analyze client connections by combining CLIENT LIST and INFO clients. \
-             Returns total connections, connections by source IP (top 10), idle \
-             connections (>60s), blocked client count, and oldest connection age.",
+            "Analyze client connections: totals, top IPs, idle/blocked counts, and oldest connection.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ConnectionSummaryInput>(
