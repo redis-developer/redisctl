@@ -8,6 +8,7 @@ use redis_cloud::acl::{
     AclUserUpdateRequest,
 };
 use redis_cloud::cloud_accounts::{CloudAccountCreateRequest, CloudAccountUpdateRequest};
+use redis_cloud::users::AccountUserUpdateRequest;
 use redis_cloud::{
     AccountHandler, AclHandler, CloudAccountHandler, CostReportCreateRequest, CostReportHandler,
     TaskHandler, UserHandler,
@@ -288,6 +289,106 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
                     .tool_context("Failed to get account user")?;
 
                 CallToolResult::from_serialize(&user)
+            },
+        )
+        .build()
+}
+
+/// Input for updating an account user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UpdateAccountUserInput {
+    /// Account user ID to update
+    pub user_id: i32,
+    /// Updated name for the user
+    pub name: String,
+    /// Updated role (e.g., "owner", "member", "viewer")
+    #[serde(default)]
+    pub role: Option<String>,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the update_account_user tool
+pub fn update_account_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("update_account_user")
+        .description(
+            "Update an account user's name or role. Returns a task state for the async operation.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, UpdateAccountUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<UpdateAccountUserInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations require policy tier 'read-write' or 'full'",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = UserHandler::new(client);
+                let request = AccountUserUpdateRequest {
+                    user_id: None,
+                    name: input.name,
+                    role: input.role,
+                    command_type: None,
+                };
+                let result = handler
+                    .update_user(input.user_id, &request)
+                    .await
+                    .tool_context("Failed to update account user")?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
+/// Input for deleting an account user
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DeleteAccountUserInput {
+    /// Account user ID to delete
+    pub user_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the delete_account_user tool
+pub fn delete_account_user(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("delete_account_user")
+        .description(
+            "DANGEROUS: Permanently deletes an account user (team member). \
+             The user will lose all access to the account. This action cannot be undone.",
+        )
+        .destructive()
+        .extractor_handler_typed::<_, _, _, DeleteAccountUserInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<DeleteAccountUserInput>| async move {
+                if !state.is_destructive_allowed() {
+                    return Err(McpError::tool(
+                        "Destructive operations require policy tier 'full'",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = UserHandler::new(client);
+                let result = handler
+                    .delete_user_by_id(input.user_id)
+                    .await
+                    .tool_context("Failed to delete account user")?;
+
+                CallToolResult::from_serialize(&result)
             },
         )
         .build()
@@ -1184,6 +1285,95 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// Input for waiting on a cloud task
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct WaitForCloudTaskInput {
+    /// Task ID to wait for
+    pub task_id: String,
+    /// Maximum time to wait in seconds (default: 300)
+    #[serde(default = "default_task_timeout")]
+    pub timeout_seconds: u64,
+    /// Polling interval in seconds (default: 5)
+    #[serde(default = "default_task_interval")]
+    pub interval_seconds: u64,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+fn default_task_timeout() -> u64 {
+    300
+}
+
+fn default_task_interval() -> u64 {
+    5
+}
+
+/// Build the wait_for_cloud_task tool
+pub fn wait_for_cloud_task(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("wait_for_cloud_task")
+        .description(
+            "Wait for an async Cloud task to complete by polling until it reaches a terminal \
+             state (completed, failed, error, cancelled). Returns the final task status. \
+             Useful for orchestrating multi-step workflows \
+             (e.g., create subscription -> wait -> create database).",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, WaitForCloudTaskInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<WaitForCloudTaskInput>| async move {
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = TaskHandler::new(client);
+                let deadline =
+                    tokio::time::Instant::now() + std::time::Duration::from_secs(input.timeout_seconds);
+                let interval = std::time::Duration::from_secs(input.interval_seconds);
+
+                loop {
+                    let task = handler
+                        .get_task_by_id(input.task_id.clone())
+                        .await
+                        .tool_context("Failed to get task status")?;
+
+                    // Check for terminal states
+                    if let Some(ref status) = task.status {
+                        let s = status.to_lowercase();
+                        if matches!(
+                            s.as_str(),
+                            "completed"
+                                | "failed"
+                                | "error"
+                                | "success"
+                                | "cancelled"
+                                | "aborted"
+                        ) {
+                            return CallToolResult::from_serialize(&task);
+                        }
+                    }
+
+                    // Check timeout
+                    if tokio::time::Instant::now() >= deadline {
+                        return CallToolResult::from_serialize(&serde_json::json!({
+                            "timeout": true,
+                            "message": format!(
+                                "Task {} did not complete within {} seconds",
+                                input.task_id, input.timeout_seconds
+                            ),
+                            "last_status": task,
+                        }));
+                    }
+
+                    tokio::time::sleep(interval).await;
+                }
+            },
+        )
+        .build()
+}
+
 // ============================================================================
 // Cloud Account (BYOC) tools
 // ============================================================================
@@ -1458,6 +1648,8 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(get_modules(state.clone()))
         .tool(list_account_users(state.clone()))
         .tool(get_account_user(state.clone()))
+        .tool(update_account_user(state.clone()))
+        .tool(delete_account_user(state.clone()))
         .tool(list_acl_users(state.clone()))
         .tool(get_acl_user(state.clone()))
         .tool(list_acl_roles(state.clone()))
@@ -1488,4 +1680,5 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         // Tasks
         .tool(list_tasks(state.clone()))
         .tool(get_task(state.clone()))
+        .tool(wait_for_cloud_task(state.clone()))
 }

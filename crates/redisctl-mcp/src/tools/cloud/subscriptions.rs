@@ -856,6 +856,59 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// Input for flushing an Active-Active (CRDB) database
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct FlushCrdbDatabaseInput {
+    /// Subscription ID containing the database
+    pub subscription_id: i32,
+    /// Database ID to flush
+    pub database_id: i32,
+    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the flush_crdb_database tool
+pub fn flush_crdb_database(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("flush_crdb_database")
+        .description(
+            "DANGEROUS: Removes all data from an Active-Active (CRDB) database. \
+             This uses a different API method than regular flush and is specifically \
+             for Active-Active databases. This action cannot be undone.",
+        )
+        .destructive()
+        .extractor_handler_typed::<_, _, _, FlushCrdbDatabaseInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<FlushCrdbDatabaseInput>| async move {
+                if !state.is_destructive_allowed() {
+                    return Err(McpError::tool(
+                        "Destructive operations require policy tier 'full'",
+                    ));
+                }
+
+                let client = state
+                    .cloud_client_for_profile(input.profile.as_deref())
+                    .await
+                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+
+                let handler = DatabaseHandler::new(client);
+                let request = redis_cloud::databases::CrdbFlushRequest {
+                    subscription_id: None,
+                    database_id: None,
+                    command_type: None,
+                };
+                let result = handler
+                    .flush_crdb(input.subscription_id, input.database_id, &request)
+                    .await
+                    .tool_context("Failed to flush CRDB database")?;
+
+                CallToolResult::from_serialize(&result)
+            },
+        )
+        .build()
+}
+
 fn default_cloud_account_id() -> i32 {
     1 // Default internal account
 }
@@ -2074,6 +2127,7 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(import_database(state.clone()))
         .tool(delete_subscription(state.clone()))
         .tool(flush_database(state.clone()))
+        .tool(flush_crdb_database(state.clone()))
         .tool(create_subscription(state.clone()))
         .tool(update_subscription(state.clone()))
         .tool(update_subscription_cidr_allowlist(state.clone()))
