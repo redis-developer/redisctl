@@ -1,6 +1,6 @@
 # Tools Reference
 
-The redisctl MCP server exposes **309 tools** across 4 toolsets and 2 system tools for managing Redis Cloud, Redis Enterprise, and direct database operations.
+The redisctl MCP server exposes **305 tools** across 4 toolsets and 2 system tools for managing Redis Cloud, Redis Enterprise, and direct database operations.
 
 Tools are organized into **toolsets** (Cloud, Enterprise, Database, App) and further into **sub-modules** that can be selectively loaded with the [`--tools` flag](configuration.md#the-tools-flag).
 
@@ -18,11 +18,11 @@ These tools are always available regardless of `--tools` selection or visibility
 | `list_available_tools` | List all available tools grouped by toolset, showing active vs. hidden |
 | `show_policy` | Show the active safety tier, per-toolset overrides, and allow/deny lists |
 
-## Cloud Toolset (151 tools)
+## Cloud Toolset (148 tools)
 
 Redis Cloud management tools. Select with `--tools cloud` or target specific sub-modules.
 
-### `cloud:subscriptions` (37 tools)
+### `cloud:subscriptions` (36 tools)
 
 Manages flexible subscriptions and their databases -- creation, configuration, backup/import, tagging, CIDR allowlists, maintenance windows, Active-Active regions, and version upgrades.
 
@@ -37,7 +37,7 @@ Manages flexible subscriptions and their databases -- creation, configuration, b
 | `get_backup_status` | Get database backup status |
 | `get_database_tags` | Get database tags |
 
-### `cloud:account` (34 tools)
+### `cloud:account` (33 tools)
 
 Account management -- users, ACL users/roles/rules, cloud provider accounts, payment methods, cost reports, and task tracking.
 
@@ -49,10 +49,10 @@ Account management -- users, ACL users/roles/rules, cloud provider accounts, pay
 | `get_modules` | List available database modules |
 | `list_account_users` | List account users |
 | `list_acl_users` | List ACL users |
-| `list_cost_reports` | List cost reports |
+| `generate_cost_report` | Generate cost reports |
 | `list_tasks` | List recent async tasks |
 
-### `cloud:networking` (52 tools)
+### `cloud:networking` (51 tools)
 
 Network connectivity -- VPC peering, Transit Gateway, Private Service Connect (PSC), and AWS PrivateLink for both standard and Active-Active subscriptions.
 
@@ -61,9 +61,9 @@ Network connectivity -- VPC peering, Transit Gateway, Private Service Connect (P
 | `get_vpc_peering` | Get VPC peering details |
 | `create_vpc_peering` | Create VPC peering *(write)* |
 | `get_aa_vpc_peering` | Get Active-Active VPC peering |
-| `get_transit_gateway` | Get Transit Gateway attachment |
-| `create_transit_gateway` | Create Transit Gateway *(write)* |
-| `get_private_service_connect` | Get PSC configuration |
+| `get_tgw_attachments` | Get Transit Gateway attachments |
+| `create_tgw_attachment` | Create Transit Gateway attachment *(write)* |
+| `get_psc_service` | Get PSC configuration |
 | `get_private_link` | Get PrivateLink configuration |
 | `create_private_link` | Create PrivateLink *(write)* |
 
@@ -134,7 +134,7 @@ Role-based access control -- users, roles, ACL rules, built-in roles, and LDAP c
 | `list_enterprise_roles` | List all roles |
 | `get_enterprise_role` | Get role details |
 | `create_enterprise_role` | Create a role *(write)* |
-| `list_enterprise_acl_rules` | List ACL rules |
+| `list_enterprise_acls` | List ACL rules |
 | `get_enterprise_ldap_config` | Get LDAP configuration |
 
 ### `enterprise:observability` (16 tools)
@@ -150,7 +150,7 @@ Monitoring -- alerts, audit logs, aggregate stats for nodes/databases/shards, de
 | `get_all_databases_stats` | Get aggregate database statistics |
 | `list_shards` | List all shards |
 | `get_shard_stats` | Get shard statistics |
-| `list_enterprise_modules` | List available modules |
+| `list_modules` | List available modules |
 
 ### `enterprise:proxy` (4 tools)
 
@@ -183,7 +183,7 @@ System service lifecycle -- list, inspect, start, stop, restart, and status chec
 |------|-------------|
 | `enterprise_raw_api` | Execute arbitrary Redis Enterprise REST API requests |
 
-## Database Toolset (56 tools)
+## Database Toolset (55 tools)
 
 Direct Redis database operations. Requires `--database-url` connection. Select with `--tools database` or target specific sub-modules.
 
@@ -217,7 +217,7 @@ Key-space operations -- listing, scanning, get/set, type inspection, TTL, existe
 | `redis_del` | Delete keys *(write)* |
 | `redis_expire` | Set key expiration *(write)* |
 
-### `database:structures` (22 tools)
+### `database:structures` (21 tools)
 
 Data structure operations -- hashes, lists, sets, sorted sets, streams, and pub/sub inspection.
 
@@ -268,12 +268,12 @@ Profile and configuration management tools. Always compiled in; no sub-modules.
 
 | Toolset | Sub-modules | Tools |
 |---------|-------------|-------|
-| Cloud | `subscriptions` (37), `account` (34), `networking` (52), `fixed` (27), `raw` (1) | **151** |
+| Cloud | `subscriptions` (36), `account` (33), `networking` (51), `fixed` (27), `raw` (1) | **148** |
 | Enterprise | `cluster` (24), `databases` (20), `rbac` (20), `observability` (16), `proxy` (4), `services` (7), `raw` (1) | **92** |
-| Database | `server` (14), `keys` (15), `structures` (22), `diagnostics` (4), `raw` (1) | **56** |
+| Database | `server` (14), `keys` (15), `structures` (21), `diagnostics` (4), `raw` (1) | **55** |
 | App | *(flat)* | **8** |
 | System | *(always on)* | **2** |
-| **Total** | | **309** |
+| **Total** | | **305** |
 
 ## Example Tool Usage
 

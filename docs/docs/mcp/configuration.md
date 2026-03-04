@@ -65,9 +65,9 @@ The server resolves which toolsets to load in this order:
 
 | Toolset | Sub-modules | Total Tools |
 |---------|-------------|-------------|
-| `cloud` | `subscriptions`, `account`, `networking`, `fixed`, `raw` | 151 |
+| `cloud` | `subscriptions`, `account`, `networking`, `fixed`, `raw` | 148 |
 | `enterprise` | `cluster`, `databases`, `rbac`, `observability`, `proxy`, `services`, `raw` | 92 |
-| `database` | `server`, `keys`, `structures`, `diagnostics`, `raw` | 56 |
+| `database` | `server`, `keys`, `structures`, `diagnostics`, `raw` | 55 |
 | `app` | *(none -- flat toolset)* | 8 |
 | *(system)* | *(always loaded)* | 2 |
 
@@ -75,13 +75,13 @@ The two system tools (`list_available_tools` and `show_policy`) are always regis
 
 ### Examples
 
-**Cloud only** -- all Cloud sub-modules (149 tools + system):
+**Cloud only** -- all Cloud sub-modules (148 tools + system):
 
 ```bash
 redisctl-mcp --profile my-cloud --tools cloud
 ```
 
-**Cloud subscriptions and networking only** (86 tools + system):
+**Cloud subscriptions and networking only** (87 tools + system):
 
 ```bash
 redisctl-mcp --profile my-cloud --tools cloud:subscriptions,cloud:networking
@@ -152,7 +152,6 @@ The `--read-only` flag maps to the read-only and full tiers. For the intermediat
 
 ```toml
 # mcp-policy.toml
-[safety]
 tier = "read-write"
 ```
 
