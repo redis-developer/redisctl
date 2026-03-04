@@ -334,7 +334,7 @@ By default, the MCP server runs in read-only mode. This prevents any destructive
 
 ### Write Mode
 
-Use `--allow-writes` only when you need to create or modify resources. Consider:
+Use `--read-only=false` only when you need to create or modify resources. Consider:
 
 - Using separate profiles for read-only vs write access
 - Running write-enabled servers only in development environments

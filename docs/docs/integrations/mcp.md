@@ -247,126 +247,17 @@ See [Configuration](../mcp/configuration.md) for the full `--tools` syntax, safe
 
 ## Available Tools
 
-### Redis Cloud Tools (17 tools)
+The MCP server provides **305 tools** across 4 toolsets:
 
-#### Account & Infrastructure
+| Toolset | Tools | Description |
+|---------|-------|-------------|
+| **Cloud** | 148 | Subscriptions, databases, networking, Essentials, account management |
+| **Enterprise** | 92 | Cluster, databases, RBAC, observability, proxies, services |
+| **Database** | 55 | Direct Redis operations -- keys, data structures, diagnostics |
+| **App** | 8 | Profile and configuration management |
+| **System** | 2 | `list_available_tools`, `show_policy` (always available) |
 
-| Tool | Description |
-|------|-------------|
-| `cloud_account_get` | Get account information |
-| `cloud_payment_methods_get` | List all payment methods configured for your account |
-| `cloud_database_modules_get` | List all available database modules (capabilities) |
-| `cloud_regions_get` | Get available regions across cloud providers (AWS, GCP, Azure) |
-
-#### Pro Subscriptions
-
-| Tool | Description |
-|------|-------------|
-| `cloud_subscriptions_list` | List all Pro subscriptions |
-| `cloud_subscription_get` | Get Pro subscription details |
-| `cloud_pro_subscription_create` | Create a new Pro subscription *(write)* |
-| `cloud_pro_subscription_delete` | Delete a Pro subscription *(write)* |
-
-#### Essentials Subscriptions
-
-| Tool | Description |
-|------|-------------|
-| `cloud_essentials_subscriptions_list` | List all Essentials subscriptions |
-| `cloud_essentials_subscription_get` | Get Essentials subscription details |
-| `cloud_essentials_subscription_create` | Create a new Essentials subscription *(write)* |
-| `cloud_essentials_subscription_delete` | Delete an Essentials subscription *(write)* |
-| `cloud_essentials_plans_list` | List available Essentials plans with pricing |
-
-#### Database & Task Operations
-
-| Tool | Description |
-|------|-------------|
-| `cloud_databases_list` | List databases in a subscription |
-| `cloud_database_get` | Get database details |
-| `cloud_tasks_list` | List recent async tasks |
-| `cloud_task_get` | Get task status |
-
-### Redis Enterprise Tools (48 tools)
-
-#### Cluster Operations
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_cluster_get` | Get cluster information |
-| `enterprise_cluster_stats` | Get cluster statistics |
-| `enterprise_cluster_settings` | Get cluster settings |
-| `enterprise_cluster_topology` | Get cluster topology |
-| `enterprise_cluster_update` | Update cluster configuration *(write)* |
-
-#### Database Operations
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_databases_list` | List all databases |
-| `enterprise_database_get` | Get database details |
-| `enterprise_database_stats` | Get database statistics |
-| `enterprise_database_metrics` | Get database performance metrics |
-| `enterprise_database_create` | Create a new database *(write)* |
-| `enterprise_database_update` | Update database configuration *(write)* |
-| `enterprise_database_delete` | Delete a database *(write)* |
-| `enterprise_database_flush` | Flush all data from database *(write)* |
-| `enterprise_database_export` | Export database to external location *(write)* |
-| `enterprise_database_import` | Import data into database *(write)* |
-| `enterprise_database_backup` | Trigger database backup *(write)* |
-| `enterprise_database_restore` | Restore database from backup *(write)* |
-
-#### Node Operations
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_nodes_list` | List all cluster nodes |
-| `enterprise_node_get` | Get node details |
-| `enterprise_node_stats` | Get node statistics |
-| `enterprise_node_update` | Update node configuration *(write)* |
-| `enterprise_node_remove` | Remove node from cluster *(write)* |
-
-#### Shard & Alert Operations
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_shards_list` | List all shards |
-| `enterprise_shard_get` | Get shard details |
-| `enterprise_alerts_list` | List active alerts |
-| `enterprise_alert_get` | Get alert details |
-
-#### User & Access Management
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_users_list` | List all users |
-| `enterprise_user_get` | Get user details |
-| `enterprise_user_create` | Create a new user *(write)* |
-| `enterprise_user_delete` | Delete a user *(write)* |
-| `enterprise_roles_list` | List all roles |
-| `enterprise_role_get` | Get role details |
-| `enterprise_role_create` | Create a new role *(write)* |
-| `enterprise_role_delete` | Delete a role *(write)* |
-| `enterprise_acls_list` | List all Redis ACLs |
-| `enterprise_acl_get` | Get ACL details |
-| `enterprise_acl_create` | Create a new Redis ACL *(write)* |
-| `enterprise_acl_delete` | Delete a Redis ACL *(write)* |
-
-#### Other Operations
-
-| Tool | Description |
-|------|-------------|
-| `enterprise_logs_get` | Get cluster event logs |
-| `enterprise_license_get` | Get license information |
-| `enterprise_modules_list` | List available modules |
-| `enterprise_module_get` | Get module details |
-| `enterprise_crdbs_list` | List Active-Active databases |
-| `enterprise_crdb_get` | Get Active-Active database details |
-| `enterprise_crdb_update` | Update Active-Active database *(write)* |
-| `enterprise_crdb_delete` | Delete Active-Active database *(write)* |
-| `enterprise_debuginfo_list` | List debug info tasks |
-| `enterprise_debuginfo_status` | Get debug info task status |
-
-**Total: 65 tools** (17 Cloud + 48 Enterprise)
+For the complete tool catalog with sub-module breakdowns, see the [Tools Reference](../mcp/tools-reference.md).
 
 ## Example Conversations
 
@@ -374,7 +265,7 @@ Once configured, you can interact naturally with your Redis infrastructure:
 
 > **You**: What databases do I have in my enterprise cluster?
 >
-> **Claude**: *uses enterprise_databases_list*
+> **Claude**: *uses list_enterprise_databases*
 > You have 2 databases:
 >
 > - `default-db` (uid: 1) - 1GB, active
@@ -382,17 +273,17 @@ Once configured, you can interact naturally with your Redis infrastructure:
 
 > **You**: Create a new database called session-store with 512MB
 >
-> **Claude**: *uses enterprise_database_create*
+> **Claude**: *uses create_enterprise_database*
 > Created database `session-store` (uid: 3) with 512MB memory. Status: active.
 
 > **You**: Show me any active alerts
 >
-> **Claude**: *uses enterprise_alerts_list*
+> **Claude**: *uses list_alerts*
 > No active alerts in your cluster.
 
 > **You**: What Essentials plans are available on AWS?
 >
-> **Claude**: *uses cloud_essentials_plans_list with provider: AWS*
+> **Claude**: *uses list_fixed_plans with provider: AWS*
 > Here are the available Essentials plans on AWS:
 >
 > - 250MB Cache ($5/month) - us-east-1
@@ -402,8 +293,8 @@ Once configured, you can interact naturally with your Redis infrastructure:
 
 > **You**: Create a new Essentials subscription with the 250MB plan
 >
-> **Claude**: *uses cloud_essentials_subscription_create*
-> Created Essentials subscription `my-cache` with plan 250MB. Task ID: abc123. Use cloud_task_get to monitor progress.
+> **Claude**: *uses create_fixed_subscription*
+> Created Essentials subscription `my-cache` with plan 250MB. Task ID: abc123. Use `get_task` to monitor progress.
 
 ## Security Considerations
 
