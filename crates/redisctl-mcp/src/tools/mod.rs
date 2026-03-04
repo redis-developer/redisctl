@@ -1,5 +1,17 @@
 //! MCP tools for Redis Cloud, Enterprise, and direct database operations
 
+/// Metadata for a toolset sub-module (e.g. `cloud:subscriptions`).
+///
+/// Each sub-module within a toolset declares a static `TOOL_NAMES` array and
+/// exposes a `router()` function. This struct lets the parent toolset `mod.rs`
+/// advertise its sub-modules for selective CLI loading via `--tools cloud:subscriptions`.
+pub struct SubModule {
+    /// Sub-module name as used on the CLI (e.g. `"subscriptions"`).
+    pub name: &'static str,
+    /// Tool names registered by this sub-module.
+    pub tool_names: &'static [&'static str],
+}
+
 #[cfg(any(feature = "cloud", feature = "enterprise"))]
 use serde::Serialize;
 #[cfg(any(feature = "cloud", feature = "enterprise"))]

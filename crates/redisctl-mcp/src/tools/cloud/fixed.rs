@@ -1435,6 +1435,37 @@ pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
 // Instructions & Router
 // ============================================================================
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_fixed_subscriptions",
+    "get_fixed_subscription",
+    "create_fixed_subscription",
+    "update_fixed_subscription",
+    "delete_fixed_subscription",
+    "list_fixed_plans",
+    "get_fixed_plans_by_subscription",
+    "get_fixed_plan",
+    "get_fixed_redis_versions",
+    "list_fixed_databases",
+    "get_fixed_database",
+    "create_fixed_database",
+    "update_fixed_database",
+    "delete_fixed_database",
+    "get_fixed_database_backup_status",
+    "backup_fixed_database",
+    "get_fixed_database_import_status",
+    "import_fixed_database",
+    "get_fixed_database_slow_log",
+    "get_fixed_database_tags",
+    "create_fixed_database_tag",
+    "update_fixed_database_tag",
+    "delete_fixed_database_tag",
+    "update_fixed_database_tags",
+    "get_fixed_database_upgrade_versions",
+    "get_fixed_database_upgrade_status",
+    "upgrade_fixed_database_redis_version",
+];
+
 /// Build an MCP sub-router containing all Fixed/Essentials tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

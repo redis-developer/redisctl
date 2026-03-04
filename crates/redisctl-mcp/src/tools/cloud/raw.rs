@@ -133,6 +133,9 @@ pub fn cloud_raw_api(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &["cloud_raw_api"];
+
 /// Build a sub-router containing the raw Cloud API tool.
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new().tool(cloud_raw_api(state))

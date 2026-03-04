@@ -1639,6 +1639,43 @@ pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "get_account",
+    "get_system_logs",
+    "get_session_logs",
+    "get_regions",
+    "get_modules",
+    "list_account_users",
+    "get_account_user",
+    "update_account_user",
+    "delete_account_user",
+    "list_acl_users",
+    "get_acl_user",
+    "list_acl_roles",
+    "list_redis_rules",
+    "create_acl_user",
+    "update_acl_user",
+    "delete_acl_user",
+    "create_acl_role",
+    "update_acl_role",
+    "delete_acl_role",
+    "create_redis_rule",
+    "update_redis_rule",
+    "delete_redis_rule",
+    "generate_cost_report",
+    "download_cost_report",
+    "list_payment_methods",
+    "list_tasks",
+    "get_task",
+    "wait_for_cloud_task",
+    "list_cloud_accounts",
+    "get_cloud_account",
+    "create_cloud_account",
+    "update_cloud_account",
+    "delete_cloud_account",
+];
+
 /// Build an MCP sub-router containing account, ACL, cloud account, and task tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

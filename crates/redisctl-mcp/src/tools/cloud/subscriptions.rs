@@ -2099,6 +2099,46 @@ pub fn update_crdb_local_properties(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_subscriptions",
+    "get_subscription",
+    "list_databases",
+    "get_database",
+    "get_backup_status",
+    "get_slow_log",
+    "get_database_tags",
+    "get_database_certificate",
+    "create_database",
+    "update_database",
+    "delete_database",
+    "backup_database",
+    "import_database",
+    "delete_subscription",
+    "flush_database",
+    "flush_crdb_database",
+    "create_subscription",
+    "update_subscription",
+    "get_subscription_pricing",
+    "get_redis_versions",
+    "get_subscription_cidr_allowlist",
+    "update_subscription_cidr_allowlist",
+    "get_subscription_maintenance_windows",
+    "update_subscription_maintenance_windows",
+    "get_active_active_regions",
+    "add_active_active_region",
+    "delete_active_active_regions",
+    "get_available_database_versions",
+    "upgrade_database_redis_version",
+    "get_database_upgrade_status",
+    "get_database_import_status",
+    "create_database_tag",
+    "update_database_tag",
+    "delete_database_tag",
+    "update_database_tags",
+    "update_crdb_local_properties",
+];
+
 /// Build an MCP sub-router containing subscription and database tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

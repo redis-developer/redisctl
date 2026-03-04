@@ -7,7 +7,7 @@ use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::{Parser, ValueEnum};
 use redisctl_core::Config;
 #[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
@@ -45,7 +45,7 @@ enum Transport {
 }
 
 /// Toolsets that can be enabled or disabled at runtime
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, ValueEnum)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 enum Toolset {
     /// Redis Cloud management tools
     #[cfg(feature = "cloud")]
@@ -60,6 +60,36 @@ enum Toolset {
     App,
 }
 
+impl Toolset {
+    /// Parse a toolset name string into a `Toolset` variant.
+    fn from_str(s: &str) -> Option<Self> {
+        match s {
+            #[cfg(feature = "cloud")]
+            "cloud" => Some(Toolset::Cloud),
+            #[cfg(feature = "enterprise")]
+            "enterprise" => Some(Toolset::Enterprise),
+            #[cfg(feature = "database")]
+            "database" => Some(Toolset::Database),
+            "app" => Some(Toolset::App),
+            _ => None,
+        }
+    }
+
+    /// All compiled-in toolset names (for error messages).
+    #[allow(clippy::vec_init_then_push)]
+    fn all_names() -> Vec<&'static str> {
+        let mut names = Vec::new();
+        #[cfg(feature = "cloud")]
+        names.push("cloud");
+        #[cfg(feature = "enterprise")]
+        names.push("enterprise");
+        #[cfg(feature = "database")]
+        names.push("database");
+        names.push("app");
+        names
+    }
+}
+
 impl std::fmt::Display for Toolset {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -71,6 +101,54 @@ impl std::fmt::Display for Toolset {
             Toolset::Database => write!(f, "database"),
             Toolset::App => write!(f, "app"),
         }
+    }
+}
+
+/// Whether a toolset loads all sub-modules or a selected subset.
+#[derive(Debug, Clone)]
+enum SubModuleSelection {
+    /// Load all sub-modules in this toolset.
+    All,
+    /// Load only the named sub-modules.
+    Selected(HashSet<String>),
+}
+
+/// Resolved set of enabled toolsets with optional sub-module selection.
+#[derive(Debug, Clone)]
+struct EnabledToolsets {
+    selections: HashMap<Toolset, SubModuleSelection>,
+}
+
+#[allow(dead_code)]
+impl EnabledToolsets {
+    /// Create an `EnabledToolsets` with all sub-modules for each given toolset.
+    fn all_of(toolsets: impl IntoIterator<Item = Toolset>) -> Self {
+        Self {
+            selections: toolsets
+                .into_iter()
+                .map(|t| (t, SubModuleSelection::All))
+                .collect(),
+        }
+    }
+
+    /// Check whether a toolset is enabled (with any selection).
+    fn contains(&self, toolset: &Toolset) -> bool {
+        self.selections.contains_key(toolset)
+    }
+
+    /// Get the sub-module selection for a toolset.
+    fn selection(&self, toolset: &Toolset) -> Option<&SubModuleSelection> {
+        self.selections.get(toolset)
+    }
+
+    /// Remove toolsets that match a predicate.
+    fn retain(&mut self, f: impl Fn(&Toolset) -> bool) {
+        self.selections.retain(|t, _| f(t));
+    }
+
+    /// Iterate over enabled toolsets.
+    fn iter(&self) -> impl Iterator<Item = &Toolset> {
+        self.selections.keys()
     }
 }
 
@@ -101,9 +179,11 @@ struct Args {
     #[arg(long, env = "REDIS_URL")]
     database_url: Option<String>,
 
-    /// Toolsets to enable (default: all compiled-in). Options: cloud, enterprise, database, app.
-    #[arg(long, value_delimiter = ',', value_enum)]
-    tools: Option<Vec<Toolset>>,
+    /// Toolsets to enable (default: all compiled-in).
+    /// Use bare names for all sub-modules: cloud,enterprise,database,app.
+    /// Use colon syntax for specific sub-modules: cloud:subscriptions,cloud:networking.
+    #[arg(long, value_delimiter = ',')]
+    tools: Option<Vec<String>>,
 
     // --- HTTP transport options ---
     /// Host to bind HTTP server
@@ -150,48 +230,175 @@ struct Args {
     log_level: String,
 }
 
+/// Parse `--tools` specs like `["cloud:subscriptions", "cloud:networking", "enterprise", "app"]`
+/// into an `EnabledToolsets`.
+///
+/// Rules:
+/// - Bare name (e.g. `cloud`) selects all sub-modules for that toolset.
+/// - Colon syntax (e.g. `cloud:subscriptions`) selects a single sub-module.
+/// - If both bare and colon forms appear for the same toolset, bare wins (all sub-modules).
+/// - `app` has no sub-modules; `app:anything` is an error.
+fn parse_tool_specs(specs: &[String]) -> Result<EnabledToolsets> {
+    let mut selections: HashMap<Toolset, SubModuleSelection> = HashMap::new();
+
+    for spec in specs {
+        if let Some((toolset_name, sub_name)) = spec.split_once(':') {
+            let toolset = Toolset::from_str(toolset_name).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Unknown toolset '{}'. Valid toolsets: {}",
+                    toolset_name,
+                    Toolset::all_names().join(", ")
+                )
+            })?;
+
+            // app has no sub-modules
+            if matches!(toolset, Toolset::App) {
+                bail!("'app' has no sub-modules (got 'app:{}')", sub_name);
+            }
+
+            // Validate sub-module name
+            if !is_valid_sub_module(&toolset, sub_name) {
+                bail!(
+                    "Unknown sub-module '{}' for toolset '{}'. Valid sub-modules: {}",
+                    sub_name,
+                    toolset,
+                    valid_sub_module_names(&toolset).join(", ")
+                );
+            }
+
+            match selections.get_mut(&toolset) {
+                Some(SubModuleSelection::All) => {
+                    // Bare already seen, keep All
+                }
+                Some(SubModuleSelection::Selected(set)) => {
+                    set.insert(sub_name.to_string());
+                }
+                None => {
+                    let mut set = HashSet::new();
+                    set.insert(sub_name.to_string());
+                    selections.insert(toolset, SubModuleSelection::Selected(set));
+                }
+            }
+        } else {
+            let toolset = Toolset::from_str(spec).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "Unknown toolset '{}'. Valid toolsets: {}",
+                    spec,
+                    Toolset::all_names().join(", ")
+                )
+            })?;
+            // Bare name: select all sub-modules (overrides any previous selective)
+            selections.insert(toolset, SubModuleSelection::All);
+        }
+    }
+
+    Ok(EnabledToolsets { selections })
+}
+
+/// Check whether a sub-module name is valid for a given toolset.
+fn is_valid_sub_module(toolset: &Toolset, _name: &str) -> bool {
+    match toolset {
+        #[cfg(feature = "cloud")]
+        Toolset::Cloud => tools::cloud::sub_tool_names(_name).is_some(),
+        #[cfg(feature = "enterprise")]
+        Toolset::Enterprise => tools::enterprise::sub_tool_names(_name).is_some(),
+        #[cfg(feature = "database")]
+        Toolset::Database => tools::redis::sub_tool_names(_name).is_some(),
+        Toolset::App => false,
+    }
+}
+
+/// Return valid sub-module names for a toolset (for error messages).
+fn valid_sub_module_names(toolset: &Toolset) -> Vec<&'static str> {
+    match toolset {
+        #[cfg(feature = "cloud")]
+        Toolset::Cloud => tools::cloud::SUB_MODULES.iter().map(|sm| sm.name).collect(),
+        #[cfg(feature = "enterprise")]
+        Toolset::Enterprise => tools::enterprise::SUB_MODULES
+            .iter()
+            .map(|sm| sm.name)
+            .collect(),
+        #[cfg(feature = "database")]
+        Toolset::Database => tools::redis::SUB_MODULES.iter().map(|sm| sm.name).collect(),
+        Toolset::App => vec![],
+    }
+}
+
+/// Get tool names for a toolset according to its sub-module selection.
+fn selected_tool_names(toolset: &Toolset, selection: &SubModuleSelection) -> Vec<String> {
+    match selection {
+        SubModuleSelection::All => match toolset {
+            #[cfg(feature = "cloud")]
+            Toolset::Cloud => tools::cloud::tool_names(),
+            #[cfg(feature = "enterprise")]
+            Toolset::Enterprise => tools::enterprise::tool_names(),
+            #[cfg(feature = "database")]
+            Toolset::Database => tools::redis::tool_names(),
+            Toolset::App => tools::profile::tool_names(),
+        },
+        SubModuleSelection::Selected(sub_modules) => {
+            let mut names = Vec::new();
+            for _sub in sub_modules {
+                let sub_names: Option<&[&str]> = match toolset {
+                    #[cfg(feature = "cloud")]
+                    Toolset::Cloud => tools::cloud::sub_tool_names(_sub),
+                    #[cfg(feature = "enterprise")]
+                    Toolset::Enterprise => tools::enterprise::sub_tool_names(_sub),
+                    #[cfg(feature = "database")]
+                    Toolset::Database => tools::redis::sub_tool_names(_sub),
+                    Toolset::App => None,
+                };
+                if let Some(tool_names) = sub_names {
+                    names.extend(tool_names.iter().map(|s| (*s).to_string()));
+                }
+            }
+            names
+        }
+    }
+}
+
 /// Derive which toolsets to enable based on profile types in the config.
 /// Returns `None` if config has no profiles (caller should fall back to all compiled-in).
-fn toolsets_from_config(config: &Config) -> Option<HashSet<Toolset>> {
+fn toolsets_from_config(config: &Config) -> Option<EnabledToolsets> {
     if config.profiles.is_empty() {
         return None;
     }
 
-    let mut set = HashSet::new();
-    set.insert(Toolset::App); // always include profile management
+    #[allow(unused_mut)]
+    let mut toolsets = vec![Toolset::App];
 
     #[cfg(feature = "cloud")]
     if !config
         .get_profiles_of_type(DeploymentType::Cloud)
         .is_empty()
     {
-        set.insert(Toolset::Cloud);
+        toolsets.push(Toolset::Cloud);
     }
     #[cfg(feature = "enterprise")]
     if !config
         .get_profiles_of_type(DeploymentType::Enterprise)
         .is_empty()
     {
-        set.insert(Toolset::Enterprise);
+        toolsets.push(Toolset::Enterprise);
     }
     #[cfg(feature = "database")]
     if !config
         .get_profiles_of_type(DeploymentType::Database)
         .is_empty()
     {
-        set.insert(Toolset::Database);
+        toolsets.push(Toolset::Database);
     }
 
-    Some(set)
+    Some(EnabledToolsets::all_of(toolsets))
 }
 
 /// Try to auto-detect toolsets from the config file on disk.
 /// Returns `None` if config cannot be loaded or has no profiles.
-fn detect_toolsets_from_config() -> Option<HashSet<Toolset>> {
+fn detect_toolsets_from_config() -> Option<EnabledToolsets> {
     let config = Config::load().ok()?;
     let result = toolsets_from_config(&config);
-    if let Some(ref toolsets) = result {
-        let names: Vec<String> = toolsets.iter().map(|t| t.to_string()).collect();
+    if let Some(ref enabled) = result {
+        let names: Vec<String> = enabled.iter().map(|t| t.to_string()).collect();
         info!(toolsets = ?names, "Auto-detected toolsets from config profiles");
     }
     result
@@ -200,27 +407,27 @@ fn detect_toolsets_from_config() -> Option<HashSet<Toolset>> {
 /// Resolve which toolsets are enabled based on CLI args, config profiles, and compiled features.
 ///
 /// Priority: explicit `--tools` flag > config-based auto-detection > all compiled-in features.
-fn enabled_toolsets(args: &Args) -> HashSet<Toolset> {
+fn resolve_enabled_toolsets(args: &Args) -> Result<EnabledToolsets> {
     // 1. Explicit --tools flag always wins
     if let Some(ref tools) = args.tools {
-        return tools.iter().copied().collect();
+        return parse_tool_specs(tools);
     }
 
     // 2. Auto-detect from config profiles
     if let Some(toolsets) = detect_toolsets_from_config() {
-        return toolsets;
+        return Ok(toolsets);
     }
 
     // 3. Fallback: all compiled-in features
-    let mut set = HashSet::new();
+    #[allow(unused_mut)]
+    let mut all = vec![Toolset::App];
     #[cfg(feature = "cloud")]
-    set.insert(Toolset::Cloud);
+    all.push(Toolset::Cloud);
     #[cfg(feature = "enterprise")]
-    set.insert(Toolset::Enterprise);
+    all.push(Toolset::Enterprise);
     #[cfg(feature = "database")]
-    set.insert(Toolset::Database);
-    set.insert(Toolset::App);
-    set
+    all.push(Toolset::Database);
+    Ok(EnabledToolsets::all_of(all))
 }
 
 /// Map a CLI `Toolset` to its corresponding `ToolsetKind` for policy lookup.
@@ -281,7 +488,7 @@ fn resolve_policy(args: &Args) -> Result<(PolicyConfig, String)> {
 async fn main() -> Result<()> {
     let args = Args::parse();
 
-    let mut enabled = enabled_toolsets(&args);
+    let mut enabled = resolve_enabled_toolsets(&args)?;
 
     // Resolve policy configuration (includes audit config)
     let (policy_config, policy_source) = resolve_policy(&args)?;
@@ -409,68 +616,70 @@ fn init_tracing(log_level: &str, audit_enabled: bool) {
 }
 
 /// Build the tool name -> toolset kind mapping for policy evaluation.
-fn build_tool_toolset_mapping(enabled: &HashSet<Toolset>) -> HashMap<String, ToolsetKind> {
+fn build_tool_toolset_mapping(enabled: &EnabledToolsets) -> HashMap<String, ToolsetKind> {
     let mut mapping = HashMap::new();
 
-    #[cfg(feature = "cloud")]
-    if enabled.contains(&Toolset::Cloud) {
-        for name in tools::cloud::tool_names() {
-            mapping.insert(name, ToolsetKind::Cloud);
-        }
-    }
-
-    #[cfg(feature = "enterprise")]
-    if enabled.contains(&Toolset::Enterprise) {
-        for name in tools::enterprise::tool_names() {
-            mapping.insert(name, ToolsetKind::Enterprise);
-        }
-    }
-
-    #[cfg(feature = "database")]
-    if enabled.contains(&Toolset::Database) {
-        for name in tools::redis::tool_names() {
-            mapping.insert(name, ToolsetKind::Database);
-        }
-    }
-
-    if enabled.contains(&Toolset::App) {
-        for name in tools::profile::tool_names() {
-            mapping.insert(name, ToolsetKind::App);
+    for (toolset, selection) in &enabled.selections {
+        let kind = toolset_to_kind(toolset);
+        for name in selected_tool_names(toolset, selection) {
+            mapping.insert(name, kind);
         }
     }
 
     mapping
 }
 
+/// Merge a single toolset's router(s) into the main router, respecting sub-module selection.
+fn merge_toolset_router(
+    router: McpRouter,
+    toolset: &Toolset,
+    selection: &SubModuleSelection,
+    state: Arc<AppState>,
+) -> McpRouter {
+    match selection {
+        SubModuleSelection::All => match toolset {
+            #[cfg(feature = "cloud")]
+            Toolset::Cloud => router.merge(tools::cloud::router(state)),
+            #[cfg(feature = "enterprise")]
+            Toolset::Enterprise => router.merge(tools::enterprise::router(state)),
+            #[cfg(feature = "database")]
+            Toolset::Database => router.merge(tools::redis::router(state)),
+            Toolset::App => router.merge(tools::profile::router(state)),
+        },
+        SubModuleSelection::Selected(sub_modules) => {
+            let mut r = router;
+            for _sub in sub_modules {
+                let sub_router: Option<McpRouter> = match toolset {
+                    #[cfg(feature = "cloud")]
+                    Toolset::Cloud => tools::cloud::sub_router(_sub, state.clone()),
+                    #[cfg(feature = "enterprise")]
+                    Toolset::Enterprise => tools::enterprise::sub_router(_sub, state.clone()),
+                    #[cfg(feature = "database")]
+                    Toolset::Database => tools::redis::sub_router(_sub, state.clone()),
+                    Toolset::App => None,
+                };
+                if let Some(sr) = sub_router {
+                    r = r.merge(sr);
+                }
+            }
+            r
+        }
+    }
+}
+
 /// Build the MCP router with modular sub-routers based on enabled toolsets
 fn build_router(
     state: Arc<AppState>,
     policy: Arc<Policy>,
-    enabled: &HashSet<Toolset>,
+    enabled: &EnabledToolsets,
     tools_config: ToolsConfig,
     tool_toolset: &HashMap<String, ToolsetKind>,
 ) -> Result<McpRouter> {
     let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
 
-    // Conditionally merge each toolset
-    #[cfg(feature = "cloud")]
-    if enabled.contains(&Toolset::Cloud) {
-        router = router.merge(tools::cloud::router(state.clone()));
-    }
-
-    #[cfg(feature = "enterprise")]
-    if enabled.contains(&Toolset::Enterprise) {
-        router = router.merge(tools::enterprise::router(state.clone()));
-    }
-
-    #[cfg(feature = "database")]
-    if enabled.contains(&Toolset::Database) {
-        router = router.merge(tools::redis::router(state.clone()));
-    }
-
-    // App toolset includes profile tools, resources, and prompts
-    if enabled.contains(&Toolset::App) {
-        router = router.merge(tools::profile::router(state.clone()));
+    // Merge toolsets, respecting sub-module selection
+    for (toolset, selection) in &enabled.selections {
+        router = merge_toolset_router(router, toolset, selection, state.clone());
     }
 
     // Register the show_policy tool (always available, bypasses visibility)
@@ -1103,7 +1312,7 @@ mod tests {
     #[test]
     fn instructions_contain_safety_model() {
         let state = test_state();
-        let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let enabled = EnabledToolsets::all_of([Toolset::App]);
         let tool_toolset = build_tool_toolset_mapping(&enabled);
 
         let policy_ro = test_policy_arc(SafetyTier::ReadOnly);
@@ -1130,7 +1339,7 @@ mod tests {
     #[test]
     fn show_policy_tool_is_always_registered() {
         let state = test_state();
-        let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let enabled = EnabledToolsets::all_of([Toolset::App]);
         let tool_toolset = build_tool_toolset_mapping(&enabled);
         let policy = test_policy_arc(SafetyTier::ReadOnly);
         // Build should succeed and include show_policy and list_available_tools
@@ -1147,7 +1356,7 @@ mod tests {
     #[test]
     fn essentials_preset_filters_tools() {
         let state = test_state();
-        let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let enabled = EnabledToolsets::all_of([Toolset::App]);
         let tool_toolset = build_tool_toolset_mapping(&enabled);
         let policy = test_policy_arc(SafetyTier::Full);
         let tools_config = ToolsConfig {
@@ -1171,12 +1380,12 @@ mod tests {
         };
         let disabled = config.disabled_toolsets();
 
-        let mut enabled: HashSet<Toolset> = HashSet::new();
+        let mut toolsets = vec![Toolset::App];
         #[cfg(feature = "cloud")]
-        enabled.insert(Toolset::Cloud);
+        toolsets.push(Toolset::Cloud);
         #[cfg(feature = "enterprise")]
-        enabled.insert(Toolset::Enterprise);
-        enabled.insert(Toolset::App);
+        toolsets.push(Toolset::Enterprise);
+        let mut enabled = EnabledToolsets::all_of(toolsets);
 
         enabled.retain(|t| !disabled.contains(&toolset_to_kind(t)));
 
@@ -1199,5 +1408,97 @@ mod tests {
         #[cfg(feature = "database")]
         assert_eq!(toolset_to_kind(&Toolset::Database), ToolsetKind::Database);
         assert_eq!(toolset_to_kind(&Toolset::App), ToolsetKind::App);
+    }
+
+    // ========================================================================
+    // --tools parsing tests
+    // ========================================================================
+
+    #[test]
+    fn parse_bare_toolset_names() {
+        let specs = vec!["app".to_string()];
+        let enabled = parse_tool_specs(&specs).unwrap();
+        assert!(enabled.contains(&Toolset::App));
+        assert!(matches!(
+            enabled.selection(&Toolset::App),
+            Some(SubModuleSelection::All)
+        ));
+    }
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn parse_sub_module_syntax() {
+        let specs = vec![
+            "cloud:subscriptions".to_string(),
+            "cloud:networking".to_string(),
+        ];
+        let enabled = parse_tool_specs(&specs).unwrap();
+        assert!(enabled.contains(&Toolset::Cloud));
+        match enabled.selection(&Toolset::Cloud) {
+            Some(SubModuleSelection::Selected(set)) => {
+                assert!(set.contains("subscriptions"));
+                assert!(set.contains("networking"));
+                assert!(!set.contains("account"));
+            }
+            other => panic!("Expected Selected, got {:?}", other),
+        }
+    }
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn parse_mixed_bare_and_sub_module() {
+        let specs = vec!["cloud:subscriptions".to_string(), "app".to_string()];
+        let enabled = parse_tool_specs(&specs).unwrap();
+        assert!(enabled.contains(&Toolset::Cloud));
+        assert!(enabled.contains(&Toolset::App));
+        assert!(matches!(
+            enabled.selection(&Toolset::App),
+            Some(SubModuleSelection::All)
+        ));
+        assert!(matches!(
+            enabled.selection(&Toolset::Cloud),
+            Some(SubModuleSelection::Selected(_))
+        ));
+    }
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn parse_bare_overrides_sub_module() {
+        let specs = vec!["cloud:subscriptions".to_string(), "cloud".to_string()];
+        let enabled = parse_tool_specs(&specs).unwrap();
+        assert!(matches!(
+            enabled.selection(&Toolset::Cloud),
+            Some(SubModuleSelection::All)
+        ));
+    }
+
+    #[test]
+    fn parse_invalid_toolset_errors() {
+        let specs = vec!["bogus".to_string()];
+        assert!(parse_tool_specs(&specs).is_err());
+    }
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn parse_invalid_sub_module_errors() {
+        let specs = vec!["cloud:nonexistent".to_string()];
+        assert!(parse_tool_specs(&specs).is_err());
+    }
+
+    #[test]
+    fn parse_app_with_sub_module_errors() {
+        let specs = vec!["app:anything".to_string()];
+        assert!(parse_tool_specs(&specs).is_err());
+    }
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn sub_module_selection_limits_tool_names() {
+        let specs = vec!["cloud:raw".to_string()];
+        let enabled = parse_tool_specs(&specs).unwrap();
+        let mapping = build_tool_toolset_mapping(&enabled);
+        // Only the raw sub-module tool should be present
+        assert!(mapping.contains_key("cloud_raw_api"));
+        assert!(!mapping.contains_key("list_subscriptions"));
     }
 }

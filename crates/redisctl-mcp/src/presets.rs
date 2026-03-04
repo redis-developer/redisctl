@@ -471,12 +471,15 @@ mod tests {
         assert!(!visible.contains("b")); // exclude wins
     }
 
-    // -- Cross-validation: essentials constants vs TOOL_NAMES --
+    // -- Cross-validation: essentials constants vs SUB_MODULES tool names --
 
     #[cfg(feature = "cloud")]
     #[test]
     fn cloud_essentials_are_valid_tool_names() {
-        let valid: HashSet<&str> = crate::tools::cloud::TOOL_NAMES.iter().copied().collect();
+        let valid: HashSet<&str> = crate::tools::cloud::SUB_MODULES
+            .iter()
+            .flat_map(|sm| sm.tool_names.iter().copied())
+            .collect();
         for name in CLOUD_ESSENTIALS {
             assert!(
                 valid.contains(name),
@@ -488,9 +491,9 @@ mod tests {
     #[cfg(feature = "enterprise")]
     #[test]
     fn enterprise_essentials_are_valid_tool_names() {
-        let valid: HashSet<&str> = crate::tools::enterprise::TOOL_NAMES
+        let valid: HashSet<&str> = crate::tools::enterprise::SUB_MODULES
             .iter()
-            .copied()
+            .flat_map(|sm| sm.tool_names.iter().copied())
             .collect();
         for name in ENTERPRISE_ESSENTIALS {
             assert!(
@@ -503,7 +506,10 @@ mod tests {
     #[cfg(feature = "database")]
     #[test]
     fn database_essentials_are_valid_tool_names() {
-        let valid: HashSet<&str> = crate::tools::redis::TOOL_NAMES.iter().copied().collect();
+        let valid: HashSet<&str> = crate::tools::redis::SUB_MODULES
+            .iter()
+            .flat_map(|sm| sm.tool_names.iter().copied())
+            .collect();
         for name in DATABASE_ESSENTIALS {
             assert!(
                 valid.contains(name),

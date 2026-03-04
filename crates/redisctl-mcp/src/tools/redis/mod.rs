@@ -21,75 +21,59 @@ use std::sync::Arc;
 
 use tower_mcp::{McpRouter, ToolError};
 
+use super::SubModule;
 use crate::state::AppState;
 
-/// All tool names registered by the Database (Redis) toolset.
-pub const TOOL_NAMES: &[&str] = &[
-    // server
-    "redis_ping",
-    "redis_info",
-    "redis_dbsize",
-    "redis_client_list",
-    "redis_cluster_info",
-    "redis_slowlog",
-    "redis_config_get",
-    "redis_memory_stats",
-    "redis_latency_history",
-    "redis_acl_list",
-    "redis_acl_whoami",
-    "redis_module_list",
-    "redis_config_set",
-    "redis_flushdb",
-    // diagnostics
-    "redis_health_check",
-    "redis_key_summary",
-    "redis_hotkeys",
-    "redis_connection_summary",
-    // keys
-    "redis_keys",
-    "redis_get",
-    "redis_type",
-    "redis_ttl",
-    "redis_exists",
-    "redis_memory_usage",
-    "redis_scan",
-    "redis_object_encoding",
-    "redis_object_freq",
-    "redis_object_idletime",
-    "redis_object_help",
-    "redis_set",
-    "redis_del",
-    "redis_expire",
-    "redis_rename",
-    // structures
-    "redis_hgetall",
-    "redis_lrange",
-    "redis_smembers",
-    "redis_zrange",
-    "redis_xinfo_stream",
-    "redis_xrange",
-    "redis_xlen",
-    "redis_pubsub_channels",
-    "redis_pubsub_numsub",
-    "redis_hset",
-    "redis_hdel",
-    "redis_lpush",
-    "redis_rpush",
-    "redis_lpop",
-    "redis_rpop",
-    "redis_sadd",
-    "redis_srem",
-    "redis_zadd",
-    "redis_zrem",
-    "redis_xadd",
-    "redis_xtrim",
-    // raw
-    "redis_command",
+/// Sub-modules within the Database (Redis) toolset, each with its own tool names and router.
+pub const SUB_MODULES: &[SubModule] = &[
+    SubModule {
+        name: "server",
+        tool_names: server::TOOL_NAMES,
+    },
+    SubModule {
+        name: "keys",
+        tool_names: keys::TOOL_NAMES,
+    },
+    SubModule {
+        name: "structures",
+        tool_names: structures::TOOL_NAMES,
+    },
+    SubModule {
+        name: "diagnostics",
+        tool_names: diagnostics::TOOL_NAMES,
+    },
+    SubModule {
+        name: "raw",
+        tool_names: raw::TOOL_NAMES,
+    },
 ];
 
 /// Get all Database tool names as owned strings.
 pub fn tool_names() -> Vec<String> {
-    TOOL_NAMES.iter().map(|s| (*s).to_string()).collect()
+    SUB_MODULES
+        .iter()
+        .flat_map(|sm| sm.tool_names.iter().map(|s| (*s).to_string()))
+        .collect()
+}
+
+/// Get tool names for a specific sub-module by name.
+pub fn sub_tool_names(name: &str) -> Option<&'static [&'static str]> {
+    SUB_MODULES
+        .iter()
+        .find(|sm| sm.name == name)
+        .map(|sm| sm.tool_names)
+}
+
+/// Build an MCP sub-router for a specific sub-module by name.
+pub fn sub_router(name: &str, state: Arc<AppState>) -> Option<McpRouter> {
+    match name {
+        "server" => Some(server::router(state)),
+        "keys" => Some(keys::router(state)),
+        "structures" => Some(structures::router(state)),
+        "diagnostics" => Some(diagnostics::router(state)),
+        "raw" => Some(raw::router(state)),
+        _ => None,
+    }
 }
 
 /// Resolve a Redis URL from the provided inputs.

@@ -12,6 +12,31 @@ use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, T
 
 use crate::state::AppState;
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "redis_hgetall",
+    "redis_lrange",
+    "redis_smembers",
+    "redis_zrange",
+    "redis_xinfo_stream",
+    "redis_xrange",
+    "redis_xlen",
+    "redis_pubsub_channels",
+    "redis_pubsub_numsub",
+    "redis_hset",
+    "redis_hdel",
+    "redis_lpush",
+    "redis_rpush",
+    "redis_lpop",
+    "redis_rpop",
+    "redis_sadd",
+    "redis_srem",
+    "redis_zadd",
+    "redis_zrem",
+    "redis_xadd",
+    "redis_xtrim",
+];
+
 /// Build a sub-router containing all data structure Redis tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

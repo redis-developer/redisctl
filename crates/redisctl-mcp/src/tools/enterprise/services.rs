@@ -272,6 +272,17 @@ pub fn restart_service(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_enterprise_services",
+    "get_enterprise_service",
+    "get_enterprise_service_status",
+    "update_enterprise_service",
+    "start_enterprise_service",
+    "stop_enterprise_service",
+    "restart_enterprise_service",
+];
+
 /// Build the services sub-router
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

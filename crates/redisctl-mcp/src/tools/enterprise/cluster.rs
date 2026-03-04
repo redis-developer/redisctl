@@ -1118,6 +1118,34 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "get_cluster",
+    "get_license",
+    "get_license_usage",
+    "update_enterprise_license",
+    "validate_enterprise_license",
+    "update_enterprise_cluster",
+    "get_enterprise_cluster_policy",
+    "update_enterprise_cluster_policy",
+    "enable_enterprise_maintenance_mode",
+    "disable_enterprise_maintenance_mode",
+    "get_enterprise_cluster_certificates",
+    "rotate_enterprise_cluster_certificates",
+    "update_enterprise_cluster_certificates",
+    "get_enterprise_cluster_services",
+    "list_nodes",
+    "get_node",
+    "get_node_stats",
+    "enable_enterprise_node_maintenance",
+    "disable_enterprise_node_maintenance",
+    "rebalance_enterprise_node",
+    "drain_enterprise_node",
+    "update_enterprise_node",
+    "remove_enterprise_node",
+    "get_cluster_stats",
+];
+
 /// Build an MCP sub-router containing cluster, license, and node tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
