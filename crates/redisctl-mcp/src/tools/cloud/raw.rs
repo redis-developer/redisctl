@@ -43,15 +43,13 @@ pub struct CloudRawApiInput {
 pub fn cloud_raw_api(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("cloud_raw_api")
         .description(
-            "DANGEROUS: Execute a raw HTTP request against the Redis Cloud API. \
-             Use this escape hatch to reach any Cloud API endpoint not covered by a dedicated tool. \
-             GET requires read-write tier; POST/PUT/PATCH/DELETE require full tier.",
+            "DANGEROUS: Execute a raw HTTP request against the Cloud API. \
+             Escape hatch for endpoints not covered by dedicated tools.",
         )
         .destructive()
         .extractor_handler_typed::<_, _, _, CloudRawApiInput>(
             state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<CloudRawApiInput>| async move {
+            |State(state): State<Arc<AppState>>, Json(input): Json<CloudRawApiInput>| async move {
                 // Method-based tier gating
                 match input.method {
                     HttpMethod::Get => {
@@ -61,10 +59,7 @@ pub fn cloud_raw_api(state: Arc<AppState>) -> Tool {
                             ));
                         }
                     }
-                    HttpMethod::Post
-                    | HttpMethod::Put
-                    | HttpMethod::Patch
-                    | HttpMethod::Delete => {
+                    HttpMethod::Post | HttpMethod::Put | HttpMethod::Patch | HttpMethod::Delete => {
                         if !state.is_destructive_allowed() {
                             return Err(McpError::tool(
                                 "cloud_raw_api mutating methods require full tier",

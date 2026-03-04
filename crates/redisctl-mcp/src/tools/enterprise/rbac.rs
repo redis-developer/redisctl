@@ -30,7 +30,7 @@ pub struct ListUsersInput {
 /// Build the list_users tool
 pub fn list_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_users")
-        .description("List all users in the Redis Enterprise cluster")
+        .description("List all users.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListUsersInput>(
             state,
@@ -62,9 +62,7 @@ pub struct GetUserInput {
 /// Build the get_user tool
 pub fn get_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_user")
-        .description(
-            "Get detailed information about a specific user in the Redis Enterprise cluster",
-        )
+        .description("Get user details by UID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetUserInput>(
             state,
@@ -112,10 +110,7 @@ pub struct CreateEnterpriseUserInput {
 /// Build the create_enterprise_user tool
 pub fn create_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_user")
-        .description(
-            "Create a new user in the Redis Enterprise cluster. \
-             Requires write permission.",
-        )
+        .description("Create a new user.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseUserInput>(
             state,
@@ -187,10 +182,7 @@ pub struct UpdateEnterpriseUserInput {
 /// Build the update_enterprise_user tool
 pub fn update_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_user")
-        .description(
-            "Update an existing user in the Redis Enterprise cluster. \
-             Only specified fields will be modified. Requires write permission.",
-        )
+        .description("Update an existing user. Only specified fields will be modified.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseUserInput>(
             state,
@@ -244,10 +236,7 @@ pub struct DeleteEnterpriseUserInput {
 /// Build the delete_enterprise_user tool
 pub fn delete_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_user")
-        .description(
-            "DANGEROUS: Permanently deletes a user from the Redis Enterprise cluster. \
-             Active sessions using this user will be terminated. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a user. Active sessions will be terminated.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseUserInput>(
             state,
@@ -295,10 +284,7 @@ pub struct ListRolesInput {
 /// Build the list_roles tool
 pub fn list_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_roles")
-        .description(
-            "List all roles in the Redis Enterprise cluster. Returns role names, \
-             permissions (management, data_access), and database-specific role assignments.",
-        )
+        .description("List all roles.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListRolesInput>(
             state,
@@ -330,10 +316,7 @@ pub struct GetRoleInput {
 /// Build the get_role tool
 pub fn get_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_role")
-        .description(
-            "Get detailed information about a specific role including permissions \
-             and database role assignments.",
-        )
+        .description("Get role details by UID, including permissions and assignments.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRoleInput>(
             state,
@@ -374,10 +357,7 @@ pub struct CreateEnterpriseRoleInput {
 /// Build the create_enterprise_role tool
 pub fn create_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_role")
-        .description(
-            "Create a new role in the Redis Enterprise cluster. \
-             Requires write permission.",
-        )
+        .description("Create a new role.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseRoleInput>(
             state,
@@ -436,10 +416,7 @@ pub struct UpdateEnterpriseRoleInput {
 /// Build the update_enterprise_role tool
 pub fn update_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_role")
-        .description(
-            "Update an existing role in the Redis Enterprise cluster. \
-             Requires write permission.",
-        )
+        .description("Update an existing role.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseRoleInput>(
             state,
@@ -490,10 +467,7 @@ pub struct DeleteEnterpriseRoleInput {
 /// Build the delete_enterprise_role tool
 pub fn delete_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_role")
-        .description(
-            "DANGEROUS: Permanently deletes a role from the Redis Enterprise cluster. \
-             Users assigned to this role will lose their permissions. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a role. Users assigned to it will lose their permissions.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseRoleInput>(
             state,
@@ -541,10 +515,7 @@ pub struct ListRedisAclsInput {
 /// Build the list_redis_acls tool
 pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_acls")
-        .description(
-            "List all Redis ACLs in the Redis Enterprise cluster. Returns ACL names, \
-             rules, and associated databases.",
-        )
+        .description("List all Redis ACLs.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListRedisAclsInput>(
             state,
@@ -577,8 +548,7 @@ pub struct GetRedisAclInput {
 pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_acl")
         .description(
-            "Get detailed information about a specific Redis ACL including the ACL rule string \
-             and associated databases.",
+            "Get Redis ACL details by UID, including rule string and associated databases.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRedisAclInput>(
@@ -619,11 +589,7 @@ pub struct CreateEnterpriseAclInput {
 /// Build the create_enterprise_acl tool
 pub fn create_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_acl")
-        .description(
-            "Create a new Redis ACL in the Redis Enterprise cluster. \
-             The ACL rule string follows Redis ACL syntax (e.g., \"+@all ~*\"). \
-             Requires write permission.",
-        )
+        .description("Create a new Redis ACL using Redis ACL syntax (e.g., \"+@all ~*\").")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateEnterpriseAclInput>(
             state,
@@ -679,10 +645,7 @@ pub struct UpdateEnterpriseAclInput {
 /// Build the update_enterprise_acl tool
 pub fn update_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_acl")
-        .description(
-            "Update an existing Redis ACL in the Redis Enterprise cluster. \
-             Requires write permission.",
-        )
+        .description("Update an existing Redis ACL.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateEnterpriseAclInput>(
             state,
@@ -731,10 +694,7 @@ pub struct DeleteEnterpriseAclInput {
 /// Build the delete_enterprise_acl tool
 pub fn delete_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_acl")
-        .description(
-            "DANGEROUS: Permanently deletes a Redis ACL from the cluster. \
-             Databases using this ACL will lose those access controls. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a Redis ACL. Databases using it will lose those access controls.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteEnterpriseAclInput>(
             state,
@@ -783,8 +743,7 @@ pub struct GetLdapConfigInput {
 pub fn get_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_ldap_config")
         .description(
-            "Get the LDAP configuration for the Redis Enterprise cluster including \
-             server settings, bind DN, and query suffixes.",
+            "Get the LDAP configuration including server settings, bind DN, and query suffixes.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetLdapConfigInput>(
@@ -821,10 +780,7 @@ pub struct UpdateLdapConfigInput {
 /// Build the update_enterprise_ldap_config tool
 pub fn update_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_ldap_config")
-        .description(
-            "Update the LDAP configuration for the Redis Enterprise cluster. \
-             Accepts a JSON object with LDAP settings. Requires write permission.",
-        )
+        .description("Update the LDAP configuration. Pass LDAP settings as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateLdapConfigInput>(
             state,
@@ -872,9 +828,7 @@ pub struct GetUserPermissionsInput {
 /// Build the get_enterprise_user_permissions tool
 pub fn get_enterprise_user_permissions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_user_permissions")
-        .description(
-            "Get all available permission types for Redis Enterprise user management.",
-        )
+        .description("Get all available permission types for user management.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetUserPermissionsInput>(
             state,
@@ -912,9 +866,7 @@ pub struct GetBuiltinRolesInput {
 /// Build the get_enterprise_builtin_roles tool
 pub fn get_enterprise_builtin_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_builtin_roles")
-        .description(
-            "Get the list of built-in roles available in the Redis Enterprise cluster.",
-        )
+        .description("Get the list of built-in roles.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetBuiltinRolesInput>(
             state,
@@ -959,10 +911,7 @@ pub struct ValidateEnterpriseAclInput {
 /// Build the validate_enterprise_acl tool
 pub fn validate_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("validate_enterprise_acl")
-        .description(
-            "Validate a Redis ACL rule before creating it. Returns validation results \
-             and any errors.",
-        )
+        .description("Validate a Redis ACL rule before creating it.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ValidateEnterpriseAclInput>(
             state,

@@ -62,7 +62,7 @@ pub struct PingInput {
 /// Build the ping tool
 pub fn ping(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_ping")
-        .description("Test connectivity to a Redis database by sending a PING command")
+        .description("Test connectivity by sending a PING command")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, PingInput>(
             state,
@@ -107,7 +107,7 @@ pub struct InfoInput {
 /// Build the info tool
 pub fn info(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_info")
-        .description("Get Redis server information using the INFO command")
+        .description("Get server information and statistics (INFO command).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, InfoInput>(
             state,
@@ -151,7 +151,7 @@ pub struct DbsizeInput {
 /// Build the dbsize tool
 pub fn dbsize(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_dbsize")
-        .description("Get the number of keys in the currently selected database")
+        .description("Get the number of keys in the current database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, DbsizeInput>(
             state,
@@ -193,7 +193,7 @@ pub struct ClientListInput {
 /// Build the client_list tool
 pub fn client_list(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_client_list")
-        .description("Get list of client connections to the Redis server")
+        .description("List client connections (CLIENT LIST).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ClientListInput>(
             state,
@@ -237,7 +237,7 @@ pub struct ClusterInfoInput {
 /// Build the cluster_info tool
 pub fn cluster_info(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_cluster_info")
-        .description("Get Redis Cluster information (only works on cluster-enabled databases)")
+        .description("Get cluster information (only works on cluster-enabled instances).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ClusterInfoInput>(
             state,
@@ -284,17 +284,14 @@ fn default_slowlog_count() -> usize {
 /// Build the slowlog tool
 pub fn slowlog(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_slowlog")
-        .description(
-            "Get slow query log entries. Useful for identifying slow commands affecting performance.",
-        )
+        .description("Get slow query log entries for identifying performance issues.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, SlowlogInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SlowlogInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
@@ -356,8 +353,8 @@ pub struct ConfigGetInput {
 pub fn config_get(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_config_get")
         .description(
-            "Get Redis configuration parameter values using CONFIG GET. \
-             Supports glob-style patterns (e.g. \"maxmemory\", \"*memory*\", \"*\").",
+            "Get configuration parameter values (CONFIG GET). \
+             Supports glob-style patterns.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ConfigGetInput>(
@@ -416,10 +413,7 @@ pub struct MemoryStatsInput {
 /// Build the memory_stats tool
 pub fn memory_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_memory_stats")
-        .description(
-            "Get detailed memory allocator statistics using MEMORY STATS. \
-             Shows memory usage breakdown by category.",
-        )
+        .description("Get memory usage breakdown by category (MEMORY STATS).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, MemoryStatsInput>(
             state,
@@ -462,9 +456,8 @@ pub struct LatencyHistoryInput {
 pub fn latency_history(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_latency_history")
         .description(
-            "Get latency history for a specific event using LATENCY HISTORY. \
-             Returns timestamp and latency pairs. Events include \"command\", \
-             \"fast-command\", etc. May return empty if latency monitoring is not enabled \
+            "Get latency history for a specific event (LATENCY HISTORY). \
+             May return empty if latency monitoring is not enabled \
              (CONFIG SET latency-monitor-threshold <ms>).",
         )
         .read_only_safe()
@@ -532,7 +525,7 @@ pub struct AclListInput {
 /// Build the acl_list tool
 pub fn acl_list(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_acl_list")
-        .description("List all ACL rules configured on the Redis server using ACL LIST")
+        .description("List all ACL rules (ACL LIST).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, AclListInput>(
             state,
@@ -580,7 +573,7 @@ pub struct AclWhoamiInput {
 /// Build the acl_whoami tool
 pub fn acl_whoami(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_acl_whoami")
-        .description("Get the username of the current authenticated connection using ACL WHOAMI")
+        .description("Get the current authenticated username (ACL WHOAMI).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, AclWhoamiInput>(
             state,
@@ -620,7 +613,7 @@ pub struct ModuleListInput {
 /// Build the module_list tool
 pub fn module_list(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_module_list")
-        .description("List loaded Redis modules with their names and versions using MODULE LIST")
+        .description("List loaded modules with names and versions (MODULE LIST).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ModuleListInput>(
             state,
@@ -675,8 +668,8 @@ pub struct ConfigSetInput {
 pub fn config_set(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_config_set")
         .description(
-            "Set a Redis configuration parameter at runtime using CONFIG SET. \
-             Changes may not persist across restarts unless CONFIG REWRITE is called.",
+            "Set a configuration parameter at runtime (CONFIG SET). \
+             Changes may not persist unless CONFIG REWRITE is called.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ConfigSetInput>(
@@ -732,8 +725,8 @@ pub struct FlushdbInput {
 pub fn flushdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_flushdb")
         .description(
-            "DANGEROUS: Flush all keys from the current database. This permanently deletes \
-             all data. Use with extreme caution. Set async_flush=true for non-blocking operation.",
+            "DANGEROUS: Delete all keys in the current database. \
+             Set async_flush=true for non-blocking operation.",
         )
         .destructive()
         .extractor_handler_typed::<_, _, _, FlushdbInput>(

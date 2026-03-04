@@ -32,9 +32,7 @@ pub struct ListFixedSubscriptionsInput {
 /// Build the list_fixed_subscriptions tool
 pub fn list_fixed_subscriptions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_fixed_subscriptions")
-        .description(
-            "List all Redis Cloud Fixed/Essentials subscriptions in the current account.",
-        )
+        .description("List all Fixed/Essentials subscriptions.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListFixedSubscriptionsInput>(
             state,
@@ -70,9 +68,7 @@ pub struct GetFixedSubscriptionInput {
 /// Build the get_fixed_subscription tool
 pub fn get_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_subscription")
-        .description(
-            "Get detailed information about a specific Redis Cloud Fixed/Essentials subscription.",
-        )
+        .description("Get subscription details by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedSubscriptionInput>(
             state,
@@ -116,10 +112,7 @@ pub struct CreateFixedSubscriptionInput {
 /// Build the create_fixed_subscription tool
 pub fn create_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_subscription")
-        .description(
-            "Create a new Redis Cloud Fixed/Essentials subscription. \
-             Requires write permission.",
-        )
+        .description("Create a new Fixed/Essentials subscription.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateFixedSubscriptionInput>(
             state,
@@ -181,10 +174,7 @@ pub struct UpdateFixedSubscriptionInput {
 /// Build the update_fixed_subscription tool
 pub fn update_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_subscription")
-        .description(
-            "Update a Redis Cloud Fixed/Essentials subscription. \
-             Requires write permission.",
-        )
+        .description("Update a Fixed/Essentials subscription.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedSubscriptionInput>(
             state,
@@ -236,9 +226,8 @@ pub struct DeleteFixedSubscriptionInput {
 pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_subscription")
         .description(
-            "DANGEROUS: Permanently deletes a Fixed/Essentials subscription. \
-             All databases must be deleted first. This action cannot be undone. \
-             Requires write permission.",
+            "DANGEROUS: Delete a Fixed/Essentials subscription. \
+             All databases must be deleted first.",
         )
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteFixedSubscriptionInput>(
@@ -285,10 +274,7 @@ pub struct ListFixedPlansInput {
 /// Build the list_fixed_plans tool
 pub fn list_fixed_plans(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_fixed_plans")
-        .description(
-            "List available Redis Cloud Fixed/Essentials plans. \
-             Plans describe dataset size, cloud provider, region, and pricing.",
-        )
+        .description("List available Fixed/Essentials plans.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListFixedPlansInput>(
             state,
@@ -324,10 +310,7 @@ pub struct GetFixedPlansBySubscriptionInput {
 /// Build the get_fixed_plans_by_subscription tool
 pub fn get_fixed_plans_by_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_plans_by_subscription")
-        .description(
-            "Get compatible Fixed/Essentials plans for a specific subscription. \
-             Useful when upgrading or changing a subscription's plan.",
-        )
+        .description("Get compatible plans for a subscription.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedPlansBySubscriptionInput>(
             state,
@@ -363,10 +346,7 @@ pub struct GetFixedPlanInput {
 /// Build the get_fixed_plan tool
 pub fn get_fixed_plan(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_plan")
-        .description(
-            "Get detailed information about a specific Fixed/Essentials plan \
-             including pricing, capacity, and feature support.",
-        )
+        .description("Get plan details by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedPlanInput>(
             state,
@@ -401,9 +381,7 @@ pub struct GetFixedRedisVersionsInput {
 /// Build the get_fixed_redis_versions tool
 pub fn get_fixed_redis_versions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_redis_versions")
-        .description(
-            "Get available Redis database versions for a specific Fixed/Essentials subscription.",
-        )
+        .description("Get available Redis versions for a subscription.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedRedisVersionsInput>(
             state,
@@ -449,9 +427,7 @@ pub struct ListFixedDatabasesInput {
 /// Build the list_fixed_databases tool
 pub fn list_fixed_databases(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_fixed_databases")
-        .description(
-            "List all databases in a Redis Cloud Fixed/Essentials subscription.",
-        )
+        .description("List databases in a subscription.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListFixedDatabasesInput>(
             state,
@@ -489,10 +465,7 @@ pub struct GetFixedDatabaseInput {
 /// Build the get_fixed_database tool
 pub fn get_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database")
-        .description(
-            "Get detailed information about a specific database in a \
-             Redis Cloud Fixed/Essentials subscription.",
-        )
+        .description("Get database details by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseInput>(
             state,
@@ -563,10 +536,7 @@ pub struct CreateFixedDatabaseInput {
 /// Build the create_fixed_database tool
 pub fn create_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_database")
-        .description(
-            "Create a new database in a Redis Cloud Fixed/Essentials subscription. \
-             Requires write permission.",
-        )
+        .description("Create a database in a Fixed/Essentials subscription.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateFixedDatabaseInput>(
             state,
@@ -663,10 +633,7 @@ pub struct UpdateFixedDatabaseInput {
 /// Build the update_fixed_database tool
 pub fn update_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_database")
-        .description(
-            "Update a database in a Redis Cloud Fixed/Essentials subscription. \
-             Requires write permission.",
-        )
+        .description("Update a database in a Fixed/Essentials subscription.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseInput>(
             state,
@@ -738,10 +705,7 @@ pub struct DeleteFixedDatabaseInput {
 /// Build the delete_fixed_database tool
 pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_database")
-        .description(
-            "DANGEROUS: Permanently deletes a Fixed/Essentials database and all its data. \
-             This action cannot be undone. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a Fixed/Essentials database and all its data.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseInput>(
             state,
@@ -789,7 +753,7 @@ pub struct GetFixedDatabaseBackupStatusInput {
 /// Build the get_fixed_database_backup_status tool
 pub fn get_fixed_database_backup_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_backup_status")
-        .description("Get the latest backup status for a Fixed/Essentials database.")
+        .description("Get latest backup status for a database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseBackupStatusInput>(
             state,
@@ -830,10 +794,7 @@ pub struct BackupFixedDatabaseInput {
 /// Build the backup_fixed_database tool
 pub fn backup_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("backup_fixed_database")
-        .description(
-            "Trigger a manual backup of a Fixed/Essentials database. \
-             Requires write permission.",
-        )
+        .description("Trigger a manual backup of a database.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, BackupFixedDatabaseInput>(
             state,
@@ -884,7 +845,7 @@ pub struct GetFixedDatabaseImportStatusInput {
 /// Build the get_fixed_database_import_status tool
 pub fn get_fixed_database_import_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_import_status")
-        .description("Get the latest import status for a Fixed/Essentials database.")
+        .description("Get latest import status for a database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseImportStatusInput>(
             state,
@@ -927,8 +888,8 @@ pub struct ImportFixedDatabaseInput {
 pub fn import_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("import_fixed_database")
         .description(
-            "Import data into a Fixed/Essentials database from an external source. \
-             WARNING: This will overwrite existing data. Requires write permission.",
+            "Import data into a database from an external source. \
+             WARNING: This will overwrite existing data.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ImportFixedDatabaseInput>(
@@ -981,10 +942,7 @@ pub struct GetFixedDatabaseSlowLogInput {
 /// Build the get_fixed_database_slow_log tool
 pub fn get_fixed_database_slow_log(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_slow_log")
-        .description(
-            "Get slow log entries for a Fixed/Essentials database. \
-             Shows slow queries for debugging performance issues.",
-        )
+        .description("Get slow log entries for a database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseSlowLogInput>(
             state,
@@ -1026,7 +984,7 @@ pub struct GetFixedDatabaseTagsInput {
 /// Build the get_fixed_database_tags tool
 pub fn get_fixed_database_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_tags")
-        .description("Get tags attached to a Fixed/Essentials database.")
+        .description("Get tags for a database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseTagsInput>(
             state,
@@ -1068,10 +1026,7 @@ pub struct CreateFixedDatabaseTagInput {
 /// Build the create_fixed_database_tag tool
 pub fn create_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_database_tag")
-        .description(
-            "Create a tag on a Fixed/Essentials database. \
-             Requires write permission.",
-        )
+        .description("Create a tag on a database.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateFixedDatabaseTagInput>(
             state,
@@ -1127,10 +1082,7 @@ pub struct UpdateFixedDatabaseTagInput {
 /// Build the update_fixed_database_tag tool
 pub fn update_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_database_tag")
-        .description(
-            "Update a tag value on a Fixed/Essentials database. \
-             Requires write permission.",
-        )
+        .description("Update a tag value on a database.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseTagInput>(
             state,
@@ -1189,10 +1141,7 @@ pub struct DeleteFixedDatabaseTagInput {
 /// Build the delete_fixed_database_tag tool
 pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_database_tag")
-        .description(
-            "DANGEROUS: Permanently deletes a tag from a Fixed/Essentials database. \
-             This action cannot be undone. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a tag from a database.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseTagInput>(
             state,
@@ -1247,10 +1196,7 @@ pub struct UpdateFixedDatabaseTagsInput {
 /// Build the update_fixed_database_tags tool
 pub fn update_fixed_database_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_database_tags")
-        .description(
-            "Update all tags on a Fixed/Essentials database (replaces existing tags). \
-             Requires write permission.",
-        )
+        .description("Update all tags on a database (replaces existing tags).")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseTagsInput>(
             state,
@@ -1315,9 +1261,7 @@ pub struct GetFixedDatabaseUpgradeVersionsInput {
 /// Build the get_fixed_database_upgrade_versions tool
 pub fn get_fixed_database_upgrade_versions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_upgrade_versions")
-        .description(
-            "Get available target Redis versions that a Fixed/Essentials database can be upgraded to.",
-        )
+        .description("Get available upgrade target Redis versions for a database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeVersionsInput>(
             state,
@@ -1355,7 +1299,7 @@ pub struct GetFixedDatabaseUpgradeStatusInput {
 /// Build the get_fixed_database_upgrade_status tool
 pub fn get_fixed_database_upgrade_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_upgrade_status")
-        .description("Get the latest Redis version upgrade status for a Fixed/Essentials database.")
+        .description("Get latest Redis version upgrade status for a database.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeStatusInput>(
             state,
@@ -1395,10 +1339,7 @@ pub struct UpgradeFixedDatabaseRedisVersionInput {
 /// Build the upgrade_fixed_database_redis_version tool
 pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("upgrade_fixed_database_redis_version")
-        .description(
-            "Upgrade the Redis version of a Fixed/Essentials database. \
-             Requires write permission.",
-        )
+        .description("Upgrade the Redis version of a database.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpgradeFixedDatabaseRedisVersionInput>(
             state,

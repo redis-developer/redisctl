@@ -25,9 +25,7 @@ pub struct GetClusterInput {
 /// Build the get_cluster tool
 pub fn get_cluster(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_cluster")
-        .description(
-            "Get Redis Enterprise cluster information including name, version, and configuration",
-        )
+        .description("Get cluster information including name, version, and configuration")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterInput>(
             state,
@@ -64,10 +62,7 @@ pub struct GetLicenseInput {
 /// Build the get_license tool
 pub fn get_license(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_license")
-        .description(
-            "Get Redis Enterprise cluster license information including type, expiration date, \
-             cluster name, owner, and enabled features",
-        )
+        .description("Get license information including type, expiration, and enabled features")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetLicenseInput>(
             state,
@@ -98,8 +93,7 @@ pub struct GetLicenseUsageInput {
 pub fn get_license_usage(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_license_usage")
         .description(
-            "Get Redis Enterprise cluster license utilization statistics including shards, \
-             nodes, and RAM usage against license limits",
+            "Get license utilization statistics including shards, nodes, and RAM usage against limits",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetLicenseUsageInput>(
@@ -140,10 +134,7 @@ pub struct UpdateLicenseInput {
 /// Build the update_license tool
 pub fn update_license(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_license")
-        .description(
-            "Update the Redis Enterprise cluster license with a new license key. \
-             This applies a new license to the cluster. Requires write permission.",
-        )
+        .description("Apply a new license key to the cluster.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateLicenseInput>(
             state,
@@ -188,11 +179,7 @@ pub struct ValidateLicenseInput {
 /// Build the validate_license tool
 pub fn validate_license(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("validate_enterprise_license")
-        .description(
-            "Validate a license key before applying it to the Redis Enterprise cluster. \
-             Returns license information if valid, or an error if invalid. \
-             This is a dry-run that does not modify the cluster.",
-        )
+        .description("Validate a license key without applying it (dry-run).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ValidateLicenseInput>(
             state,
@@ -232,11 +219,7 @@ pub struct UpdateClusterInput {
 /// Build the update_cluster tool
 pub fn update_cluster(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_cluster")
-        .description(
-            "Update Redis Enterprise cluster configuration settings. \
-             Pass a JSON object with the fields to update (e.g., name, email_alerts, rack_aware). \
-             Requires write permission.",
-        )
+        .description("Update cluster configuration settings. Pass fields to update as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateClusterInput>(
             state,
@@ -277,8 +260,8 @@ pub struct GetClusterPolicyInput {
 pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_cluster_policy")
         .description(
-            "Get Redis Enterprise cluster policy settings including default shards placement, \
-             rack awareness, default Redis version, and other cluster-wide defaults.",
+            "Get cluster policy settings including default shards placement, \
+             rack awareness, and default Redis version.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterPolicyInput>(
@@ -317,10 +300,7 @@ pub struct UpdateClusterPolicyInput {
 pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_cluster_policy")
         .description(
-            "Update Redis Enterprise cluster policy settings. \
-             Common settings: default_shards_placement (dense/sparse), rack_aware, \
-             default_provisioned_redis_version, persistent_node_removal. \
-             Requires write permission.",
+            "Update cluster policy settings. Pass fields to update as JSON.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateClusterPolicyInput>(
@@ -367,9 +347,8 @@ pub struct EnableMaintenanceModeInput {
 pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("enable_enterprise_maintenance_mode")
         .description(
-            "Enable maintenance mode on the Redis Enterprise cluster. \
-             When enabled, cluster configuration changes are blocked, allowing safe \
-             maintenance operations like upgrades. Requires write permission.",
+            "Enable maintenance mode. Configuration changes will be blocked \
+             until maintenance mode is disabled.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, EnableMaintenanceModeInput>(
@@ -415,11 +394,7 @@ pub struct DisableMaintenanceModeInput {
 /// Build the disable_maintenance_mode tool
 pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("disable_enterprise_maintenance_mode")
-        .description(
-            "Disable maintenance mode on the Redis Enterprise cluster. \
-             This re-enables cluster configuration changes after maintenance is complete. \
-             Requires write permission.",
-        )
+        .description("Disable maintenance mode and re-enable configuration changes.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, DisableMaintenanceModeInput>(
             state,
@@ -468,10 +443,7 @@ pub struct GetClusterCertificatesInput {
 /// Build the get_cluster_certificates tool
 pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_cluster_certificates")
-        .description(
-            "Get all certificates configured on the Redis Enterprise cluster including \
-             proxy certificates, syncer certificates, and API certificates.",
-        )
+        .description("Get all configured certificates (proxy, syncer, API).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterCertificatesInput>(
             state,
@@ -505,11 +477,7 @@ pub struct RotateClusterCertificatesInput {
 /// Build the rotate_cluster_certificates tool
 pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("rotate_enterprise_cluster_certificates")
-        .description(
-            "Rotate all certificates on the Redis Enterprise cluster. \
-             This generates new certificates and replaces the existing ones. \
-             Requires write permission.",
-        )
+        .description("Rotate all certificates, generating new ones to replace existing.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, RotateClusterCertificatesInput>(
             state,
@@ -560,9 +528,8 @@ pub struct UpdateClusterCertificatesInput {
 pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_cluster_certificates")
         .description(
-            "Update a specific certificate on the Redis Enterprise cluster. \
-             Provide the certificate name (proxy, syncer, api), the PEM-encoded certificate, \
-             and the PEM-encoded private key. Requires write permission.",
+            "Update a specific certificate. Provide the certificate name (proxy, syncer, api), \
+             PEM-encoded certificate, and PEM-encoded private key.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateClusterCertificatesInput>(
@@ -617,7 +584,7 @@ pub struct ListNodesInput {
 /// Build the list_nodes tool
 pub fn list_nodes(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_nodes")
-        .description("List all nodes in the Redis Enterprise cluster")
+        .description("List all nodes.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListNodesInput>(
             state,
@@ -649,9 +616,7 @@ pub struct GetNodeInput {
 /// Build the get_node tool
 pub fn get_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_node")
-        .description(
-            "Get detailed information about a specific node in the Redis Enterprise cluster",
-        )
+        .description("Get detailed information about a specific node by UID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetNodeInput>(
             state,
@@ -696,8 +661,8 @@ pub struct GetNodeStatsInput {
 pub fn get_node_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_node_stats")
         .description(
-            "Get statistics for a specific node. By default returns the latest stats. \
-             Optionally specify interval and time range for historical data.",
+            "Get statistics for a specific node. Optionally specify interval and time range \
+             for historical data.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetNodeStatsInput>(
@@ -755,9 +720,7 @@ pub struct NodeActionInput {
 pub fn enable_node_maintenance(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("enable_enterprise_node_maintenance")
         .description(
-            "Enable maintenance mode on a specific node in the Redis Enterprise cluster. \
-             Shards will be migrated off the node before maintenance begins. \
-             Requires write permission.",
+            "Enable maintenance mode on a specific node. Shards will be migrated off first.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
@@ -796,9 +759,7 @@ pub fn enable_node_maintenance(state: Arc<AppState>) -> Tool {
 pub fn disable_node_maintenance(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("disable_enterprise_node_maintenance")
         .description(
-            "Disable maintenance mode on a specific node in the Redis Enterprise cluster. \
-             The node will rejoin the cluster and accept shards again. \
-             Requires write permission.",
+            "Disable maintenance mode on a specific node. The node will accept shards again.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
@@ -836,11 +797,7 @@ pub fn disable_node_maintenance(state: Arc<AppState>) -> Tool {
 /// Build the rebalance_node tool
 pub fn rebalance_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("rebalance_enterprise_node")
-        .description(
-            "Rebalance shards on a specific node in the Redis Enterprise cluster. \
-             Redistributes shards across nodes for optimal performance. \
-             Requires write permission.",
-        )
+        .description("Rebalance shards on a specific node for optimal distribution.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
             state,
@@ -877,11 +834,7 @@ pub fn rebalance_node(state: Arc<AppState>) -> Tool {
 /// Build the drain_node tool
 pub fn drain_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("drain_enterprise_node")
-        .description(
-            "Drain all shards from a specific node in the Redis Enterprise cluster. \
-             All shards will be migrated to other available nodes. \
-             Requires write permission.",
-        )
+        .description("Drain all shards from a specific node, migrating them to other nodes.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, NodeActionInput>(
             state,
@@ -934,10 +887,7 @@ pub struct UpdateNodeInput {
 /// Build the update_enterprise_node tool
 pub fn update_enterprise_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_node")
-        .description(
-            "Update a node's configuration in the Redis Enterprise cluster. \
-             Pass the fields to update as JSON.",
-        )
+        .description("Update a node's configuration. Pass fields to update as JSON.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateNodeInput>(
             state,
@@ -979,10 +929,7 @@ pub struct RemoveNodeInput {
 /// Build the remove_enterprise_node tool
 pub fn remove_enterprise_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("remove_enterprise_node")
-        .description(
-            "DANGEROUS: Permanently removes a node from the Redis Enterprise cluster. \
-             All shards must be drained first. This action cannot be undone.",
-        )
+        .description("DANGEROUS: Remove a node. All shards must be drained first.")
         .destructive()
         .extractor_handler_typed::<_, _, _, RemoveNodeInput>(
             state,
@@ -1029,9 +976,7 @@ pub struct GetClusterServicesInput {
 /// Build the get_enterprise_cluster_services tool
 pub fn get_enterprise_cluster_services(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_cluster_services")
-        .description(
-            "Get the list of services running on the Redis Enterprise cluster.",
-        )
+        .description("Get the list of cluster services.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterServicesInput>(
             state,
@@ -1075,8 +1020,8 @@ pub struct GetClusterStatsInput {
 pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_cluster_stats")
         .description(
-            "Get statistics for the Redis Enterprise cluster. By default returns the latest \
-             stats. Optionally specify interval and time range for historical data.",
+            "Get cluster-level statistics. Optionally specify interval and time range \
+             for historical data.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetClusterStatsInput>(

@@ -77,10 +77,7 @@ fn default_limit() -> usize {
 /// Build the keys tool
 pub fn keys(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_keys")
-        .description(
-            "List keys matching a pattern using SCAN (production-safe, non-blocking). \
-             Returns up to 'limit' keys.",
-        )
+        .description("List keys matching a pattern using SCAN (production-safe, non-blocking).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, KeysInput>(
             state,
@@ -153,7 +150,7 @@ pub struct GetInput {
 /// Build the get tool
 pub fn get(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_get")
-        .description("Get the value of a key from Redis")
+        .description("Get the value of a key.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetInput>(
             state,
@@ -201,7 +198,7 @@ pub struct TypeInput {
 /// Build the type tool
 pub fn key_type(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_type")
-        .description("Get the type of a key (string, list, set, zset, hash, stream)")
+        .description("Get the data type of a key.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, TypeInput>(
             state,
@@ -243,15 +240,14 @@ pub struct TtlInput {
 /// Build the ttl tool
 pub fn ttl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_ttl")
-        .description("Get the time-to-live (TTL) of a key in seconds. Returns -1 if no expiry, -2 if key doesn't exist.")
+        .description("Get the TTL of a key in seconds (-1 = no expiry, -2 = missing).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, TtlInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
 
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
 
                 let mut conn = client
                     .get_multiplexed_async_connection()
@@ -292,7 +288,7 @@ pub struct ExistsInput {
 /// Build the exists tool
 pub fn exists(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_exists")
-        .description("Check if one or more keys exist. Returns the count of keys that exist.")
+        .description("Check if one or more keys exist.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ExistsInput>(
             state,
@@ -342,7 +338,7 @@ pub struct MemoryUsageInput {
 /// Build the memory_usage tool
 pub fn memory_usage(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_memory_usage")
-        .description("Get the memory usage of a key in bytes")
+        .description("Get memory usage of a key in bytes (MEMORY USAGE).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, MemoryUsageInput>(
             state,
@@ -399,8 +395,7 @@ pub struct ScanInput {
 pub fn scan(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_scan")
         .description(
-            "Scan keys with optional type filter. More efficient than redis_keys when filtering \
-             by type (string, list, set, zset, hash, stream).",
+            "Scan keys with optional type filter. Prefer over redis_keys when filtering by type.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ScanInput>(
@@ -490,8 +485,7 @@ pub struct ObjectEncodingInput {
 pub fn object_encoding(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_encoding")
         .description(
-            "Get the internal encoding of a key (e.g., embstr, int, raw, quicklist, listpack, \
-             hashtable, intset, skiplist). Useful for understanding memory usage patterns.",
+            "Get the internal encoding of a key. Useful for understanding memory usage patterns.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectEncodingInput>(
@@ -544,8 +538,8 @@ pub struct ObjectFreqInput {
 pub fn object_freq(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_freq")
         .description(
-            "Get the LFU access frequency counter for a key using OBJECT FREQ. \
-             Only works when maxmemory-policy is set to allkeys-lfu or volatile-lfu.",
+            "Get the LFU access frequency counter for a key. \
+             Only works with allkeys-lfu or volatile-lfu eviction policy.",
         )
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectFreqInput>(
@@ -592,10 +586,7 @@ pub struct ObjectIdletimeInput {
 /// Build the object_idletime tool
 pub fn object_idletime(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_idletime")
-        .description(
-            "Get the idle time of a key in seconds using OBJECT IDLETIME. \
-             Shows how long since the key was last accessed.",
-        )
+        .description("Get idle time of a key in seconds since last access.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectIdletimeInput>(
             state,
@@ -641,7 +632,7 @@ pub struct ObjectHelpInput {
 /// Build the object_help tool
 pub fn object_help(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_help")
-        .description("Get available OBJECT subcommands using OBJECT HELP")
+        .description("Get available OBJECT subcommands.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ObjectHelpInput>(
             state,
@@ -703,9 +694,7 @@ pub struct SetInput {
 pub fn set(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_set")
         .description(
-            "Set a key to a string value with optional expiry and conditional flags. \
-             Use EX for seconds, PX for milliseconds expiry. Use NX to only set if \
-             the key does not exist, XX to only set if it exists.",
+            "Set a key to a string value with optional expiry and conditional flags (NX/XX).",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, SetInput>(
@@ -783,10 +772,7 @@ pub struct DelInput {
 /// Build the del tool
 pub fn del(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_del")
-        .description(
-            "DANGEROUS: Permanently deletes one or more keys and their data. \
-             This action cannot be undone. Returns the number of keys removed.",
-        )
+        .description("DANGEROUS: Delete one or more keys.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DelInput>(
             state,
@@ -844,10 +830,7 @@ pub struct ExpireInput {
 /// Build the expire tool
 pub fn expire(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_expire")
-        .description(
-            "Set a timeout on a key in seconds. The key will be automatically deleted \
-             after the timeout expires. Returns whether the timeout was set.",
-        )
+        .description("Set a timeout on a key in seconds. Key auto-deletes after expiry.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, ExpireInput>(
             state,
@@ -908,10 +891,7 @@ pub struct RenameInput {
 /// Build the rename tool
 pub fn rename(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_rename")
-        .description(
-            "Rename a key. Returns an error if the source key does not exist. \
-             If the destination key already exists, it is overwritten.",
-        )
+        .description("Rename a key. Overwrites the destination key if it exists.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, RenameInput>(
             state,

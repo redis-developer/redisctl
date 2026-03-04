@@ -92,10 +92,8 @@ pub fn redis_command(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_command")
         .description(
             "DANGEROUS: Execute an arbitrary Redis command. \
-             Use this escape hatch to run any Redis command not covered by a dedicated tool. \
-             Requires full tier. Certain dangerous commands (FLUSHALL, SHUTDOWN, DEBUG, etc.) \
-             and dangerous subcommands (CONFIG SET, ACL DELUSER, CLUSTER RESET, MODULE LOAD, etc.) \
-             are blocked.",
+             Escape hatch for commands not covered by dedicated tools. \
+             Certain dangerous commands and subcommands are blocked.",
         )
         .destructive()
         .extractor_handler_typed::<_, _, _, RedisCommandInput>(

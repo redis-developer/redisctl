@@ -50,7 +50,7 @@ struct ProfileSummary {
 /// Build the profile_list tool
 pub fn list_profiles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_list")
-        .description("List all configured redisctl profiles with their types and default status")
+        .description("List all configured profiles.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListProfilesInput>(
             state,
@@ -183,7 +183,7 @@ fn mask_credential(value: &str) -> String {
 /// Build the profile_show tool
 pub fn show_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_show")
-        .description("Show details of a specific profile. Credentials are masked for security.")
+        .description("Show details of a specific profile (credentials masked).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ShowProfileInput>(
             state,
@@ -292,7 +292,7 @@ pub struct ConfigPathInput {}
 /// Build the profile_path tool
 pub fn config_path(_state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_path")
-        .description("Show the path to the redisctl configuration file")
+        .description("Show the configuration file path.")
         .read_only_safe()
         .handler(|_input: ConfigPathInput| async move {
             let path = Config::config_path().tool_context("Failed to get config path")?;
@@ -320,7 +320,7 @@ pub struct ValidateConfigInput {
 /// Build the profile_validate tool
 pub fn validate_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_validate")
-        .description("Validate the redisctl configuration file and check for common issues. Set connect=true to also test actual API/database connectivity for each profile.")
+        .description("Validate configuration for structural issues. Set connect=true to test connectivity.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ValidateConfigInput>(
             state,
@@ -594,7 +594,7 @@ pub struct SetDefaultCloudInput {
 /// Build the profile_set_default_cloud tool
 pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_set_default_cloud")
-        .description("Set the default profile for Cloud commands. Requires write access.")
+        .description("Set the default profile for Cloud commands.")
         .idempotent()
         .non_destructive()
         .extractor_handler_typed::<_, _, _, SetDefaultCloudInput>(
@@ -645,7 +645,7 @@ pub struct SetDefaultEnterpriseInput {
 /// Build the profile_set_default_enterprise tool
 pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_set_default_enterprise")
-        .description("Set the default profile for Enterprise commands. Requires write access.")
+        .description("Set the default profile for Enterprise commands.")
         .idempotent()
         .non_destructive()
         .extractor_handler_typed::<_, _, _, SetDefaultEnterpriseInput>(
@@ -696,10 +696,7 @@ pub struct DeleteProfileInput {
 /// Build the profile_delete tool
 pub fn delete_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_delete")
-        .description(
-            "DANGEROUS: Permanently deletes a profile from the configuration. \
-             This action cannot be undone. Requires write access.",
-        )
+        .description("DANGEROUS: Delete a profile from the configuration.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteProfileInput>(
             state,
@@ -800,13 +797,9 @@ pub struct CreateProfileInput {
 pub fn create_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_create")
         .description(
-            "Create a new redisctl profile with credentials. Requires write access.\n\n\
-             Profile types and required fields:\n\
-             - cloud: api_key, api_secret (api_url optional, defaults to Redis Cloud API)\n\
-             - enterprise: url, username (password, insecure, ca_cert optional)\n\
-             - database: host (port defaults to 6379, tls defaults to true, db_username defaults to 'default')\n\n\
-             The profile is automatically set as default for its type if it's the first of that type, \
-             unless set_default is explicitly false.",
+            "Create a new profile with credentials.\n\n\
+             Types: cloud (api_key, api_secret), enterprise (url, username), \
+             database (host). Auto-sets as default if first of its type.",
         )
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateProfileInput>(

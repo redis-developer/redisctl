@@ -36,7 +36,7 @@ pub struct GetAccountInput {
 /// Build the get_account tool
 pub fn get_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_account")
-        .description("Get information about the current Redis Cloud account including name, ID, and settings.")
+        .description("Get current account information.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAccountInput>(
             state,
@@ -75,10 +75,7 @@ pub struct GetSystemLogsInput {
 /// Build the get_system_logs tool
 pub fn get_system_logs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_system_logs")
-        .description(
-            "Get system audit logs for the Redis Cloud account. Includes events like \
-             subscription changes, database modifications, and user actions.",
-        )
+        .description("Get system audit logs.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSystemLogsInput>(
             state,
@@ -117,10 +114,7 @@ pub struct GetSessionLogsInput {
 /// Build the get_session_logs tool
 pub fn get_session_logs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_session_logs")
-        .description(
-            "Get session activity logs for the Redis Cloud account. Includes user login/logout \
-             events and session information.",
-        )
+        .description("Get session activity logs.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetSessionLogsInput>(
             state,
@@ -157,9 +151,7 @@ pub struct GetRegionsInput {
 /// Build the get_regions tool
 pub fn get_regions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_regions")
-        .description(
-            "Get supported cloud regions for Redis Cloud. Optionally filter by provider (AWS, GCP, Azure).",
-        )
+        .description("Get supported cloud regions. Optionally filter by provider.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetRegionsInput>(
             state,
@@ -192,9 +184,7 @@ pub struct GetModulesInput {
 /// Build the get_modules tool
 pub fn get_modules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_modules")
-        .description(
-            "Get supported Redis database modules (e.g., Search, JSON, TimeSeries, Bloom).",
-        )
+        .description("Get supported database modules.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetModulesInput>(
             state,
@@ -231,9 +221,7 @@ pub struct ListAccountUsersInput {
 /// Build the list_account_users tool
 pub fn list_account_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_account_users")
-        .description(
-            "List all users in the Redis Cloud account (team members with console access).",
-        )
+        .description("List all account users (team members with console access).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAccountUsersInput>(
             state,
@@ -269,9 +257,7 @@ pub struct GetAccountUserInput {
 /// Build the get_account_user tool
 pub fn get_account_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_account_user")
-        .description(
-            "Get detailed information about a specific account user (team member) by ID.",
-        )
+        .description("Get an account user by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAccountUserInput>(
             state,
@@ -312,9 +298,7 @@ pub struct UpdateAccountUserInput {
 /// Build the update_account_user tool
 pub fn update_account_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_account_user")
-        .description(
-            "Update an account user's name or role. Returns a task state for the async operation.",
-        )
+        .description("Update an account user's name or role.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAccountUserInput>(
             state,
@@ -362,10 +346,7 @@ pub struct DeleteAccountUserInput {
 /// Build the delete_account_user tool
 pub fn delete_account_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_account_user")
-        .description(
-            "DANGEROUS: Permanently deletes an account user (team member). \
-             The user will lose all access to the account. This action cannot be undone.",
-        )
+        .description("DANGEROUS: Delete an account user. The user will lose all access.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAccountUserInput>(
             state,
@@ -409,7 +390,7 @@ pub struct ListAclUsersInput {
 /// Build the list_acl_users tool
 pub fn list_acl_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_acl_users")
-        .description("List all ACL users (database-level Redis users for authentication).")
+        .description("List all ACL users.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAclUsersInput>(
             state,
@@ -444,7 +425,7 @@ pub struct GetAclUserInput {
 /// Build the get_acl_user tool
 pub fn get_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_acl_user")
-        .description("Get detailed information about a specific ACL user by ID.")
+        .description("Get an ACL user by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetAclUserInput>(
             state,
@@ -477,7 +458,7 @@ pub struct ListAclRolesInput {
 /// Build the list_acl_roles tool
 pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_acl_roles")
-        .description("List all ACL roles (permission templates for database access).")
+        .description("List all ACL roles.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListAclRolesInput>(
             state,
@@ -510,7 +491,7 @@ pub struct ListRedisRulesInput {
 /// Build the list_redis_rules tool
 pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_redis_rules")
-        .description("List all Redis ACL rules (command permissions for Redis users).")
+        .description("List all Redis ACL rules.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListRedisRulesInput>(
             state,
@@ -554,10 +535,7 @@ pub struct CreateAclUserInput {
 /// Build the create_acl_user tool
 pub fn create_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_acl_user")
-        .description(
-            "Create a new ACL user with the assigned database access role. \
-             Requires write permission.",
-        )
+        .description("Create a new ACL user with a database access role.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAclUserInput>(
             state,
@@ -610,10 +588,7 @@ pub struct UpdateAclUserInput {
 /// Build the update_acl_user tool
 pub fn update_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_acl_user")
-        .description(
-            "Update an ACL user's role or password. \
-             Requires write permission.",
-        )
+        .description("Update an ACL user's role or password.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAclUserInput>(
             state,
@@ -660,10 +635,7 @@ pub struct DeleteAclUserInput {
 /// Build the delete_acl_user tool
 pub fn delete_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_acl_user")
-        .description(
-            "DANGEROUS: Permanently deletes an ACL user. Active sessions using this user \
-             will be terminated. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete an ACL user. Active sessions will be terminated.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAclUserInput>(
             state,
@@ -727,10 +699,7 @@ pub struct CreateAclRoleInput {
 /// Build the create_acl_role tool
 pub fn create_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_acl_role")
-        .description(
-            "Create a new ACL role with assigned Redis rules and database associations. \
-             Requires write permission.",
-        )
+        .description("Create a new ACL role with Redis rules and database associations.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateAclRoleInput>(
             state,
@@ -797,10 +766,7 @@ pub struct UpdateAclRoleInput {
 /// Build the update_acl_role tool
 pub fn update_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_acl_role")
-        .description(
-            "Update an ACL role's name or Redis rule assignments. \
-             Requires write permission.",
-        )
+        .description("Update an ACL role's name or Redis rule assignments.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateAclRoleInput>(
             state,
@@ -863,10 +829,7 @@ pub struct DeleteAclRoleInput {
 /// Build the delete_acl_role tool
 pub fn delete_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_acl_role")
-        .description(
-            "DANGEROUS: Permanently deletes an ACL role. Users assigned to this role \
-             will lose their permissions. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete an ACL role. Assigned users will lose their permissions.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteAclRoleInput>(
             state,
@@ -909,10 +872,7 @@ pub struct CreateRedisRuleInput {
 /// Build the create_redis_rule tool
 pub fn create_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_redis_rule")
-        .description(
-            "Create a new Redis ACL rule defining command permissions. \
-             Requires write permission.",
-        )
+        .description("Create a new Redis ACL rule defining command permissions.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateRedisRuleInput>(
             state,
@@ -963,10 +923,7 @@ pub struct UpdateRedisRuleInput {
 /// Build the update_redis_rule tool
 pub fn update_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_redis_rule")
-        .description(
-            "Update a Redis ACL rule's name or pattern. \
-             Requires write permission.",
-        )
+        .description("Update a Redis ACL rule's name or pattern.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateRedisRuleInput>(
             state,
@@ -1014,10 +971,7 @@ pub struct DeleteRedisRuleInput {
 /// Build the delete_redis_rule tool
 pub fn delete_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_redis_rule")
-        .description(
-            "DANGEROUS: Permanently deletes a Redis ACL rule. Roles using this rule \
-             will lose those permissions. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a Redis ACL rule. Roles using it will lose those permissions.")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteRedisRuleInput>(
             state,
@@ -1080,11 +1034,7 @@ pub struct GenerateCostReportInput {
 /// Build the generate_cost_report tool
 pub fn generate_cost_report(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("generate_cost_report")
-        .description(
-            "Generate a cost report in FOCUS format for the specified date range. \
-             Returns a task ID to track generation progress. \
-             Requires write permission.",
-        )
+        .description("Generate a FOCUS cost report for the specified date range.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, GenerateCostReportInput>(
             state,
@@ -1146,10 +1096,7 @@ pub struct DownloadCostReportInput {
 /// Build the download_cost_report tool
 pub fn download_cost_report(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("download_cost_report")
-        .description(
-            "Download a previously generated cost report by ID. \
-             Returns the report content (CSV or JSON).",
-        )
+        .description("Download a previously generated cost report by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, DownloadCostReportInput>(
             state,
@@ -1190,7 +1137,7 @@ pub struct ListPaymentMethodsInput {
 /// Build the list_payment_methods tool
 pub fn list_payment_methods(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_payment_methods")
-        .description("List all payment methods for the Redis Cloud account.")
+        .description("List all payment methods.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListPaymentMethodsInput>(
             state,
@@ -1228,7 +1175,7 @@ pub struct ListTasksInput {
 /// Build the list_tasks tool
 pub fn list_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_tasks")
-        .description("List all async tasks in the Redis Cloud account. Tasks track long-running operations like database creation.")
+        .description("List all async tasks.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListTasksInput>(
             state,
@@ -1263,7 +1210,7 @@ pub struct GetTaskInput {
 /// Build the get_task tool
 pub fn get_task(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_task")
-        .description("Get status and details of a specific async task by ID.")
+        .description("Get task status by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetTaskInput>(
             state,
@@ -1312,12 +1259,7 @@ fn default_task_interval() -> u64 {
 /// Build the wait_for_cloud_task tool
 pub fn wait_for_cloud_task(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("wait_for_cloud_task")
-        .description(
-            "Wait for an async Cloud task to complete by polling until it reaches a terminal \
-             state (completed, failed, error, cancelled). Returns the final task status. \
-             Useful for orchestrating multi-step workflows \
-             (e.g., create subscription -> wait -> create database).",
-        )
+        .description("Poll an async task until it reaches a terminal state. Useful for multi-step workflows.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, WaitForCloudTaskInput>(
             state,
@@ -1389,10 +1331,7 @@ pub struct ListCloudAccountsInput {
 /// Build the list_cloud_accounts tool
 pub fn list_cloud_accounts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_cloud_accounts")
-        .description(
-            "List all configured cloud provider accounts (BYOC). Returns cloud accounts \
-             for AWS, GCP, or Azure that are integrated with Redis Cloud.",
-        )
+        .description("List all cloud provider accounts (BYOC).")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, ListCloudAccountsInput>(
             state,
@@ -1429,10 +1368,7 @@ pub struct GetCloudAccountInput {
 /// Build the get_cloud_account tool
 pub fn get_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_cloud_account")
-        .description(
-            "Get details for a specific cloud provider account (BYOC) by ID, \
-             including provider type, access credentials, and status.",
-        )
+        .description("Get a cloud provider account (BYOC) by ID.")
         .read_only_safe()
         .extractor_handler_typed::<_, _, _, GetCloudAccountInput>(
             state,
@@ -1481,11 +1417,7 @@ pub struct CreateCloudAccountInput {
 /// Build the create_cloud_account tool
 pub fn create_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_cloud_account")
-        .description(
-            "Create a new cloud provider account (BYOC) for AWS, GCP, or Azure. \
-             Registers cloud credentials with Redis Cloud for resource provisioning. \
-             Requires write permission.",
-        )
+        .description("Create a new cloud provider account (BYOC).")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, CreateCloudAccountInput>(
             state,
@@ -1551,11 +1483,7 @@ pub struct UpdateCloudAccountInput {
 /// Build the update_cloud_account tool
 pub fn update_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_cloud_account")
-        .description(
-            "Update an existing cloud provider account (BYOC) configuration, \
-             including credentials and console access details. \
-             Requires write permission.",
-        )
+        .description("Update a cloud provider account (BYOC) configuration.")
         .non_destructive()
         .extractor_handler_typed::<_, _, _, UpdateCloudAccountInput>(
             state,
@@ -1607,10 +1535,7 @@ pub struct DeleteCloudAccountInput {
 /// Build the delete_cloud_account tool
 pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_cloud_account")
-        .description(
-            "DANGEROUS: Permanently deletes a cloud provider account (BYOC). This removes \
-             the cloud account integration and cannot be undone. Requires write permission.",
-        )
+        .description("DANGEROUS: Delete a cloud provider account (BYOC).")
         .destructive()
         .extractor_handler_typed::<_, _, _, DeleteCloudAccountInput>(
             state,
