@@ -3,6 +3,7 @@
 mod account;
 mod fixed;
 mod networking;
+mod raw;
 mod subscriptions;
 
 #[allow(unused_imports)]
@@ -11,6 +12,8 @@ pub use account::*;
 pub use fixed::*;
 #[allow(unused_imports)]
 pub use networking::*;
+#[allow(unused_imports)]
+pub use raw::*;
 #[allow(unused_imports)]
 pub use subscriptions::*;
 
@@ -173,6 +176,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "get_fixed_database_upgrade_versions",
     "get_fixed_database_upgrade_status",
     "upgrade_fixed_database_redis_version",
+    // raw
+    "cloud_raw_api",
 ];
 
 /// Get all Cloud tool names as owned strings.
@@ -186,5 +191,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(subscriptions::router(state.clone()))
         .merge(account::router(state.clone()))
         .merge(networking::router(state.clone()))
-        .merge(fixed::router(state))
+        .merge(fixed::router(state.clone()))
+        .merge(raw::router(state))
 }

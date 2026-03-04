@@ -847,6 +847,12 @@ mod tests {
         }
 
         #[test]
+        fn cloud_raw_api_is_destructive() {
+            let state = test_state();
+            assert_destructive(&tools::cloud::cloud_raw_api(state.clone()), "cloud_raw_api");
+        }
+
+        #[test]
         fn cloud_destructive_tools() {
             let state = test_state();
             assert_destructive(
@@ -941,6 +947,15 @@ mod tests {
         }
 
         #[test]
+        fn enterprise_raw_api_is_destructive() {
+            let state = test_state();
+            assert_destructive(
+                &tools::enterprise::enterprise_raw_api(state.clone()),
+                "enterprise_raw_api",
+            );
+        }
+
+        #[test]
         fn enterprise_destructive_tools() {
             let state = test_state();
             assert_destructive(
@@ -998,6 +1013,12 @@ mod tests {
             assert_non_destructive_write(&tools::redis::hset(state.clone()), "redis_hset");
             assert_non_destructive_write(&tools::redis::lpush(state.clone()), "redis_lpush");
             assert_non_destructive_write(&tools::redis::xadd(state.clone()), "redis_xadd");
+        }
+
+        #[test]
+        fn redis_command_is_destructive() {
+            let state = test_state();
+            assert_destructive(&tools::redis::redis_command(state.clone()), "redis_command");
         }
 
         #[test]

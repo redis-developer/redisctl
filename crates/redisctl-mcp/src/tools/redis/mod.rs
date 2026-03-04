@@ -2,6 +2,7 @@
 
 mod diagnostics;
 mod keys;
+mod raw;
 mod server;
 mod structures;
 
@@ -9,6 +10,8 @@ mod structures;
 pub use diagnostics::*;
 #[allow(unused_imports)]
 pub use keys::*;
+#[allow(unused_imports)]
+pub use raw::*;
 #[allow(unused_imports)]
 pub use server::*;
 #[allow(unused_imports)]
@@ -80,6 +83,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "redis_zrem",
     "redis_xadd",
     "redis_xtrim",
+    // raw
+    "redis_command",
 ];
 
 /// Get all Database tool names as owned strings.
@@ -145,5 +150,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(server::router(state.clone()))
         .merge(keys::router(state.clone()))
         .merge(structures::router(state.clone()))
-        .merge(diagnostics::router(state))
+        .merge(diagnostics::router(state.clone()))
+        .merge(raw::router(state))
 }

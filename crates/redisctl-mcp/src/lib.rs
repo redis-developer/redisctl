@@ -217,6 +217,8 @@ mod tests {
         let _ = tools::cloud::delete_subscription(state.clone());
         let _ = tools::cloud::flush_database(state.clone());
         let _ = tools::cloud::create_subscription(state.clone());
+        // Raw
+        let _ = tools::cloud::cloud_raw_api(state.clone());
     }
 
     #[cfg(feature = "enterprise")]
@@ -277,6 +279,32 @@ mod tests {
         let _ = tools::enterprise::update_enterprise_database(state.clone());
         let _ = tools::enterprise::delete_enterprise_database(state.clone());
         let _ = tools::enterprise::flush_enterprise_database(state.clone());
+        // Raw
+        let _ = tools::enterprise::enterprise_raw_api(state.clone());
+    }
+
+    #[cfg(feature = "database")]
+    #[test]
+    fn test_database_tools_build() {
+        let state = Arc::new(
+            AppState::new(
+                CredentialSource::Profiles(vec![]),
+                AppState::test_policy(),
+                Some("redis://localhost:6379".to_string()),
+            )
+            .unwrap(),
+        );
+
+        // Verify database tools build successfully
+        let _ = tools::redis::ping(state.clone());
+        let _ = tools::redis::info(state.clone());
+        let _ = tools::redis::keys(state.clone());
+        let _ = tools::redis::get(state.clone());
+        let _ = tools::redis::set(state.clone());
+        let _ = tools::redis::del(state.clone());
+        let _ = tools::redis::flushdb(state.clone());
+        // Raw
+        let _ = tools::redis::redis_command(state.clone());
     }
 
     #[test]
