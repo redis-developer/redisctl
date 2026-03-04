@@ -159,6 +159,9 @@ pub fn redis_command(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &["redis_command"];
+
 /// Build a sub-router containing the raw Redis command tool.
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new().tool(redis_command(state))

@@ -163,6 +163,14 @@ pub fn update_proxy(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_enterprise_proxies",
+    "get_enterprise_proxy",
+    "get_enterprise_proxy_stats",
+    "update_enterprise_proxy",
+];
+
 /// Build the proxy sub-router
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

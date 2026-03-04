@@ -10,6 +10,14 @@ use tower_mcp::{CallToolResult, McpRouter, ResultExt, Tool, ToolBuilder};
 
 use crate::state::AppState;
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "redis_health_check",
+    "redis_key_summary",
+    "redis_hotkeys",
+    "redis_connection_summary",
+];
+
 /// Build a sub-router containing all diagnostic Redis tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

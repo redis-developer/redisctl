@@ -713,6 +713,26 @@ pub fn create_debug_info(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_alerts",
+    "acknowledge_enterprise_alert",
+    "list_logs",
+    "get_all_nodes_stats",
+    "get_all_databases_stats",
+    "get_shard_stats",
+    "get_all_shards_stats",
+    "list_shards",
+    "get_shard",
+    "list_shards_by_database",
+    "list_shards_by_node",
+    "list_debug_info_tasks",
+    "get_debug_info_status",
+    "create_debug_info",
+    "list_modules",
+    "get_module",
+];
+
 /// Build an MCP sub-router containing observability tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

@@ -1033,6 +1033,30 @@ pub fn delete_enterprise_crdb(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_enterprise_databases",
+    "get_enterprise_database",
+    "get_database_stats",
+    "get_database_endpoints",
+    "list_database_alerts",
+    "backup_enterprise_database",
+    "import_enterprise_database",
+    "create_enterprise_database",
+    "update_enterprise_database",
+    "delete_enterprise_database",
+    "flush_enterprise_database",
+    "export_enterprise_database",
+    "restore_enterprise_database",
+    "upgrade_enterprise_database_redis",
+    "list_enterprise_crdbs",
+    "get_enterprise_crdb",
+    "get_enterprise_crdb_tasks",
+    "create_enterprise_crdb",
+    "update_enterprise_crdb",
+    "delete_enterprise_crdb",
+];
+
 /// Build an MCP sub-router containing database tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

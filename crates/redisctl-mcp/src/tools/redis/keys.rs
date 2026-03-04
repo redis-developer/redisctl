@@ -10,6 +10,25 @@ use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, T
 
 use crate::state::AppState;
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "redis_keys",
+    "redis_get",
+    "redis_type",
+    "redis_ttl",
+    "redis_exists",
+    "redis_memory_usage",
+    "redis_scan",
+    "redis_object_encoding",
+    "redis_object_freq",
+    "redis_object_idletime",
+    "redis_object_help",
+    "redis_set",
+    "redis_del",
+    "redis_expire",
+    "redis_rename",
+];
+
 /// Build a sub-router containing all key-level Redis tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()

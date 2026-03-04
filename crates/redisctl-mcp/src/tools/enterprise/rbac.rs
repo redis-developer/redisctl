@@ -991,6 +991,30 @@ pub fn validate_enterprise_acl(state: Arc<AppState>) -> Tool {
         .build()
 }
 
+/// All tool names registered by this sub-module.
+pub(super) const TOOL_NAMES: &[&str] = &[
+    "list_enterprise_users",
+    "get_enterprise_user",
+    "create_enterprise_user",
+    "update_enterprise_user",
+    "delete_enterprise_user",
+    "get_enterprise_user_permissions",
+    "list_enterprise_roles",
+    "get_enterprise_role",
+    "create_enterprise_role",
+    "update_enterprise_role",
+    "delete_enterprise_role",
+    "get_enterprise_builtin_roles",
+    "list_enterprise_acls",
+    "get_enterprise_acl",
+    "create_enterprise_acl",
+    "update_enterprise_acl",
+    "delete_enterprise_acl",
+    "validate_enterprise_acl",
+    "get_enterprise_ldap_config",
+    "update_enterprise_ldap_config",
+];
+
 /// Build an MCP sub-router containing RBAC and LDAP tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
