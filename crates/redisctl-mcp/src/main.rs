@@ -22,6 +22,7 @@ use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 mod audit;
 mod error;
 mod policy;
+mod presets;
 mod prompts;
 mod resources;
 mod state;
@@ -29,6 +30,7 @@ mod tools;
 
 use audit::AuditLayer;
 use policy::{Policy, PolicyConfig, SafetyTier, ToolsetKind};
+use presets::{ToolVisibility, ToolsConfig};
 use state::{AppState, CredentialSource};
 use tower::Layer;
 
@@ -302,8 +304,15 @@ async fn main() -> Result<()> {
     let tool_toolset = build_tool_toolset_mapping(&enabled);
     let tool_toolset_arc = Arc::new(tool_toolset.clone());
 
+    // Extract tools visibility config before consuming policy_config
+    let tools_config = policy_config.tools.clone();
+
     // Build resolved policy
-    let policy = Arc::new(Policy::new(policy_config, tool_toolset, policy_source));
+    let policy = Arc::new(Policy::new(
+        policy_config,
+        tool_toolset.clone(),
+        policy_source,
+    ));
 
     // Build application state
     let state = Arc::new(AppState::new(
@@ -313,7 +322,7 @@ async fn main() -> Result<()> {
     )?);
 
     // Build router with tools and policy-based filter
-    let router = build_router(state.clone(), policy, &enabled)?;
+    let router = build_router(state.clone(), policy, &enabled, tools_config, &tool_toolset)?;
 
     match args.transport {
         Transport::Stdio => {
@@ -416,6 +425,8 @@ fn build_router(
     state: Arc<AppState>,
     policy: Arc<Policy>,
     enabled: &HashSet<Toolset>,
+    tools_config: ToolsConfig,
+    tool_toolset: &HashMap<String, ToolsetKind>,
 ) -> Result<McpRouter> {
     let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
 
@@ -440,14 +451,48 @@ fn build_router(
         router = router.merge(tools::profile::router(state.clone()));
     }
 
-    // Register the show_policy tool (always available)
+    // Register the show_policy tool (always available, bypasses visibility)
     router = router.tool(policy::show_policy_tool(policy.clone()));
 
+    // Resolve tool visibility from preset config
+    let all_tools: HashSet<String> = tool_toolset.keys().cloned().collect();
+    let visible_set = presets::resolve_visible_tools(&tools_config, &all_tools, tool_toolset);
+    let is_preset_active = !tools_config.is_all();
+
+    if is_preset_active {
+        info!(
+            preset = %tools_config.preset,
+            active = visible_set.len(),
+            total = all_tools.len(),
+            "Tool visibility preset active"
+        );
+    }
+
+    // Register list_available_tools tool (always available, bypasses visibility)
+    let visibility = Arc::new(ToolVisibility {
+        visible: visible_set.clone(),
+        all_tools: tool_toolset.clone(),
+        config: tools_config,
+    });
+    router = router.tool(presets::list_available_tools_tool(visibility));
+
     // Build instructions with policy description
-    let prefix = format!(
+    let mut prefix = format!(
         "# Redis Cloud and Enterprise MCP Server\n\n## Safety Model\n\n{}\n",
         policy.describe()
     );
+
+    if is_preset_active {
+        prefix.push_str(&format!(
+            "\n## Tool Visibility\n\n\
+             A visibility preset is active: {active}/{total} tools are loaded. \
+             Use the `list_available_tools` tool to see all tools grouped by toolset, \
+             including hidden tools that can be enabled via the `include` list in the \
+             policy config.\n",
+            active = visible_set.len(),
+            total = all_tools.len(),
+        ));
+    }
 
     let suffix = "\n## Authentication\n\n\
          In stdio mode, credentials are resolved from redisctl profiles.\n\
@@ -455,14 +500,18 @@ fn build_router(
 
     router = router.auto_instructions_with(Some(prefix), Some(suffix));
 
-    // Apply policy-based tool filter
-    // This hides denied tools from tools/list and returns "unauthorized"
-    // if they're called directly, providing defense in depth beyond handler-level checks
+    // Apply combined visibility + policy filter
+    // System tools (show_policy, list_available_tools) bypass visibility.
+    // All other tools must pass both visibility and policy checks.
     let policy_for_filter = policy.clone();
+    let visible_for_filter = Arc::new(visible_set);
     info!(tier = %policy.global_tier(), "Applying policy filter");
     let router = router.tool_filter(
         CapabilityFilter::<Tool>::new(move |_session, tool: &Tool| {
-            policy_for_filter.is_tool_allowed(tool)
+            let name = tool.name.as_str();
+            let is_system = presets::SYSTEM_TOOLS.contains(&name);
+            let is_visible = is_system || visible_for_filter.contains(name);
+            is_visible && policy_for_filter.is_tool_allowed(tool)
         })
         .denial_behavior(DenialBehavior::Unauthorized),
     );
@@ -1033,20 +1082,57 @@ mod tests {
     fn instructions_contain_safety_model() {
         let state = test_state();
         let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let tool_toolset = build_tool_toolset_mapping(&enabled);
 
         let policy_ro = test_policy_arc(SafetyTier::ReadOnly);
-        let _router = build_router(state.clone(), policy_ro, &enabled).unwrap();
+        let _router = build_router(
+            state.clone(),
+            policy_ro,
+            &enabled,
+            ToolsConfig::default(),
+            &tool_toolset,
+        )
+        .unwrap();
         // Verify the build succeeds (no panics) for both modes.
         let policy_full = test_policy_arc(SafetyTier::Full);
-        let _router_write = build_router(state.clone(), policy_full, &enabled).unwrap();
+        let _router_write = build_router(
+            state.clone(),
+            policy_full,
+            &enabled,
+            ToolsConfig::default(),
+            &tool_toolset,
+        )
+        .unwrap();
     }
 
     #[test]
     fn show_policy_tool_is_always_registered() {
         let state = test_state();
         let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let tool_toolset = build_tool_toolset_mapping(&enabled);
         let policy = test_policy_arc(SafetyTier::ReadOnly);
-        // Build should succeed and include show_policy tool
-        let _router = build_router(state, policy, &enabled).unwrap();
+        // Build should succeed and include show_policy and list_available_tools
+        let _router = build_router(
+            state,
+            policy,
+            &enabled,
+            ToolsConfig::default(),
+            &tool_toolset,
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn essentials_preset_filters_tools() {
+        let state = test_state();
+        let enabled: HashSet<Toolset> = [Toolset::App].into_iter().collect();
+        let tool_toolset = build_tool_toolset_mapping(&enabled);
+        let policy = test_policy_arc(SafetyTier::Full);
+        let tools_config = ToolsConfig {
+            preset: "essentials".to_string(),
+            ..Default::default()
+        };
+        // Build should succeed with essentials preset
+        let _router = build_router(state, policy, &enabled, tools_config, &tool_toolset).unwrap();
     }
 }
