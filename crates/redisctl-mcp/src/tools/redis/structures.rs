@@ -1,6 +1,7 @@
 //! Data structure Redis tools (hgetall, lrange, smembers, zrange, xinfo_stream, xrange, xlen,
 //! pubsub_channels, pubsub_numsub, hset, hdel, lpush, rpush, lpop, rpop, sadd, srem, zadd,
-//! zrem, xadd, xtrim)
+//! zrem, xadd, xtrim, hget, hmget, hlen, hexists, hkeys, hvals, hincrby, scard, sismember,
+//! sunion, sinter, sdiff, zcard, zscore, zrank, zcount, zrangebyscore, llen, lindex)
 
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -35,6 +36,25 @@ pub(super) const TOOL_NAMES: &[&str] = &[
     "redis_zrem",
     "redis_xadd",
     "redis_xtrim",
+    "redis_hget",
+    "redis_hmget",
+    "redis_hlen",
+    "redis_hexists",
+    "redis_hkeys",
+    "redis_hvals",
+    "redis_hincrby",
+    "redis_scard",
+    "redis_sismember",
+    "redis_sunion",
+    "redis_sinter",
+    "redis_sdiff",
+    "redis_zcard",
+    "redis_zscore",
+    "redis_zrank",
+    "redis_zcount",
+    "redis_zrangebyscore",
+    "redis_llen",
+    "redis_lindex",
 ];
 
 /// Build a sub-router containing all data structure Redis tools
@@ -60,7 +80,26 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(zadd(state.clone()))
         .tool(zrem(state.clone()))
         .tool(xadd(state.clone()))
-        .tool(xtrim(state))
+        .tool(xtrim(state.clone()))
+        .tool(hget(state.clone()))
+        .tool(hmget(state.clone()))
+        .tool(hlen(state.clone()))
+        .tool(hexists(state.clone()))
+        .tool(hkeys(state.clone()))
+        .tool(hvals(state.clone()))
+        .tool(hincrby(state.clone()))
+        .tool(scard(state.clone()))
+        .tool(sismember(state.clone()))
+        .tool(sunion(state.clone()))
+        .tool(sinter(state.clone()))
+        .tool(sdiff(state.clone()))
+        .tool(zcard(state.clone()))
+        .tool(zscore(state.clone()))
+        .tool(zrank(state.clone()))
+        .tool(zcount(state.clone()))
+        .tool(zrangebyscore(state.clone()))
+        .tool(llen(state.clone()))
+        .tool(lindex(state))
 }
 
 /// Input for HGETALL command
@@ -1458,6 +1497,1051 @@ pub fn xtrim(state: Arc<AppState>) -> Tool {
                     "OK - trimmed {} entries from stream '{}'",
                     trimmed, input.key
                 )))
+            },
+        )
+        .build()
+}
+
+// --- P1 Hash read tools ---
+
+/// Input for HGET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HgetInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+    /// Field to get
+    pub field: String,
+}
+
+/// Build the hget tool
+pub fn hget(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hget")
+        .description("Get the value of a single field in a hash.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, HgetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HgetInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: Option<String> = redis::cmd("HGET")
+                    .arg(&input.key)
+                    .arg(&input.field)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HGET failed")?;
+
+                match value {
+                    Some(v) => Ok(CallToolResult::text(v)),
+                    None => Ok(CallToolResult::text(format!(
+                        "(nil) - field '{}' not found in '{}'",
+                        input.field, input.key
+                    ))),
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for HMGET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HmgetInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+    /// Fields to get
+    pub fields: Vec<String>,
+}
+
+/// Build the hmget tool
+pub fn hmget(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hmget")
+        .description("Get the values of multiple fields in a hash.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, HmgetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HmgetInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("HMGET");
+                cmd.arg(&input.key);
+                for field in &input.fields {
+                    cmd.arg(field);
+                }
+
+                let values: Vec<redis::Value> = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HMGET failed")?;
+
+                let output = input
+                    .fields
+                    .iter()
+                    .zip(values.iter())
+                    .map(|(f, v)| format!("{}: {}", f, super::format_value(v)))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                Ok(CallToolResult::text(output))
+            },
+        )
+        .build()
+}
+
+/// Input for HLEN command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HlenInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+}
+
+/// Build the hlen tool
+pub fn hlen(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hlen")
+        .description("Get the number of fields in a hash.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, HlenInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HlenInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let count: i64 = redis::cmd("HLEN")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HLEN failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {} fields",
+                    input.key, count
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for HEXISTS command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HexistsInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+    /// Field to check
+    pub field: String,
+}
+
+/// Build the hexists tool
+pub fn hexists(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hexists")
+        .description("Check if a field exists in a hash.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, HexistsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HexistsInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let exists: bool = redis::cmd("HEXISTS")
+                    .arg(&input.key)
+                    .arg(&input.field)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HEXISTS failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}.{}: {}",
+                    input.key,
+                    input.field,
+                    if exists { "exists" } else { "does not exist" }
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for HKEYS command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HkeysInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+}
+
+/// Build the hkeys tool
+pub fn hkeys(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hkeys")
+        .description("Get all field names in a hash.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, HkeysInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HkeysInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let fields: Vec<String> = redis::cmd("HKEYS")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HKEYS failed")?;
+
+                if fields.is_empty() {
+                    return Ok(CallToolResult::text(format!(
+                        "(empty hash or key '{}' not found)",
+                        input.key
+                    )));
+                }
+
+                Ok(CallToolResult::text(format!(
+                    "Hash '{}' ({} fields):\n{}",
+                    input.key,
+                    fields.len(),
+                    fields.join("\n")
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for HVALS command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HvalsInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+}
+
+/// Build the hvals tool
+pub fn hvals(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hvals")
+        .description("Get all values in a hash.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, HvalsInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HvalsInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let values: Vec<String> = redis::cmd("HVALS")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HVALS failed")?;
+
+                if values.is_empty() {
+                    return Ok(CallToolResult::text(format!(
+                        "(empty hash or key '{}' not found)",
+                        input.key
+                    )));
+                }
+
+                Ok(CallToolResult::text(format!(
+                    "Hash '{}' ({} values):\n{}",
+                    input.key,
+                    values.len(),
+                    values.join("\n")
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for HINCRBY command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct HincrbyInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Hash key
+    pub key: String,
+    /// Field to increment
+    pub field: String,
+    /// Increment value (can be negative)
+    pub increment: i64,
+}
+
+/// Build the hincrby tool
+pub fn hincrby(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_hincrby")
+        .description("Increment the integer value of a hash field by the given amount.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, HincrbyInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<HincrbyInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: i64 = redis::cmd("HINCRBY")
+                    .arg(&input.key)
+                    .arg(&input.field)
+                    .arg(input.increment)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("HINCRBY failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}.{}: {}",
+                    input.key, input.field, value
+                )))
+            },
+        )
+        .build()
+}
+
+// --- P1 Set read tools ---
+
+/// Input for SCARD command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ScardInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set key
+    pub key: String,
+}
+
+/// Build the scard tool
+pub fn scard(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_scard")
+        .description("Get the number of members in a set (cardinality).")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ScardInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ScardInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let count: i64 = redis::cmd("SCARD")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SCARD failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {} members",
+                    input.key, count
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SISMEMBER command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SismemberInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set key
+    pub key: String,
+    /// Member to check
+    pub member: String,
+}
+
+/// Build the sismember tool
+pub fn sismember(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_sismember")
+        .description("Check if a value is a member of a set.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, SismemberInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SismemberInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let is_member: bool = redis::cmd("SISMEMBER")
+                    .arg(&input.key)
+                    .arg(&input.member)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SISMEMBER failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "'{}' {} a member of '{}'",
+                    input.member,
+                    if is_member { "is" } else { "is not" },
+                    input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SUNION command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SunionInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set keys to compute union of
+    pub keys: Vec<String>,
+}
+
+/// Build the sunion tool
+pub fn sunion(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_sunion")
+        .description("Return the union of multiple sets.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, SunionInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SunionInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("SUNION");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let members: Vec<String> = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SUNION failed")?;
+
+                if members.is_empty() {
+                    return Ok(CallToolResult::text("(empty set)"));
+                }
+
+                Ok(CallToolResult::text(format!(
+                    "Union ({} members):\n{}",
+                    members.len(),
+                    members.join("\n")
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SINTER command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SinterInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set keys to compute intersection of
+    pub keys: Vec<String>,
+}
+
+/// Build the sinter tool
+pub fn sinter(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_sinter")
+        .description("Return the intersection of multiple sets.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, SinterInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SinterInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("SINTER");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let members: Vec<String> = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SINTER failed")?;
+
+                if members.is_empty() {
+                    return Ok(CallToolResult::text("(empty set)"));
+                }
+
+                Ok(CallToolResult::text(format!(
+                    "Intersection ({} members):\n{}",
+                    members.len(),
+                    members.join("\n")
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SDIFF command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SdiffInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Set keys (first set minus all subsequent sets)
+    pub keys: Vec<String>,
+}
+
+/// Build the sdiff tool
+pub fn sdiff(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_sdiff")
+        .description("Return the difference between the first set and all subsequent sets.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, SdiffInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SdiffInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("SDIFF");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let members: Vec<String> = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SDIFF failed")?;
+
+                if members.is_empty() {
+                    return Ok(CallToolResult::text("(empty set)"));
+                }
+
+                Ok(CallToolResult::text(format!(
+                    "Difference ({} members):\n{}",
+                    members.len(),
+                    members.join("\n")
+                )))
+            },
+        )
+        .build()
+}
+
+// --- P1 Sorted Set read tools ---
+
+/// Input for ZCARD command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZcardInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+}
+
+/// Build the zcard tool
+pub fn zcard(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zcard")
+        .description("Get the number of members in a sorted set (cardinality).")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ZcardInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZcardInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let count: i64 = redis::cmd("ZCARD")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("ZCARD failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {} members",
+                    input.key, count
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for ZSCORE command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZscoreInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+    /// Member to get score for
+    pub member: String,
+}
+
+/// Build the zscore tool
+pub fn zscore(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zscore")
+        .description("Get the score of a member in a sorted set.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ZscoreInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZscoreInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let score: Option<f64> = redis::cmd("ZSCORE")
+                    .arg(&input.key)
+                    .arg(&input.member)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("ZSCORE failed")?;
+
+                match score {
+                    Some(s) => Ok(CallToolResult::text(format!(
+                        "{}.{}: {}",
+                        input.key, input.member, s
+                    ))),
+                    None => Ok(CallToolResult::text(format!(
+                        "(nil) - '{}' not found in '{}'",
+                        input.member, input.key
+                    ))),
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for ZRANK command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZrankInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+    /// Member to get rank for
+    pub member: String,
+}
+
+/// Build the zrank tool
+pub fn zrank(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zrank")
+        .description(
+            "Get the rank (0-based index) of a member in a sorted set, ordered low to high.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ZrankInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZrankInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let rank: Option<i64> = redis::cmd("ZRANK")
+                    .arg(&input.key)
+                    .arg(&input.member)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("ZRANK failed")?;
+
+                match rank {
+                    Some(r) => Ok(CallToolResult::text(format!(
+                        "{}.{}: rank {}",
+                        input.key, input.member, r
+                    ))),
+                    None => Ok(CallToolResult::text(format!(
+                        "(nil) - '{}' not found in '{}'",
+                        input.member, input.key
+                    ))),
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for ZCOUNT command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZcountInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+    /// Minimum score (use "-inf" for no lower bound)
+    pub min: String,
+    /// Maximum score (use "+inf" for no upper bound)
+    pub max: String,
+}
+
+/// Build the zcount tool
+pub fn zcount(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zcount")
+        .description("Count members in a sorted set with scores between min and max (inclusive). Use \"-inf\"/\"+inf\" for unbounded.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ZcountInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<ZcountInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let count: i64 = redis::cmd("ZCOUNT")
+                    .arg(&input.key)
+                    .arg(&input.min)
+                    .arg(&input.max)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("ZCOUNT failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {} members in score range [{}, {}]",
+                    input.key, count, input.min, input.max
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for ZRANGEBYSCORE command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct ZrangebyscoreInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Sorted set key
+    pub key: String,
+    /// Minimum score (use "-inf" for no lower bound)
+    pub min: String,
+    /// Maximum score (use "+inf" for no upper bound)
+    pub max: String,
+    /// Include scores in output
+    #[serde(default)]
+    pub withscores: bool,
+    /// Offset for pagination (requires count)
+    #[serde(default)]
+    pub offset: Option<i64>,
+    /// Maximum number of results (requires offset)
+    #[serde(default)]
+    pub count: Option<i64>,
+}
+
+/// Build the zrangebyscore tool
+pub fn zrangebyscore(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_zrangebyscore")
+        .description("Get members from a sorted set with scores in the given range. Use \"-inf\"/\"+inf\" for unbounded.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, ZrangebyscoreInput>(
+            state,
+            |State(state): State<Arc<AppState>>,
+             Json(input): Json<ZrangebyscoreInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str())
+                    .tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("ZRANGEBYSCORE");
+                cmd.arg(&input.key).arg(&input.min).arg(&input.max);
+
+                if input.withscores {
+                    cmd.arg("WITHSCORES");
+                }
+
+                if let (Some(offset), Some(count)) = (input.offset, input.count) {
+                    cmd.arg("LIMIT").arg(offset).arg(count);
+                }
+
+                if input.withscores {
+                    let result: Vec<(String, f64)> = cmd
+                        .query_async(&mut conn)
+                        .await
+                        .tool_context("ZRANGEBYSCORE failed")?;
+
+                    if result.is_empty() {
+                        return Ok(CallToolResult::text(format!(
+                            "No members in '{}' with scores in [{}, {}]",
+                            input.key, input.min, input.max
+                        )));
+                    }
+
+                    let output = result
+                        .iter()
+                        .map(|(member, score)| format!("{} (score: {})", member, score))
+                        .collect::<Vec<_>>()
+                        .join("\n");
+
+                    Ok(CallToolResult::text(format!(
+                        "'{}' ({} members in [{}, {}]):\n{}",
+                        input.key,
+                        result.len(),
+                        input.min,
+                        input.max,
+                        output
+                    )))
+                } else {
+                    let result: Vec<String> = cmd
+                        .query_async(&mut conn)
+                        .await
+                        .tool_context("ZRANGEBYSCORE failed")?;
+
+                    if result.is_empty() {
+                        return Ok(CallToolResult::text(format!(
+                            "No members in '{}' with scores in [{}, {}]",
+                            input.key, input.min, input.max
+                        )));
+                    }
+
+                    Ok(CallToolResult::text(format!(
+                        "'{}' ({} members in [{}, {}]):\n{}",
+                        input.key,
+                        result.len(),
+                        input.min,
+                        input.max,
+                        result.join("\n")
+                    )))
+                }
+            },
+        )
+        .build()
+}
+
+// --- P1 List read tools ---
+
+/// Input for LLEN command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct LlenInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List key
+    pub key: String,
+}
+
+/// Build the llen tool
+pub fn llen(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_llen")
+        .description("Get the length of a list.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, LlenInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<LlenInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let length: i64 = redis::cmd("LLEN")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("LLEN failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {} elements",
+                    input.key, length
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for LINDEX command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct LindexInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// List key
+    pub key: String,
+    /// Index (0-based, negative counts from end)
+    pub index: i64,
+}
+
+/// Build the lindex tool
+pub fn lindex(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_lindex")
+        .description("Get an element from a list by its index (0-based, negative counts from end).")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, LindexInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<LindexInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: Option<String> = redis::cmd("LINDEX")
+                    .arg(&input.key)
+                    .arg(input.index)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("LINDEX failed")?;
+
+                match value {
+                    Some(v) => Ok(CallToolResult::text(v)),
+                    None => Ok(CallToolResult::text(format!(
+                        "(nil) - index {} out of range or key '{}' not found",
+                        input.index, input.key
+                    ))),
+                }
             },
         )
         .build()

@@ -113,6 +113,14 @@ pub const DATABASE_ESSENTIALS: &[&str] = &[
     "redis_type",
     "redis_ttl",
     "redis_hgetall",
+    "redis_mget",
+    "redis_hget",
+    "redis_scard",
+    "redis_zcard",
+    "redis_llen",
+    "redis_incr",
+    "redis_zscore",
+    "redis_sismember",
 ];
 
 /// App essentials: all profile tools (always included).

@@ -1,6 +1,6 @@
 # Tools Reference
 
-The redisctl MCP server exposes **305 tools** across 4 toolsets and 2 system tools for managing Redis Cloud, Redis Enterprise, and direct database operations.
+The redisctl MCP server exposes **340 tools** across 4 toolsets and 2 system tools for managing Redis Cloud, Redis Enterprise, and direct database operations.
 
 Tools are organized into **toolsets** (Cloud, Enterprise, Database, App) and further into **sub-modules** that can be selectively loaded with the [`--tools` flag](configuration.md#the-tools-flag).
 
@@ -183,7 +183,7 @@ System service lifecycle -- list, inspect, start, stop, restart, and status chec
 |------|-------------|
 | `enterprise_raw_api` | Execute arbitrary Redis Enterprise REST API requests |
 
-## Database Toolset (55 tools)
+## Database Toolset (90 tools)
 
 Direct Redis database operations. Requires `--database-url` connection. Select with `--tools database` or target specific sub-modules.
 
@@ -202,9 +202,9 @@ Server-level operations -- connectivity, server info, client listing, slow log, 
 | `redis_config_get` | Get config values |
 | `redis_config_set` | Set config values *(write)* |
 
-### `database:keys` (15 tools)
+### `database:keys` (31 tools)
 
-Key-space operations -- listing, scanning, get/set, type inspection, TTL, existence checks, memory usage, and key mutation.
+Key-space operations -- listing, scanning, get/set, type inspection, TTL, existence checks, memory usage, key mutation, multi-key operations, atomic counters, and string manipulation.
 
 | Representative Tools | Description |
 |---------------------|-------------|
@@ -212,21 +212,40 @@ Key-space operations -- listing, scanning, get/set, type inspection, TTL, existe
 | `redis_scan` | Scan keys with cursor |
 | `redis_get` | Get string value |
 | `redis_set` | Set string value *(write)* |
+| `redis_mget` | Get multiple key values |
+| `redis_mset` | Set multiple key-value pairs *(write)* |
 | `redis_type` | Get key type |
 | `redis_ttl` | Get key TTL |
 | `redis_del` | Delete keys *(write)* |
+| `redis_unlink` | Async-delete keys *(write)* |
 | `redis_expire` | Set key expiration *(write)* |
+| `redis_incr` | Increment integer value *(write)* |
+| `redis_decr` | Decrement integer value *(write)* |
 
-### `database:structures` (21 tools)
+### `database:structures` (40 tools)
 
-Data structure operations -- hashes, lists, sets, sorted sets, streams, and pub/sub inspection.
+Data structure operations -- hashes, lists, sets, sorted sets, streams, pub/sub inspection, set algebra, and granular field/member accessors.
 
 | Representative Tools | Description |
 |---------------------|-------------|
 | `redis_hgetall` | Get all hash fields |
+| `redis_hget` | Get a single hash field |
+| `redis_hmget` | Get multiple hash fields |
+| `redis_hlen` | Get hash field count |
 | `redis_lrange` | Get list range |
+| `redis_llen` | Get list length |
+| `redis_lindex` | Get list element by index |
 | `redis_smembers` | Get all set members |
+| `redis_scard` | Get set cardinality |
+| `redis_sismember` | Check set membership |
+| `redis_sunion` | Set union |
+| `redis_sinter` | Set intersection |
+| `redis_sdiff` | Set difference |
 | `redis_zrange` | Get sorted set range |
+| `redis_zscore` | Get member score |
+| `redis_zrank` | Get member rank |
+| `redis_zcount` | Count members by score range |
+| `redis_zrangebyscore` | Get members by score range |
 | `redis_xinfo_stream` | Get stream info |
 | `redis_xrange` | Get stream entries by ID range |
 | `redis_xlen` | Get stream length |
@@ -270,10 +289,10 @@ Profile and configuration management tools. Always compiled in; no sub-modules.
 |---------|-------------|-------|
 | Cloud | `subscriptions` (36), `account` (33), `networking` (51), `fixed` (27), `raw` (1) | **148** |
 | Enterprise | `cluster` (24), `databases` (20), `rbac` (20), `observability` (16), `proxy` (4), `services` (7), `raw` (1) | **92** |
-| Database | `server` (14), `keys` (15), `structures` (21), `diagnostics` (4), `raw` (1) | **55** |
+| Database | `server` (14), `keys` (31), `structures` (40), `diagnostics` (4), `raw` (1) | **90** |
 | App | *(flat)* | **8** |
 | System | *(always on)* | **2** |
-| **Total** | | **305** |
+| **Total** | | **340** |
 
 ## Example Tool Usage
 

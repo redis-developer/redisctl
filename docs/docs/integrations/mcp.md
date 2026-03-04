@@ -247,13 +247,13 @@ See [Configuration](../mcp/configuration.md) for the full `--tools` syntax, safe
 
 ## Available Tools
 
-The MCP server provides **305 tools** across 4 toolsets:
+The MCP server provides **340 tools** across 4 toolsets:
 
 | Toolset | Tools | Description |
 |---------|-------|-------------|
 | **Cloud** | 148 | Subscriptions, databases, networking, Essentials, account management |
 | **Enterprise** | 92 | Cluster, databases, RBAC, observability, proxies, services |
-| **Database** | 55 | Direct Redis operations -- keys, data structures, diagnostics |
+| **Database** | 90 | Direct Redis operations -- keys, data structures, diagnostics |
 | **App** | 8 | Profile and configuration management |
 | **System** | 2 | `list_available_tools`, `show_policy` (always available) |
 

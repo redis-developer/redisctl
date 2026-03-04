@@ -1,5 +1,7 @@
 //! Key-level Redis tools (keys, scan, get, key_type, ttl, exists, memory_usage, object_encoding,
-//! object_freq, object_idletime, object_help, set, del, expire, rename)
+//! object_freq, object_idletime, object_help, set, del, expire, rename, mget, mset, persist,
+//! unlink, copy, dump, restore, randomkey, touch, incr, decr, append, strlen, getrange, setrange,
+//! setnx)
 
 use std::sync::Arc;
 
@@ -7,6 +9,8 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use tower_mcp::extract::{Json, State};
 use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
+
+use super::format_value;
 
 use crate::state::AppState;
 
@@ -27,6 +31,22 @@ pub(super) const TOOL_NAMES: &[&str] = &[
     "redis_del",
     "redis_expire",
     "redis_rename",
+    "redis_mget",
+    "redis_mset",
+    "redis_persist",
+    "redis_unlink",
+    "redis_copy",
+    "redis_dump",
+    "redis_restore",
+    "redis_randomkey",
+    "redis_touch",
+    "redis_incr",
+    "redis_decr",
+    "redis_append",
+    "redis_strlen",
+    "redis_getrange",
+    "redis_setrange",
+    "redis_setnx",
 ];
 
 /// Build a sub-router containing all key-level Redis tools
@@ -46,7 +66,23 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .tool(set(state.clone()))
         .tool(del(state.clone()))
         .tool(expire(state.clone()))
-        .tool(rename(state))
+        .tool(rename(state.clone()))
+        .tool(mget(state.clone()))
+        .tool(mset(state.clone()))
+        .tool(persist(state.clone()))
+        .tool(unlink(state.clone()))
+        .tool(copy(state.clone()))
+        .tool(dump(state.clone()))
+        .tool(restore(state.clone()))
+        .tool(randomkey(state.clone()))
+        .tool(touch(state.clone()))
+        .tool(incr(state.clone()))
+        .tool(decr(state.clone()))
+        .tool(append(state.clone()))
+        .tool(strlen(state.clone()))
+        .tool(getrange(state.clone()))
+        .tool(setrange(state.clone()))
+        .tool(setnx(state))
 }
 
 /// Input for keys command
@@ -922,6 +958,909 @@ pub fn rename(state: Arc<AppState>) -> Tool {
                     "OK - renamed '{}' to '{}'",
                     input.key, input.newkey
                 )))
+            },
+        )
+        .build()
+}
+
+// --- P0 Key Operations ---
+
+/// Input for MGET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct MgetInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Keys to get
+    pub keys: Vec<String>,
+}
+
+/// Build the mget tool
+pub fn mget(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_mget")
+        .description("Get the values of multiple keys in a single call.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, MgetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<MgetInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("MGET");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let values: Vec<redis::Value> = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("MGET failed")?;
+
+                let output = input
+                    .keys
+                    .iter()
+                    .zip(values.iter())
+                    .map(|(k, v)| format!("{}: {}", k, format_value(v)))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+
+                Ok(CallToolResult::text(output))
+            },
+        )
+        .build()
+}
+
+/// A key-value pair for MSET
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct KeyValuePair {
+    /// Key name
+    pub key: String,
+    /// Value to set
+    pub value: String,
+}
+
+/// Input for MSET command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct MsetInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key-value pairs to set
+    pub entries: Vec<KeyValuePair>,
+}
+
+/// Build the mset tool
+pub fn mset(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_mset")
+        .description("Set multiple key-value pairs in a single atomic call.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, MsetInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<MsetInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("MSET");
+                for entry in &input.entries {
+                    cmd.arg(&entry.key).arg(&entry.value);
+                }
+
+                let _: () = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("MSET failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - set {} key(s)",
+                    input.entries.len()
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for PERSIST command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct PersistInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to remove expiry from
+    pub key: String,
+}
+
+/// Build the persist tool
+pub fn persist(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_persist")
+        .description("Remove the expiry from a key, making it persistent.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, PersistInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<PersistInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let result: bool = redis::cmd("PERSIST")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("PERSIST failed")?;
+
+                if result {
+                    Ok(CallToolResult::text(format!(
+                        "OK - expiry removed from '{}'",
+                        input.key
+                    )))
+                } else {
+                    Ok(CallToolResult::text(format!(
+                        "Key '{}' does not exist or has no expiry",
+                        input.key
+                    )))
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for UNLINK command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct UnlinkInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Keys to unlink (async delete)
+    pub keys: Vec<String>,
+}
+
+/// Build the unlink tool
+pub fn unlink(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_unlink")
+        .description(
+            "DANGEROUS: Asynchronously delete one or more keys (non-blocking version of DEL).",
+        )
+        .destructive()
+        .extractor_handler_typed::<_, _, _, UnlinkInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<UnlinkInput>| async move {
+                if !state.is_destructive_allowed() {
+                    return Err(McpError::tool(
+                        "Destructive operations require policy tier 'full'",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("UNLINK");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let count: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("UNLINK failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "Unlinked {} of {} key(s)",
+                    count,
+                    input.keys.len()
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for COPY command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct CopyInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Source key
+    pub source: String,
+    /// Destination key
+    pub destination: String,
+    /// Replace destination key if it already exists
+    #[serde(default)]
+    pub replace: bool,
+}
+
+/// Build the copy tool
+pub fn copy(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_copy")
+        .description("Copy a key to a new key. Use replace=true to overwrite the destination.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, CopyInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<CopyInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("COPY");
+                cmd.arg(&input.source).arg(&input.destination);
+                if input.replace {
+                    cmd.arg("REPLACE");
+                }
+
+                let result: bool = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("COPY failed")?;
+
+                if result {
+                    Ok(CallToolResult::text(format!(
+                        "OK - copied '{}' to '{}'",
+                        input.source, input.destination
+                    )))
+                } else {
+                    Ok(CallToolResult::text(format!(
+                        "COPY failed: destination '{}' already exists (use replace=true to overwrite)",
+                        input.destination
+                    )))
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for DUMP command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DumpInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to dump
+    pub key: String,
+}
+
+/// Build the dump tool
+pub fn dump(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_dump")
+        .description(
+            "Serialize a key's value using Redis internal format. Returns hex-encoded bytes \
+             for use with RESTORE.",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, DumpInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<DumpInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: redis::Value = redis::cmd("DUMP")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("DUMP failed")?;
+
+                match value {
+                    redis::Value::BulkString(bytes) => {
+                        let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
+                        Ok(CallToolResult::text(format!(
+                            "{}: {} bytes\n{}",
+                            input.key,
+                            bytes.len(),
+                            hex
+                        )))
+                    }
+                    redis::Value::Nil => Ok(CallToolResult::text(format!(
+                        "(nil) - key '{}' not found",
+                        input.key
+                    ))),
+                    _ => Ok(CallToolResult::text(format_value(&value))),
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for RESTORE command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RestoreInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to restore
+    pub key: String,
+    /// TTL in milliseconds (0 = no expiry)
+    pub ttl_ms: u64,
+    /// Hex-encoded serialized value from DUMP
+    pub serialized_value: String,
+}
+
+/// Build the restore tool
+pub fn restore(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_restore")
+        .description(
+            "Restore a key from a serialized value (from DUMP). \
+             The serialized_value must be hex-encoded.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, RestoreInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<RestoreInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                // Decode hex string to bytes
+                let bytes: Result<Vec<u8>, _> = (0..input.serialized_value.len())
+                    .step_by(2)
+                    .map(|i| {
+                        u8::from_str_radix(
+                            &input.serialized_value[i..i.min(input.serialized_value.len()) + 2],
+                            16,
+                        )
+                    })
+                    .collect();
+
+                let bytes =
+                    bytes.map_err(|_| McpError::tool("Invalid hex string in serialized_value"))?;
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let _: () = redis::cmd("RESTORE")
+                    .arg(&input.key)
+                    .arg(input.ttl_ms)
+                    .arg(bytes.as_slice())
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("RESTORE failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - restored key '{}'",
+                    input.key
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for RANDOMKEY command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct RandomkeyInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+}
+
+/// Build the randomkey tool
+pub fn randomkey(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_randomkey")
+        .description("Return a random key from the database.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, RandomkeyInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<RandomkeyInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let key: Option<String> = redis::cmd("RANDOMKEY")
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("RANDOMKEY failed")?;
+
+                match key {
+                    Some(k) => Ok(CallToolResult::text(k)),
+                    None => Ok(CallToolResult::text("(empty) - database has no keys")),
+                }
+            },
+        )
+        .build()
+}
+
+/// Input for TOUCH command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct TouchInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Keys to touch (update last access time)
+    pub keys: Vec<String>,
+}
+
+/// Build the touch tool
+pub fn touch(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_touch")
+        .description("Update the last access time of one or more keys without modifying them.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, TouchInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<TouchInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let mut cmd = redis::cmd("TOUCH");
+                for key in &input.keys {
+                    cmd.arg(key);
+                }
+
+                let count: i64 = cmd
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("TOUCH failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "Touched {} of {} key(s)",
+                    count,
+                    input.keys.len()
+                )))
+            },
+        )
+        .build()
+}
+
+// --- P1 String Operations ---
+
+/// Input for INCR command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct IncrInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to increment
+    pub key: String,
+}
+
+/// Build the incr tool
+pub fn incr(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_incr")
+        .description("Increment the integer value of a key by 1. Creates the key with value 1 if it does not exist.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, IncrInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<IncrInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: i64 = redis::cmd("INCR")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("INCR failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {}",
+                    input.key, value
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for DECR command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct DecrInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to decrement
+    pub key: String,
+}
+
+/// Build the decr tool
+pub fn decr(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_decr")
+        .description("Decrement the integer value of a key by 1. Creates the key with value -1 if it does not exist.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, DecrInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<DecrInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: i64 = redis::cmd("DECR")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("DECR failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {}",
+                    input.key, value
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for APPEND command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct AppendInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to append to
+    pub key: String,
+    /// Value to append
+    pub value: String,
+}
+
+/// Build the append tool
+pub fn append(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_append")
+        .description("Append a value to a key. Creates the key if it does not exist. Returns the new string length.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, AppendInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<AppendInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let length: i64 = redis::cmd("APPEND")
+                    .arg(&input.key)
+                    .arg(&input.value)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("APPEND failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - '{}' new length: {}",
+                    input.key, length
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for STRLEN command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct StrlenInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to get string length of
+    pub key: String,
+}
+
+/// Build the strlen tool
+pub fn strlen(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_strlen")
+        .description("Get the length of the string value stored at a key.")
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, StrlenInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<StrlenInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let length: i64 = redis::cmd("STRLEN")
+                    .arg(&input.key)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("STRLEN failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "{}: {} bytes",
+                    input.key, length
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for GETRANGE command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct GetrangeInput {
+    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name to resolve connection from (uses default profile if not set)
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to get substring from
+    pub key: String,
+    /// Start offset (0-based, negative counts from end)
+    pub start: i64,
+    /// End offset (inclusive, negative counts from end)
+    pub end: i64,
+}
+
+/// Build the getrange tool
+pub fn getrange(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_getrange")
+        .description(
+            "Get a substring of the string value at a key by start and end offsets (inclusive).",
+        )
+        .read_only_safe()
+        .extractor_handler_typed::<_, _, _, GetrangeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<GetrangeInput>| async move {
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let value: String = redis::cmd("GETRANGE")
+                    .arg(&input.key)
+                    .arg(input.start)
+                    .arg(input.end)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("GETRANGE failed")?;
+
+                Ok(CallToolResult::text(value))
+            },
+        )
+        .build()
+}
+
+/// Input for SETRANGE command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetrangeInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to overwrite substring in
+    pub key: String,
+    /// Byte offset to start overwriting at
+    pub offset: u64,
+    /// Value to write at the offset
+    pub value: String,
+}
+
+/// Build the setrange tool
+pub fn setrange(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_setrange")
+        .description("Overwrite part of a string value at the given byte offset. Returns the new string length.")
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, SetrangeInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SetrangeInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let length: i64 = redis::cmd("SETRANGE")
+                    .arg(&input.key)
+                    .arg(input.offset)
+                    .arg(&input.value)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SETRANGE failed")?;
+
+                Ok(CallToolResult::text(format!(
+                    "OK - '{}' new length: {}",
+                    input.key, length
+                )))
+            },
+        )
+        .build()
+}
+
+/// Input for SETNX command
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct SetnxInput {
+    /// Optional Redis URL (overrides profile)
+    #[serde(default)]
+    pub url: Option<String>,
+    /// Optional profile name for connection resolution
+    #[serde(default)]
+    pub profile: Option<String>,
+    /// Key to set
+    pub key: String,
+    /// Value to set
+    pub value: String,
+}
+
+/// Build the setnx tool
+pub fn setnx(state: Arc<AppState>) -> Tool {
+    ToolBuilder::new("redis_setnx")
+        .description(
+            "Set a key only if it does not already exist. Returns whether the key was set.",
+        )
+        .non_destructive()
+        .extractor_handler_typed::<_, _, _, SetnxInput>(
+            state,
+            |State(state): State<Arc<AppState>>, Json(input): Json<SetnxInput>| async move {
+                if !state.is_write_allowed() {
+                    return Err(McpError::tool(
+                        "Write operations not allowed in read-only mode",
+                    ));
+                }
+
+                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
+
+                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
+
+                let mut conn = client
+                    .get_multiplexed_async_connection()
+                    .await
+                    .tool_context("Connection failed")?;
+
+                let was_set: bool = redis::cmd("SETNX")
+                    .arg(&input.key)
+                    .arg(&input.value)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("SETNX failed")?;
+
+                if was_set {
+                    Ok(CallToolResult::text(format!(
+                        "OK - set '{}' (key was new)",
+                        input.key
+                    )))
+                } else {
+                    Ok(CallToolResult::text(format!(
+                        "Key '{}' already exists, not set",
+                        input.key
+                    )))
+                }
             },
         )
         .build()
