@@ -4,6 +4,7 @@ mod cluster;
 mod databases;
 mod observability;
 mod proxy;
+mod raw;
 mod rbac;
 mod services;
 
@@ -15,6 +16,8 @@ pub use databases::*;
 pub use observability::*;
 #[allow(unused_imports)]
 pub use proxy::*;
+#[allow(unused_imports)]
+pub use raw::*;
 #[allow(unused_imports)]
 pub use rbac::*;
 #[allow(unused_imports)]
@@ -125,6 +128,8 @@ pub const TOOL_NAMES: &[&str] = &[
     "start_enterprise_service",
     "stop_enterprise_service",
     "restart_enterprise_service",
+    // raw
+    "enterprise_raw_api",
 ];
 
 /// Get all Enterprise tool names as owned strings.
@@ -140,5 +145,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(rbac::router(state.clone()))
         .merge(observability::router(state.clone()))
         .merge(proxy::router(state.clone()))
-        .merge(services::router(state))
+        .merge(services::router(state.clone()))
+        .merge(raw::router(state))
 }

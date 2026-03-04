@@ -100,7 +100,25 @@ impl Default for PolicyConfig {
     }
 }
 
+/// Raw API passthrough tool names that are denied by default when no policy
+/// file is loaded. Custom policy files use serde defaults (`deny = []`), so
+/// raw tools become available through normal tier/allow mechanisms.
+pub const RAW_TOOL_DENY_DEFAULTS: &[&str] =
+    &["cloud_raw_api", "enterprise_raw_api", "redis_command"];
+
 impl PolicyConfig {
+    /// Build the synthesized default policy (used when no config file exists).
+    /// This adds raw API passthrough tools to the deny list.
+    pub fn synthesized_default() -> Self {
+        Self {
+            deny: RAW_TOOL_DENY_DEFAULTS
+                .iter()
+                .map(|s| (*s).to_string())
+                .collect(),
+            ..Default::default()
+        }
+    }
+
     /// Load policy with resolution chain:
     /// 1. Explicit path (from `--policy` CLI flag)
     /// 2. `REDISCTL_MCP_POLICY` env var
@@ -136,8 +154,8 @@ impl PolicyConfig {
             return Ok((config, format!("file: {}", path.display())));
         }
 
-        // 4. Built-in default
-        Ok((Self::default(), "default".to_string()))
+        // 4. Built-in default (includes raw tool deny list)
+        Ok((Self::synthesized_default(), "default".to_string()))
     }
 
     fn load_from_path(path: &Path) -> Result<Self> {
@@ -399,6 +417,11 @@ impl Policy {
         if self.deny_destructive {
             desc.push_str("\n\nAll destructive operations are denied by category.");
         }
+
+        desc.push_str(
+            "\n\nRaw API passthrough tools (`cloud_raw_api`, `enterprise_raw_api`, `redis_command`) \
+             are available but denied by default. They can be enabled via a custom policy file.",
+        );
 
         desc.push_str(
             "\n\nUse the `show_policy` tool to see the full active policy configuration.",
@@ -899,5 +922,64 @@ allow = ["redis_set", "redis_expire"]
         let policy = policy_with_config(PolicyConfig::default()); // read-only
         // Tool has no read_only_hint=true, so it should be blocked at read-only tier
         assert!(!policy.is_tool_allowed(&tool));
+    }
+
+    // -- Raw tool default deny tests --
+
+    #[test]
+    fn synthesized_default_denies_raw_tools() {
+        let config = PolicyConfig::synthesized_default();
+        assert!(config.deny.contains(&"cloud_raw_api".to_string()));
+        assert!(config.deny.contains(&"enterprise_raw_api".to_string()));
+        assert!(config.deny.contains(&"redis_command".to_string()));
+
+        let policy = policy_with_config(config);
+        let cloud_raw = make_destructive_tool("cloud_raw_api");
+        let enterprise_raw = make_destructive_tool("enterprise_raw_api");
+        let redis_cmd = make_destructive_tool("redis_command");
+
+        assert!(!policy.is_tool_allowed(&cloud_raw));
+        assert!(!policy.is_tool_allowed(&enterprise_raw));
+        assert!(!policy.is_tool_allowed(&redis_cmd));
+    }
+
+    #[test]
+    fn synthesized_default_denies_raw_even_at_full_tier() {
+        let mut config = PolicyConfig::synthesized_default();
+        config.tier = SafetyTier::Full;
+        let policy = policy_with_config(config);
+
+        let cloud_raw = make_destructive_tool("cloud_raw_api");
+        let enterprise_raw = make_destructive_tool("enterprise_raw_api");
+        let redis_cmd = make_destructive_tool("redis_command");
+
+        assert!(!policy.is_tool_allowed(&cloud_raw));
+        assert!(!policy.is_tool_allowed(&enterprise_raw));
+        assert!(!policy.is_tool_allowed(&redis_cmd));
+    }
+
+    #[test]
+    fn custom_policy_file_does_not_auto_deny_raw_tools() {
+        // A custom TOML policy with tier=full and empty deny list should allow raw tools
+        let config: PolicyConfig = toml::from_str("tier = \"full\"").unwrap();
+        assert!(config.deny.is_empty());
+
+        let policy = policy_with_config(config);
+        let cloud_raw = make_destructive_tool("cloud_raw_api");
+        let enterprise_raw = make_destructive_tool("enterprise_raw_api");
+        let redis_cmd = make_destructive_tool("redis_command");
+
+        assert!(policy.is_tool_allowed(&cloud_raw));
+        assert!(policy.is_tool_allowed(&enterprise_raw));
+        assert!(policy.is_tool_allowed(&redis_cmd));
+    }
+
+    #[test]
+    fn describe_mentions_raw_tools() {
+        let policy = policy_with_config(PolicyConfig::synthesized_default());
+        let desc = policy.describe();
+        assert!(desc.contains("cloud_raw_api"));
+        assert!(desc.contains("enterprise_raw_api"));
+        assert!(desc.contains("redis_command"));
     }
 }
