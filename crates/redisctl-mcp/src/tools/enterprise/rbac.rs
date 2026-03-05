@@ -32,7 +32,7 @@ pub fn list_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_users")
         .description("List all users.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListUsersInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListUsersInput>| async move {
                 let client = state
@@ -64,7 +64,7 @@ pub fn get_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_user")
         .description("Get user details by UID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetUserInput>| async move {
                 let client = state
@@ -112,7 +112,7 @@ pub fn create_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_user")
         .description("Create a new user.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateEnterpriseUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateEnterpriseUserInput>| async move {
@@ -184,7 +184,7 @@ pub fn update_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_user")
         .description("Update an existing user. Only specified fields will be modified.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateEnterpriseUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateEnterpriseUserInput>| async move {
@@ -238,7 +238,7 @@ pub fn delete_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_user")
         .description("DANGEROUS: Delete a user. Active sessions will be terminated.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteEnterpriseUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteEnterpriseUserInput>| async move {
@@ -286,7 +286,7 @@ pub fn list_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_roles")
         .description("List all roles.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListRolesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListRolesInput>| async move {
                 let client = state
@@ -318,7 +318,7 @@ pub fn get_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_role")
         .description("Get role details by UID, including permissions and assignments.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRoleInput>| async move {
                 let client = state
@@ -359,7 +359,7 @@ pub fn create_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_role")
         .description("Create a new role.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateEnterpriseRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateEnterpriseRoleInput>| async move {
@@ -418,7 +418,7 @@ pub fn update_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_role")
         .description("Update an existing role.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateEnterpriseRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateEnterpriseRoleInput>| async move {
@@ -469,7 +469,7 @@ pub fn delete_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_role")
         .description("DANGEROUS: Delete a role. Users assigned to it will lose their permissions.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteEnterpriseRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteEnterpriseRoleInput>| async move {
@@ -517,7 +517,7 @@ pub fn list_redis_acls(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_acls")
         .description("List all Redis ACLs.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListRedisAclsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListRedisAclsInput>| async move {
                 let client = state
@@ -551,7 +551,7 @@ pub fn get_redis_acl(state: Arc<AppState>) -> Tool {
             "Get Redis ACL details by UID, including rule string and associated databases.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetRedisAclInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRedisAclInput>| async move {
                 let client = state
@@ -591,7 +591,7 @@ pub fn create_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_acl")
         .description("Create a new Redis ACL using Redis ACL syntax (e.g., \"+@all ~*\").")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateEnterpriseAclInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateEnterpriseAclInput>| async move {
@@ -647,7 +647,7 @@ pub fn update_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_acl")
         .description("Update an existing Redis ACL.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateEnterpriseAclInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateEnterpriseAclInput>| async move {
@@ -696,7 +696,7 @@ pub fn delete_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_acl")
         .description("DANGEROUS: Delete a Redis ACL. Databases using it will lose those access controls.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteEnterpriseAclInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteEnterpriseAclInput>| async move {
@@ -746,7 +746,7 @@ pub fn get_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
             "Get the LDAP configuration including server settings, bind DN, and query suffixes.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetLdapConfigInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetLdapConfigInput>| async move {
                 let client = state
@@ -782,7 +782,7 @@ pub fn update_enterprise_ldap_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_ldap_config")
         .description("Update the LDAP configuration. Pass LDAP settings as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateLdapConfigInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateLdapConfigInput>| async move {
@@ -830,7 +830,7 @@ pub fn get_enterprise_user_permissions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_user_permissions")
         .description("Get all available permission types for user management.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetUserPermissionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetUserPermissionsInput>| async move {
@@ -868,7 +868,7 @@ pub fn get_enterprise_builtin_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_builtin_roles")
         .description("Get the list of built-in roles.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetBuiltinRolesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetBuiltinRolesInput>| async move {
@@ -913,7 +913,7 @@ pub fn validate_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("validate_enterprise_acl")
         .description("Validate a Redis ACL rule before creating it.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ValidateEnterpriseAclInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ValidateEnterpriseAclInput>| async move {

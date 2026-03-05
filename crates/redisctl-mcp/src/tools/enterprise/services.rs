@@ -25,7 +25,7 @@ pub fn list_services(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_services")
         .description("List all cluster services.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListServicesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListServicesInput>| async move {
                 let client = state
@@ -60,7 +60,7 @@ pub fn get_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_service")
         .description("Get service details by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetServiceInput>| async move {
                 let client = state
@@ -95,7 +95,7 @@ pub fn get_service_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_service_status")
         .description("Get service status including per-node status.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetServiceStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetServiceStatusInput>| async move {
@@ -133,7 +133,7 @@ pub fn update_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_service")
         .description("Update a service's configuration. Pass fields as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateServiceInput>| async move {
                 if !state.is_write_allowed() {
@@ -176,7 +176,7 @@ pub fn start_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("start_enterprise_service")
         .description("Start a stopped service.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ServiceActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ServiceActionInput>| async move {
                 if !state.is_write_allowed() {
@@ -207,7 +207,7 @@ pub fn stop_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("stop_enterprise_service")
         .description("Stop a running service.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ServiceActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ServiceActionInput>| async move {
                 if !state.is_write_allowed() {
@@ -238,7 +238,7 @@ pub fn restart_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("restart_enterprise_service")
         .description("Restart a service (stop then start).")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ServiceActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ServiceActionInput>| async move {
                 if !state.is_write_allowed() {

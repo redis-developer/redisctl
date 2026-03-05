@@ -30,7 +30,7 @@ pub fn list_subscriptions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_subscriptions")
         .description("List all subscriptions.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListSubscriptionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListSubscriptionsInput>| async move {
                 let client = state
@@ -65,7 +65,7 @@ pub fn get_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_subscription")
         .description("Get subscription details by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSubscriptionInput>| async move {
                 let client = state
@@ -100,7 +100,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_databases")
         .description("List all databases in a subscription.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
                 let client = state
@@ -137,7 +137,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database")
         .description("Get database details by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
                 let client = state
@@ -181,7 +181,7 @@ pub fn get_backup_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_backup_status")
         .description("Get backup status and history for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetBackupStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetBackupStatusInput>| async move {
@@ -226,7 +226,7 @@ pub fn get_slow_log(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_slow_log")
         .description("Get slow log entries for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSlowLogInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSlowLogInput>| async move {
                 let client = state
@@ -263,7 +263,7 @@ pub fn get_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_tags")
         .description("Get tags for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetTagsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTagsInput>| async move {
                 let client = state
@@ -302,7 +302,7 @@ pub fn get_database_certificate(state: Arc<AppState>) -> Tool {
             "Get the TLS/SSL certificate for a database in PEM format.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetCertificateInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetCertificateInput>| async move {
@@ -375,7 +375,7 @@ pub fn create_database(state: Arc<AppState>) -> Tool {
             "Create a new database and wait for it to be ready.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateDatabaseInput>| async move {
@@ -473,7 +473,7 @@ pub fn update_database(state: Arc<AppState>) -> Tool {
             "Update a database configuration.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateDatabaseInput>| async move {
@@ -551,7 +551,7 @@ pub fn delete_database(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Delete a database and all its data.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteDatabaseInput>| async move {
@@ -613,7 +613,7 @@ pub fn backup_database(state: Arc<AppState>) -> Tool {
             "Trigger a manual backup of a database.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<BackupDatabaseInput>| async move {
@@ -681,7 +681,7 @@ pub fn import_database(state: Arc<AppState>) -> Tool {
             "Import data into a database from an external source. WARNING: This will overwrite existing data.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ImportDatabaseInput>| async move {
@@ -747,7 +747,7 @@ pub fn delete_subscription(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Delete a subscription. All databases must be deleted first.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteSubscriptionInput>| async move {
@@ -806,7 +806,7 @@ pub fn flush_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("flush_database")
         .description("DANGEROUS: Removes all data from a database.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, FlushDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<FlushDatabaseInput>| async move {
                 // Check destructive permission
@@ -862,7 +862,7 @@ pub fn flush_crdb_database(state: Arc<AppState>) -> Tool {
              Use this instead of regular flush for Active-Active databases.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, FlushCrdbDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<FlushCrdbDatabaseInput>| async move {
@@ -939,7 +939,7 @@ pub fn create_subscription(state: Arc<AppState>) -> Tool {
             "Create a new Pro subscription with an initial database.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateSubscriptionInput>| async move {
@@ -1027,7 +1027,7 @@ pub fn update_subscription(state: Arc<AppState>) -> Tool {
             "Update a subscription.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateSubscriptionInput>| async move {
@@ -1078,7 +1078,7 @@ pub fn get_subscription_pricing(state: Arc<AppState>) -> Tool {
             "Get pricing details for a subscription.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSubscriptionPricingInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetSubscriptionPricingInput>| async move {
@@ -1117,7 +1117,7 @@ pub fn get_redis_versions(state: Arc<AppState>) -> Tool {
             "Get available Redis versions. Optionally filter by subscription ID.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetRedisVersionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetRedisVersionsInput>| async move {
@@ -1153,7 +1153,7 @@ pub fn get_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_subscription_cidr_allowlist")
         .description("Get the CIDR allowlist for a subscription.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSubscriptionCidrAllowlistInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetSubscriptionCidrAllowlistInput>| async move {
@@ -1195,7 +1195,7 @@ pub fn update_subscription_cidr_allowlist(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_subscription_cidr_allowlist")
         .description("Update the CIDR allowlist for a subscription.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateSubscriptionCidrAllowlistInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateSubscriptionCidrAllowlistInput>| async move {
@@ -1246,7 +1246,7 @@ pub fn get_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_subscription_maintenance_windows")
         .description("Get maintenance windows for a subscription.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSubscriptionMaintenanceWindowsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetSubscriptionMaintenanceWindowsInput>| async move {
@@ -1298,7 +1298,7 @@ pub fn update_subscription_maintenance_windows(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_subscription_maintenance_windows")
         .description("Update maintenance windows for a subscription.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateSubscriptionMaintenanceWindowsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateSubscriptionMaintenanceWindowsInput>| async move {
@@ -1361,7 +1361,7 @@ pub fn get_active_active_regions(state: Arc<AppState>) -> Tool {
             "Get regions from an Active-Active subscription.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetActiveActiveRegionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetActiveActiveRegionsInput>| async move {
@@ -1413,7 +1413,7 @@ pub fn add_active_active_region(state: Arc<AppState>) -> Tool {
             "Add a new region to an Active-Active subscription.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AddActiveActiveRegionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<AddActiveActiveRegionInput>| async move {
@@ -1486,7 +1486,7 @@ pub fn delete_active_active_regions(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Remove regions from an Active-Active subscription. May cause data loss in removed regions.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteActiveActiveRegionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteActiveActiveRegionsInput>| async move {
@@ -1549,7 +1549,7 @@ pub fn get_available_database_versions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_available_database_versions")
         .description("Get available target Redis versions for upgrading a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAvailableDatabaseVersionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAvailableDatabaseVersionsInput>| async move {
@@ -1592,7 +1592,7 @@ pub fn upgrade_database_redis_version(state: Arc<AppState>) -> Tool {
              Use get_available_database_versions to find valid target versions.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpgradeDatabaseRedisVersionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpgradeDatabaseRedisVersionInput>| async move {
@@ -1649,7 +1649,7 @@ pub fn get_database_upgrade_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_upgrade_status")
         .description("Get the Redis version upgrade status for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDatabaseUpgradeStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetDatabaseUpgradeStatusInput>| async move {
@@ -1690,7 +1690,7 @@ pub fn get_database_import_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_import_status")
         .description("Get the import status for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDatabaseImportStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetDatabaseImportStatusInput>| async move {
@@ -1734,7 +1734,7 @@ pub fn create_database_tag(state: Arc<AppState>) -> Tool {
             "Create a tag on a database.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateDatabaseTagInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateDatabaseTagInput>| async move {
@@ -1794,7 +1794,7 @@ pub fn update_database_tag(state: Arc<AppState>) -> Tool {
             "Update a tag on a database.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateDatabaseTagInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateDatabaseTagInput>| async move {
@@ -1857,7 +1857,7 @@ pub fn delete_database_tag(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Delete a tag from a database.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteDatabaseTagInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteDatabaseTagInput>| async move {
@@ -1914,7 +1914,7 @@ pub fn update_database_tags(state: Arc<AppState>) -> Tool {
             "Update all tags on a database (replaces existing tags).",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateDatabaseTagsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateDatabaseTagsInput>| async move {
@@ -2010,7 +2010,7 @@ pub fn update_crdb_local_properties(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_crdb_local_properties")
         .description("Update local properties of an Active-Active (CRDB) database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateCrdbLocalPropertiesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateCrdbLocalPropertiesInput>| async move {

@@ -33,7 +33,7 @@ pub fn list_alerts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_alerts")
         .description("List all active alerts.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListAlertsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAlertsInput>| async move {
                 let client = state
@@ -82,7 +82,7 @@ pub fn list_logs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_logs")
         .description("List cluster event logs. Supports filtering by time range and pagination.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListLogsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListLogsInput>| async move {
                 let client = state
@@ -136,7 +136,7 @@ pub fn get_all_nodes_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_all_nodes_stats")
         .description("Get current statistics for all nodes including CPU, memory, and network metrics.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAllNodesStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAllNodesStatsInput>| async move {
@@ -172,7 +172,7 @@ pub fn get_all_databases_stats(state: Arc<AppState>) -> Tool {
             "Get current statistics for all databases including latency, throughput, and memory usage.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAllDatabasesStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAllDatabasesStatsInput>| async move {
@@ -205,7 +205,7 @@ pub fn get_shard_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_shard_stats")
         .description("Get current statistics for a specific shard.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetShardStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardStatsInput>| async move {
                 let client = state
@@ -238,7 +238,7 @@ pub fn get_all_shards_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_all_shards_stats")
         .description("Get current statistics for all shards.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAllShardsStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAllShardsStatsInput>| async move {
@@ -279,7 +279,7 @@ pub fn list_shards(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_shards")
         .description("List all shards. Optionally filter by database UID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListShardsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListShardsInput>| async move {
                 let client = state
@@ -320,7 +320,7 @@ pub fn get_shard(state: Arc<AppState>) -> Tool {
             "Get shard details including role (master/replica), status, and assigned node.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetShardInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetShardInput>| async move {
                 let client = state
@@ -357,7 +357,7 @@ pub fn list_debug_info_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_debug_info_tasks")
         .description("List all debug info collection tasks and their statuses.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListDebugInfoTasksInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListDebugInfoTasksInput>| async move {
@@ -393,7 +393,7 @@ pub fn get_debug_info_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_debug_info_status")
         .description("Get the status of a debug info collection task by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDebugInfoStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetDebugInfoStatusInput>| async move {
@@ -431,7 +431,7 @@ pub fn list_modules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_modules")
         .description("List all installed Redis modules.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListModulesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListModulesInput>| async move {
                 let client = state
@@ -466,7 +466,7 @@ pub fn get_module(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_module")
         .description("Get details of a specific Redis module by UID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetModuleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModuleInput>| async move {
                 let client = state
@@ -505,7 +505,7 @@ pub fn list_shards_by_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_shards_by_database")
         .description("List all shards for a specific database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListShardsByDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListShardsByDatabaseInput>| async move {
@@ -541,7 +541,7 @@ pub fn list_shards_by_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_shards_by_node")
         .description("List all shards on a specific node.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListShardsByNodeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListShardsByNodeInput>| async move {
@@ -581,7 +581,7 @@ pub fn acknowledge_enterprise_alert(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("acknowledge_enterprise_alert")
         .description("Acknowledge (clear) a specific alert by ID.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AcknowledgeAlertInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<AcknowledgeAlertInput>| async move {
@@ -635,7 +635,7 @@ pub fn create_debug_info(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_debug_info")
         .description("Start a debug info collection task. Optionally scope to specific nodes or databases.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateDebugInfoInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateDebugInfoInput>| async move {

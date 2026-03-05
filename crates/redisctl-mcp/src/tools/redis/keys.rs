@@ -115,7 +115,7 @@ pub fn keys(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_keys")
         .description("List keys matching a pattern using SCAN (production-safe, non-blocking).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, KeysInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeysInput>| async move {
                 let mut conn =
@@ -182,7 +182,7 @@ pub fn get(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_get")
         .description("Get the value of a key.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetInput>| async move {
                 let mut conn =
@@ -224,7 +224,7 @@ pub fn key_type(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_type")
         .description("Get the data type of a key.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, TypeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TypeInput>| async move {
                 let mut conn =
@@ -260,7 +260,7 @@ pub fn ttl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_ttl")
         .description("Get the TTL of a key in seconds (-1 = no expiry, -2 = missing).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, TtlInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
                 let mut conn =
@@ -302,7 +302,7 @@ pub fn exists(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_exists")
         .description("Check if one or more keys exist.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ExistsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ExistsInput>| async move {
                 let mut conn =
@@ -346,7 +346,7 @@ pub fn memory_usage(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_memory_usage")
         .description("Get memory usage of a key in bytes (MEMORY USAGE).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, MemoryUsageInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryUsageInput>| async move {
                 let mut conn =
@@ -398,7 +398,7 @@ pub fn scan(state: Arc<AppState>) -> Tool {
             "Scan keys with optional type filter. Prefer over redis_keys when filtering by type.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ScanInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ScanInput>| async move {
                 let mut conn =
@@ -482,7 +482,7 @@ pub fn object_encoding(state: Arc<AppState>) -> Tool {
             "Get the internal encoding of a key. Useful for understanding memory usage patterns.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ObjectEncodingInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ObjectEncodingInput>| async move {
@@ -529,7 +529,7 @@ pub fn object_freq(state: Arc<AppState>) -> Tool {
              Only works with allkeys-lfu or volatile-lfu eviction policy.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ObjectFreqInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectFreqInput>| async move {
                 let mut conn =
@@ -569,7 +569,7 @@ pub fn object_idletime(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_idletime")
         .description("Get idle time of a key in seconds since last access.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ObjectIdletimeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ObjectIdletimeInput>| async move {
@@ -608,7 +608,7 @@ pub fn object_help(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_object_help")
         .description("Get available OBJECT subcommands.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ObjectHelpInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ObjectHelpInput>| async move {
                 let mut conn =
@@ -665,7 +665,7 @@ pub fn set(state: Arc<AppState>) -> Tool {
             "Set a key to a string value with optional expiry and conditional flags (NX/XX).",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetInput>| async move {
                 if !state.is_write_allowed() {
@@ -736,7 +736,7 @@ pub fn del(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_del")
         .description("DANGEROUS: Delete one or more keys.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DelInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DelInput>| async move {
                 if !state.is_destructive_allowed() {
@@ -788,7 +788,7 @@ pub fn expire(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_expire")
         .description("Set a timeout on a key in seconds. Key auto-deletes after expiry.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ExpireInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ExpireInput>| async move {
                 if !state.is_write_allowed() {
@@ -843,7 +843,7 @@ pub fn rename(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_rename")
         .description("Rename a key. Overwrites the destination key if it exists.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RenameInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RenameInput>| async move {
                 if !state.is_write_allowed() {
@@ -891,7 +891,7 @@ pub fn mget(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_mget")
         .description("Get the values of multiple keys in a single call.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, MgetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MgetInput>| async move {
                 let mut conn =
@@ -948,7 +948,7 @@ pub fn mset(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_mset")
         .description("Set multiple key-value pairs in a single atomic call.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, MsetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MsetInput>| async move {
                 if !state.is_write_allowed() {
@@ -997,7 +997,7 @@ pub fn persist(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_persist")
         .description("Remove the expiry from a key, making it persistent.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, PersistInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PersistInput>| async move {
                 if !state.is_write_allowed() {
@@ -1051,7 +1051,7 @@ pub fn unlink(state: Arc<AppState>) -> Tool {
             "DANGEROUS: Asynchronously delete one or more keys (non-blocking version of DEL).",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, UnlinkInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UnlinkInput>| async move {
                 if !state.is_destructive_allowed() {
@@ -1106,7 +1106,7 @@ pub fn copy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_copy")
         .description("Copy a key to a new key. Use replace=true to overwrite the destination.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CopyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<CopyInput>| async move {
                 if !state.is_write_allowed() {
@@ -1166,7 +1166,7 @@ pub fn dump(state: Arc<AppState>) -> Tool {
              for use with RESTORE.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, DumpInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DumpInput>| async move {
                 let mut conn =
@@ -1224,7 +1224,7 @@ pub fn restore(state: Arc<AppState>) -> Tool {
              The serialized_value must be hex-encoded.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RestoreInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RestoreInput>| async move {
                 if !state.is_write_allowed() {
@@ -1283,7 +1283,7 @@ pub fn randomkey(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_randomkey")
         .description("Return a random key from the database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, RandomkeyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RandomkeyInput>| async move {
                 let mut conn =
@@ -1321,7 +1321,7 @@ pub fn touch(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_touch")
         .description("Update the last access time of one or more keys without modifying them.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, TouchInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<TouchInput>| async move {
                 let mut conn =
@@ -1367,7 +1367,7 @@ pub fn incr(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_incr")
         .description("Increment the integer value of a key by 1. Creates the key with value 1 if it does not exist.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, IncrInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<IncrInput>| async move {
                 if !state.is_write_allowed() {
@@ -1412,7 +1412,7 @@ pub fn decr(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_decr")
         .description("Decrement the integer value of a key by 1. Creates the key with value -1 if it does not exist.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, DecrInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DecrInput>| async move {
                 if !state.is_write_allowed() {
@@ -1459,7 +1459,7 @@ pub fn append(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_append")
         .description("Append a value to a key. Creates the key if it does not exist. Returns the new string length.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AppendInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AppendInput>| async move {
                 if !state.is_write_allowed() {
@@ -1505,7 +1505,7 @@ pub fn strlen(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_strlen")
         .description("Get the length of the string value stored at a key.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, StrlenInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<StrlenInput>| async move {
                 let mut conn =
@@ -1550,7 +1550,7 @@ pub fn getrange(state: Arc<AppState>) -> Tool {
             "Get a substring of the string value at a key by start and end offsets (inclusive).",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetrangeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetrangeInput>| async move {
                 let mut conn =
@@ -1592,7 +1592,7 @@ pub fn setrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_setrange")
         .description("Overwrite part of a string value at the given byte offset. Returns the new string length.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SetrangeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetrangeInput>| async move {
                 if !state.is_write_allowed() {
@@ -1643,7 +1643,7 @@ pub fn setnx(state: Arc<AppState>) -> Tool {
             "Set a key only if it does not already exist. Returns whether the key was set.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SetnxInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetnxInput>| async move {
                 if !state.is_write_allowed() {

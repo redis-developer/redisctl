@@ -120,7 +120,7 @@ pub fn hgetall(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hgetall")
         .description("Get all fields and values of a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HgetallInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HgetallInput>| async move {
                 let mut conn =
@@ -184,7 +184,7 @@ pub fn lrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lrange")
         .description("Get a range of elements from a list (start=0, stop=-1 for all).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, LrangeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LrangeInput>| async move {
                 let mut conn =
@@ -241,7 +241,7 @@ pub fn smembers(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_smembers")
         .description("Get all members of a set.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, SmembersInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SmembersInput>| async move {
                 let mut conn =
@@ -298,7 +298,7 @@ pub fn zrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zrange")
         .description("Get a range of members from a sorted set by index.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ZrangeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZrangeInput>| async move {
                 let mut conn =
@@ -387,7 +387,7 @@ pub fn xinfo_stream(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xinfo_stream")
         .description("Get stream metadata including length, consumer groups, and entry details (XINFO STREAM).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, XinfoStreamInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XinfoStreamInput>| async move {
                 let mut conn =
@@ -445,7 +445,7 @@ pub fn xrange(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xrange")
         .description("Get stream entries in a range. Use \"-\" to \"+\" for all entries.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, XrangeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XrangeInput>| async move {
                 let mut conn =
@@ -504,7 +504,7 @@ pub fn xlen(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_xlen")
         .description("Get the number of entries in a stream.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, XlenInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XlenInput>| async move {
                 let mut conn =
@@ -544,7 +544,7 @@ pub fn pubsub_channels(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_pubsub_channels")
         .description("List active pub/sub channels, optionally filtered by pattern.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, PubsubChannelsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<PubsubChannelsInput>| async move {
@@ -596,7 +596,7 @@ pub fn pubsub_numsub(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_pubsub_numsub")
         .description("Get subscriber counts for pub/sub channels.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, PubsubNumsubInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PubsubNumsubInput>| async move {
                 let mut conn =
@@ -658,7 +658,7 @@ pub fn hset(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hset")
         .description("Set one or more field-value pairs in a hash. Creates the hash if needed.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, HsetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HsetInput>| async move {
                 if !state.is_write_allowed() {
@@ -712,7 +712,7 @@ pub fn hdel(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hdel")
         .description("Delete one or more fields from a hash.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, HdelInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HdelInput>| async move {
                 if !state.is_write_allowed() {
@@ -766,7 +766,7 @@ pub fn lpush(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lpush")
         .description("Push elements to the head (left) of a list. Creates the list if needed.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, LpushInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LpushInput>| async move {
                 if !state.is_write_allowed() {
@@ -820,7 +820,7 @@ pub fn rpush(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_rpush")
         .description("Push elements to the tail (right) of a list. Creates the list if needed.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RpushInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RpushInput>| async move {
                 if !state.is_write_allowed() {
@@ -875,7 +875,7 @@ pub fn lpop(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lpop")
         .description("Pop elements from the head (left) of a list.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, LpopInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LpopInput>| async move {
                 if !state.is_write_allowed() {
@@ -929,7 +929,7 @@ pub fn rpop(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_rpop")
         .description("Pop elements from the tail (right) of a list.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RpopInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RpopInput>| async move {
                 if !state.is_write_allowed() {
@@ -982,7 +982,7 @@ pub fn sadd(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_sadd")
         .description("Add one or more members to a set. Creates the set if needed.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SaddInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SaddInput>| async move {
                 if !state.is_write_allowed() {
@@ -1036,7 +1036,7 @@ pub fn srem(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_srem")
         .description("Remove one or more members from a set.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SremInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SremInput>| async move {
                 if !state.is_write_allowed() {
@@ -1117,7 +1117,7 @@ pub fn zadd(state: Arc<AppState>) -> Tool {
              Supports NX, XX, GT, LT, and CH flags.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ZaddInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZaddInput>| async move {
                 if !state.is_write_allowed() {
@@ -1187,7 +1187,7 @@ pub fn zrem(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zrem")
         .description("Remove one or more members from a sorted set.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ZremInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZremInput>| async move {
                 if !state.is_write_allowed() {
@@ -1258,7 +1258,7 @@ pub fn xadd(state: Arc<AppState>) -> Tool {
             "Append an entry to a stream. Supports NOMKSTREAM, MAXLEN, and MINID trimming.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, XaddInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XaddInput>| async move {
                 if !state.is_write_allowed() {
@@ -1340,7 +1340,7 @@ pub fn xtrim(state: Arc<AppState>) -> Tool {
              Use approximate=true for better performance.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, XtrimInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XtrimInput>| async move {
                 if !state.is_write_allowed() {
@@ -1397,7 +1397,7 @@ pub fn hget(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hget")
         .description("Get the value of a single field in a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HgetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HgetInput>| async move {
                 let mut conn =
@@ -1442,7 +1442,7 @@ pub fn hmget(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hmget")
         .description("Get the values of multiple fields in a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HmgetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HmgetInput>| async move {
                 let mut conn =
@@ -1491,7 +1491,7 @@ pub fn hlen(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hlen")
         .description("Get the number of fields in a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HlenInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HlenInput>| async move {
                 let mut conn =
@@ -1532,7 +1532,7 @@ pub fn hexists(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hexists")
         .description("Check if a field exists in a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HexistsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HexistsInput>| async move {
                 let mut conn =
@@ -1574,7 +1574,7 @@ pub fn hkeys(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hkeys")
         .description("Get all field names in a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HkeysInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HkeysInput>| async move {
                 let mut conn =
@@ -1622,7 +1622,7 @@ pub fn hvals(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hvals")
         .description("Get all values in a hash.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HvalsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HvalsInput>| async move {
                 let mut conn =
@@ -1674,7 +1674,7 @@ pub fn hincrby(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_hincrby")
         .description("Increment the integer value of a hash field by the given amount.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, HincrbyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HincrbyInput>| async move {
                 if !state.is_write_allowed() {
@@ -1723,7 +1723,7 @@ pub fn scard(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_scard")
         .description("Get the number of members in a set (cardinality).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ScardInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ScardInput>| async move {
                 let mut conn =
@@ -1764,7 +1764,7 @@ pub fn sismember(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_sismember")
         .description("Check if a value is a member of a set.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, SismemberInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SismemberInput>| async move {
                 let mut conn =
@@ -1806,7 +1806,7 @@ pub fn sunion(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_sunion")
         .description("Return the union of multiple sets.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, SunionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SunionInput>| async move {
                 let mut conn =
@@ -1854,7 +1854,7 @@ pub fn sinter(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_sinter")
         .description("Return the intersection of multiple sets.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, SinterInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SinterInput>| async move {
                 let mut conn =
@@ -1902,7 +1902,7 @@ pub fn sdiff(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_sdiff")
         .description("Return the difference between the first set and all subsequent sets.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, SdiffInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SdiffInput>| async move {
                 let mut conn =
@@ -1952,7 +1952,7 @@ pub fn zcard(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zcard")
         .description("Get the number of members in a sorted set (cardinality).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ZcardInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZcardInput>| async move {
                 let mut conn =
@@ -1993,7 +1993,7 @@ pub fn zscore(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zscore")
         .description("Get the score of a member in a sorted set.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ZscoreInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZscoreInput>| async move {
                 let mut conn =
@@ -2043,7 +2043,7 @@ pub fn zrank(state: Arc<AppState>) -> Tool {
             "Get the rank (0-based index) of a member in a sorted set, ordered low to high.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ZrankInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZrankInput>| async move {
                 let mut conn =
@@ -2093,7 +2093,7 @@ pub fn zcount(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zcount")
         .description("Count members in a sorted set with scores between min and max (inclusive). Use \"-inf\"/\"+inf\" for unbounded.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ZcountInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZcountInput>| async move {
                 let mut conn =
@@ -2147,7 +2147,7 @@ pub fn zrangebyscore(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_zrangebyscore")
         .description("Get members from a sorted set with scores in the given range. Use \"-inf\"/\"+inf\" for unbounded.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ZrangebyscoreInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ZrangebyscoreInput>| async move {
@@ -2239,7 +2239,7 @@ pub fn llen(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_llen")
         .description("Get the length of a list.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, LlenInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LlenInput>| async move {
                 let mut conn =
@@ -2280,7 +2280,7 @@ pub fn lindex(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_lindex")
         .description("Get an element from a list by its index (0-based, negative counts from end).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, LindexInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LindexInput>| async move {
                 let mut conn =

@@ -47,7 +47,7 @@ pub fn cloud_raw_api(state: Arc<AppState>) -> Tool {
              Escape hatch for endpoints not covered by dedicated tools.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, CloudRawApiInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<CloudRawApiInput>| async move {
                 // Method-based tier gating
