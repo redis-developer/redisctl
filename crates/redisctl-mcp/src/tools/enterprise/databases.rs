@@ -38,7 +38,7 @@ pub fn list_databases(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_databases")
         .description("List all databases. Supports filtering by name and status.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListDatabasesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListDatabasesInput>| async move {
                 let client = state
@@ -95,7 +95,7 @@ pub fn get_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_database")
         .description("Get database details by UID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetDatabaseInput>| async move {
                 let client = state
@@ -142,7 +142,7 @@ pub fn get_database_stats(state: Arc<AppState>) -> Tool {
              for historical data.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDatabaseStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetDatabaseStatsInput>| async move {
@@ -195,7 +195,7 @@ pub fn get_database_endpoints(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_database_endpoints")
         .description("Get connection endpoints for a specific database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetDatabaseEndpointsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetDatabaseEndpointsInput>| async move {
@@ -231,7 +231,7 @@ pub fn list_database_alerts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_database_alerts")
         .description("List all alerts for a specific database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListDatabaseAlertsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListDatabaseAlertsInput>| async move {
@@ -278,7 +278,7 @@ pub fn backup_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("backup_enterprise_database")
         .description("Trigger a database backup and wait for completion.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, BackupDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<BackupDatabaseInput>| async move {
@@ -339,7 +339,7 @@ pub fn import_enterprise_database(state: Arc<AppState>) -> Tool {
              WARNING: If flush is true, existing data will be deleted before import.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ImportDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ImportDatabaseInput>| async move {
@@ -408,7 +408,7 @@ pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_database")
         .description("Create a new database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateEnterpriseDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateEnterpriseDatabaseInput>| async move {
@@ -471,7 +471,7 @@ pub fn update_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_database")
         .description("Update database configuration. Pass fields to update as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateEnterpriseDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateEnterpriseDatabaseInput>| async move {
@@ -514,7 +514,7 @@ pub fn delete_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_database")
         .description("DANGEROUS: Delete a database and all its data.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteEnterpriseDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteEnterpriseDatabaseInput>| async move {
@@ -563,7 +563,7 @@ pub fn flush_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("flush_enterprise_database")
         .description("DANGEROUS: Flush all data from a database.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, FlushEnterpriseDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<FlushEnterpriseDatabaseInput>| async move {
@@ -615,7 +615,7 @@ pub fn export_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("export_enterprise_database")
         .description("Export a database to a specified location (e.g., S3, FTP).")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ExportEnterpriseDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ExportEnterpriseDatabaseInput>| async move {
@@ -661,7 +661,7 @@ pub fn restore_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("restore_enterprise_database")
         .description("Restore a database from a backup.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RestoreEnterpriseDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<RestoreEnterpriseDatabaseInput>| async move {
@@ -713,7 +713,7 @@ pub fn upgrade_enterprise_database_redis(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("upgrade_enterprise_database_redis")
         .description("Upgrade the Redis version of a database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpgradeEnterpriseDatabaseRedisInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpgradeEnterpriseDatabaseRedisInput>| async move {
@@ -765,7 +765,7 @@ pub fn list_enterprise_crdbs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_crdbs")
         .description("List all Active-Active (CRDB) databases.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListCrdbsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListCrdbsInput>| async move {
                 let client = state
@@ -797,7 +797,7 @@ pub fn get_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_crdb")
         .description("Get details of a specific Active-Active (CRDB) database by GUID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetCrdbInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbInput>| async move {
                 let client = state
@@ -832,7 +832,7 @@ pub fn get_enterprise_crdb_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_crdb_tasks")
         .description("Get tasks for a specific Active-Active (CRDB) database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetCrdbTasksInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetCrdbTasksInput>| async move {
                 let client = state
@@ -867,7 +867,7 @@ pub fn create_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_crdb")
         .description("Create a new Active-Active (CRDB) database. Pass full configuration as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateEnterpriseCrdbInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateEnterpriseCrdbInput>| async move {
@@ -911,7 +911,7 @@ pub fn update_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_crdb")
         .description("Update an Active-Active (CRDB) database. Pass fields to update as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateEnterpriseCrdbInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateEnterpriseCrdbInput>| async move {
@@ -954,7 +954,7 @@ pub fn delete_enterprise_crdb(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_enterprise_crdb")
         .description("DANGEROUS: Delete an Active-Active (CRDB) database across all participating clusters.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteEnterpriseCrdbInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteEnterpriseCrdbInput>| async move {

@@ -34,7 +34,7 @@ pub fn list_fixed_subscriptions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_fixed_subscriptions")
         .description("List all Fixed/Essentials subscriptions.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListFixedSubscriptionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListFixedSubscriptionsInput>| async move {
@@ -70,7 +70,7 @@ pub fn get_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_subscription")
         .description("Get subscription details by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedSubscriptionInput>| async move {
@@ -114,7 +114,7 @@ pub fn create_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_subscription")
         .description("Create a new Fixed/Essentials subscription.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateFixedSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateFixedSubscriptionInput>| async move {
@@ -176,7 +176,7 @@ pub fn update_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_subscription")
         .description("Update a Fixed/Essentials subscription.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateFixedSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateFixedSubscriptionInput>| async move {
@@ -230,7 +230,7 @@ pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
              All databases must be deleted first.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteFixedSubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteFixedSubscriptionInput>| async move {
@@ -276,7 +276,7 @@ pub fn list_fixed_plans(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_fixed_plans")
         .description("List available Fixed/Essentials plans.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListFixedPlansInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListFixedPlansInput>| async move {
@@ -312,7 +312,7 @@ pub fn get_fixed_plans_by_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_plans_by_subscription")
         .description("Get compatible plans for a subscription.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedPlansBySubscriptionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedPlansBySubscriptionInput>| async move {
@@ -348,7 +348,7 @@ pub fn get_fixed_plan(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_plan")
         .description("Get plan details by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedPlanInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetFixedPlanInput>| async move {
                 let client = state
@@ -383,7 +383,7 @@ pub fn get_fixed_redis_versions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_redis_versions")
         .description("Get available Redis versions for a subscription.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedRedisVersionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedRedisVersionsInput>| async move {
@@ -429,7 +429,7 @@ pub fn list_fixed_databases(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_fixed_databases")
         .description("List databases in a subscription.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListFixedDatabasesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListFixedDatabasesInput>| async move {
@@ -467,7 +467,7 @@ pub fn get_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database")
         .description("Get database details by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseInput>| async move {
@@ -538,7 +538,7 @@ pub fn create_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_database")
         .description("Create a database in a Fixed/Essentials subscription.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateFixedDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateFixedDatabaseInput>| async move {
@@ -635,7 +635,7 @@ pub fn update_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_database")
         .description("Update a database in a Fixed/Essentials subscription.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateFixedDatabaseInput>| async move {
@@ -707,7 +707,7 @@ pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_database")
         .description("DANGEROUS: Delete a Fixed/Essentials database and all its data.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteFixedDatabaseInput>| async move {
@@ -755,7 +755,7 @@ pub fn get_fixed_database_backup_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_backup_status")
         .description("Get latest backup status for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseBackupStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseBackupStatusInput>| async move {
@@ -796,7 +796,7 @@ pub fn backup_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("backup_fixed_database")
         .description("Trigger a manual backup of a database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, BackupFixedDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<BackupFixedDatabaseInput>| async move {
@@ -847,7 +847,7 @@ pub fn get_fixed_database_import_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_import_status")
         .description("Get latest import status for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseImportStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseImportStatusInput>| async move {
@@ -892,7 +892,7 @@ pub fn import_fixed_database(state: Arc<AppState>) -> Tool {
              WARNING: This will overwrite existing data.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ImportFixedDatabaseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ImportFixedDatabaseInput>| async move {
@@ -944,7 +944,7 @@ pub fn get_fixed_database_slow_log(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_slow_log")
         .description("Get slow log entries for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseSlowLogInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseSlowLogInput>| async move {
@@ -986,7 +986,7 @@ pub fn get_fixed_database_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_tags")
         .description("Get tags for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseTagsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseTagsInput>| async move {
@@ -1028,7 +1028,7 @@ pub fn create_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_database_tag")
         .description("Create a tag on a database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateFixedDatabaseTagInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateFixedDatabaseTagInput>| async move {
@@ -1084,7 +1084,7 @@ pub fn update_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_database_tag")
         .description("Update a tag value on a database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseTagInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateFixedDatabaseTagInput>| async move {
@@ -1143,7 +1143,7 @@ pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_fixed_database_tag")
         .description("DANGEROUS: Delete a tag from a database.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteFixedDatabaseTagInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteFixedDatabaseTagInput>| async move {
@@ -1198,7 +1198,7 @@ pub fn update_fixed_database_tags(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_fixed_database_tags")
         .description("Update all tags on a database (replaces existing tags).")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateFixedDatabaseTagsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateFixedDatabaseTagsInput>| async move {
@@ -1263,7 +1263,7 @@ pub fn get_fixed_database_upgrade_versions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_upgrade_versions")
         .description("Get available upgrade target Redis versions for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeVersionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseUpgradeVersionsInput>| async move {
@@ -1301,7 +1301,7 @@ pub fn get_fixed_database_upgrade_status(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_fixed_database_upgrade_status")
         .description("Get latest Redis version upgrade status for a database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetFixedDatabaseUpgradeStatusInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetFixedDatabaseUpgradeStatusInput>| async move {
@@ -1341,7 +1341,7 @@ pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("upgrade_fixed_database_redis_version")
         .description("Upgrade the Redis version of a database.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpgradeFixedDatabaseRedisVersionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpgradeFixedDatabaseRedisVersionInput>| async move {

@@ -39,7 +39,7 @@ pub fn get_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_vpc_peering")
         .description("Get VPC peering details.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetVpcPeeringInput>| async move {
                 let client = state
@@ -98,7 +98,7 @@ pub fn create_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_vpc_peering")
         .description("Create a VPC peering connection.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateVpcPeeringInput>| async move {
@@ -178,7 +178,7 @@ pub fn update_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_vpc_peering")
         .description("Update a VPC peering connection.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateVpcPeeringInput>| async move {
@@ -234,7 +234,7 @@ pub fn delete_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_vpc_peering")
         .description("DANGEROUS: Delete a VPC peering connection. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteVpcPeeringInput>| async move {
@@ -280,7 +280,7 @@ pub fn get_aa_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_vpc_peering")
         .description("Get Active-Active VPC peering details.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaVpcPeeringInput>| async move {
@@ -340,7 +340,7 @@ pub fn create_aa_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_aa_vpc_peering")
         .description("Create an Active-Active VPC peering connection.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAaVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateAaVpcPeeringInput>| async move {
@@ -420,7 +420,7 @@ pub fn update_aa_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_aa_vpc_peering")
         .description("Update an Active-Active VPC peering connection.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateAaVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateAaVpcPeeringInput>| async move {
@@ -476,7 +476,7 @@ pub fn delete_aa_vpc_peering(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_vpc_peering")
         .description("DANGEROUS: Delete an Active-Active VPC peering connection. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAaVpcPeeringInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaVpcPeeringInput>| async move {
@@ -522,7 +522,7 @@ pub fn get_tgw_attachments(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_tgw_attachments")
         .description("Get Transit Gateway attachments.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetTgwAttachmentsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetTgwAttachmentsInput>| async move {
@@ -558,7 +558,7 @@ pub fn get_tgw_invitations(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_tgw_invitations")
         .description("Get Transit Gateway shared invitations.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetTgwInvitationsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetTgwInvitationsInput>| async move {
@@ -596,7 +596,7 @@ pub fn accept_tgw_invitation(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("accept_tgw_invitation")
         .description("Accept a Transit Gateway resource share invitation.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AcceptTgwInvitationInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<AcceptTgwInvitationInput>| async move {
@@ -640,7 +640,7 @@ pub fn reject_tgw_invitation(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("reject_tgw_invitation")
         .description("Reject a Transit Gateway resource share invitation.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RejectTgwInvitationInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<RejectTgwInvitationInput>| async move {
@@ -691,7 +691,7 @@ pub fn create_tgw_attachment(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_tgw_attachment")
         .description("Create a Transit Gateway attachment.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateTgwAttachmentInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateTgwAttachmentInput>| async move {
@@ -750,7 +750,7 @@ pub fn update_tgw_attachment_cidrs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_tgw_attachment_cidrs")
         .description("Update CIDRs for a Transit Gateway attachment.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateTgwAttachmentCidrsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateTgwAttachmentCidrsInput>| async move {
@@ -800,7 +800,7 @@ pub fn delete_tgw_attachment(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_tgw_attachment")
         .description("DANGEROUS: Delete a Transit Gateway attachment. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteTgwAttachmentInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteTgwAttachmentInput>| async move {
@@ -846,7 +846,7 @@ pub fn get_aa_tgw_attachments(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_tgw_attachments")
         .description("Get Active-Active Transit Gateway attachments.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaTgwAttachmentsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaTgwAttachmentsInput>| async move {
@@ -882,7 +882,7 @@ pub fn get_aa_tgw_invitations(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_tgw_invitations")
         .description("Get Active-Active Transit Gateway shared invitations.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaTgwInvitationsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaTgwInvitationsInput>| async move {
@@ -922,7 +922,7 @@ pub fn accept_aa_tgw_invitation(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("accept_aa_tgw_invitation")
         .description("Accept an Active-Active Transit Gateway resource share invitation.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AcceptAaTgwInvitationInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<AcceptAaTgwInvitationInput>| async move {
@@ -972,7 +972,7 @@ pub fn reject_aa_tgw_invitation(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("reject_aa_tgw_invitation")
         .description("Reject an Active-Active Transit Gateway resource share invitation.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RejectAaTgwInvitationInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<RejectAaTgwInvitationInput>| async move {
@@ -1029,7 +1029,7 @@ pub fn create_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_aa_tgw_attachment")
         .description("Create an Active-Active Transit Gateway attachment.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAaTgwAttachmentInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateAaTgwAttachmentInput>| async move {
@@ -1094,7 +1094,7 @@ pub fn update_aa_tgw_attachment_cidrs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_aa_tgw_attachment_cidrs")
         .description("Update CIDRs for an Active-Active Transit Gateway attachment.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateAaTgwAttachmentCidrsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateAaTgwAttachmentCidrsInput>| async move {
@@ -1151,7 +1151,7 @@ pub fn delete_aa_tgw_attachment(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_tgw_attachment")
         .description("DANGEROUS: Delete an Active-Active Transit Gateway attachment. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAaTgwAttachmentInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaTgwAttachmentInput>| async move {
@@ -1201,7 +1201,7 @@ pub fn get_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_psc_service")
         .description("Get Private Service Connect (PSC) service.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetPscServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetPscServiceInput>| async move {
                 let client = state
@@ -1236,7 +1236,7 @@ pub fn create_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_psc_service")
         .description("Create a Private Service Connect (PSC) service.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreatePscServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreatePscServiceInput>| async move {
@@ -1278,7 +1278,7 @@ pub fn delete_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_psc_service")
         .description("DANGEROUS: Delete a PSC service. Disconnects all endpoints.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeletePscServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeletePscServiceInput>| async move {
@@ -1320,7 +1320,7 @@ pub fn get_psc_endpoints(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_psc_endpoints")
         .description("Get Private Service Connect (PSC) endpoints.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetPscEndpointsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetPscEndpointsInput>| async move {
@@ -1372,7 +1372,7 @@ pub fn create_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_psc_endpoint")
         .description("Create a Private Service Connect (PSC) endpoint.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreatePscEndpointInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreatePscEndpointInput>| async move {
@@ -1440,7 +1440,7 @@ pub fn update_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_psc_endpoint")
         .description("Update a Private Service Connect (PSC) endpoint.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdatePscEndpointInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdatePscEndpointInput>| async move {
@@ -1494,7 +1494,7 @@ pub fn delete_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_psc_endpoint")
         .description("DANGEROUS: Delete a PSC endpoint. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeletePscEndpointInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeletePscEndpointInput>| async move {
@@ -1538,7 +1538,7 @@ pub fn get_psc_creation_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_psc_creation_script")
         .description("Get the creation script for a PSC endpoint.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetPscCreationScriptInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetPscCreationScriptInput>| async move {
@@ -1576,7 +1576,7 @@ pub fn get_psc_deletion_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_psc_deletion_script")
         .description("Get the deletion script for a PSC endpoint.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetPscDeletionScriptInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetPscDeletionScriptInput>| async move {
@@ -1616,7 +1616,7 @@ pub fn get_aa_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_psc_service")
         .description("Get Active-Active PSC service.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaPscServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaPscServiceInput>| async move {
@@ -1652,7 +1652,7 @@ pub fn create_aa_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_aa_psc_service")
         .description("Create an Active-Active PSC service.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAaPscServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateAaPscServiceInput>| async move {
@@ -1694,7 +1694,7 @@ pub fn delete_aa_psc_service(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_psc_service")
         .description("DANGEROUS: Delete an Active-Active PSC service. Disconnects all endpoints.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAaPscServiceInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaPscServiceInput>| async move {
@@ -1736,7 +1736,7 @@ pub fn get_aa_psc_endpoints(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_psc_endpoints")
         .description("Get Active-Active PSC endpoints.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaPscEndpointsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaPscEndpointsInput>| async move {
@@ -1788,7 +1788,7 @@ pub fn create_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_aa_psc_endpoint")
         .description("Create an Active-Active PSC endpoint.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAaPscEndpointInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateAaPscEndpointInput>| async move {
@@ -1858,7 +1858,7 @@ pub fn update_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_aa_psc_endpoint")
         .description("Update an Active-Active PSC endpoint.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateAaPscEndpointInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateAaPscEndpointInput>| async move {
@@ -1919,7 +1919,7 @@ pub fn delete_aa_psc_endpoint(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_aa_psc_endpoint")
         .description("DANGEROUS: Delete an Active-Active PSC endpoint. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAaPscEndpointInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAaPscEndpointInput>| async move {
@@ -1971,7 +1971,7 @@ pub fn get_aa_psc_creation_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_psc_creation_script")
         .description("Get the creation script for an Active-Active PSC endpoint.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaPscCreationScriptInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaPscCreationScriptInput>| async move {
@@ -2018,7 +2018,7 @@ pub fn get_aa_psc_deletion_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_psc_deletion_script")
         .description("Get the deletion script for an Active-Active PSC endpoint.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaPscDeletionScriptInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaPscDeletionScriptInput>| async move {
@@ -2063,7 +2063,7 @@ pub fn get_private_link(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_private_link")
         .description("Get AWS PrivateLink configuration.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetPrivateLinkInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetPrivateLinkInput>| async move {
@@ -2123,7 +2123,7 @@ pub fn create_private_link(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_private_link")
         .description("Create an AWS PrivateLink configuration.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreatePrivateLinkInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreatePrivateLinkInput>| async move {
@@ -2174,7 +2174,7 @@ pub fn delete_private_link(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_private_link")
         .description("DANGEROUS: Delete an AWS PrivateLink configuration. Causes connectivity loss.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeletePrivateLinkInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeletePrivateLinkInput>| async move {
@@ -2224,7 +2224,7 @@ pub fn add_private_link_principals(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("add_private_link_principals")
         .description("Add AWS principals to a PrivateLink access list.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AddPrivateLinkPrincipalsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<AddPrivateLinkPrincipalsInput>| async move {
@@ -2285,7 +2285,7 @@ pub fn remove_private_link_principals(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("remove_private_link_principals")
         .description("Remove AWS principals from a PrivateLink access list.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RemovePrivateLinkPrincipalsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<RemovePrivateLinkPrincipalsInput>| async move {
@@ -2339,7 +2339,7 @@ pub fn get_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_private_link_endpoint_script")
         .description("Get the endpoint creation script for an AWS PrivateLink.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetPrivateLinkEndpointScriptInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetPrivateLinkEndpointScriptInput>| async move {
@@ -2381,7 +2381,7 @@ pub fn get_aa_private_link(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_private_link")
         .description("Get Active-Active AWS PrivateLink configuration.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaPrivateLinkInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaPrivateLinkInput>| async move {
@@ -2428,7 +2428,7 @@ pub fn create_aa_private_link(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_aa_private_link")
         .description("Create an Active-Active AWS PrivateLink configuration.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAaPrivateLinkInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateAaPrivateLinkInput>| async move {
@@ -2489,7 +2489,7 @@ pub fn add_aa_private_link_principals(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("add_aa_private_link_principals")
         .description("Add AWS principals to an Active-Active PrivateLink access list.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, AddAaPrivateLinkPrincipalsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<AddAaPrivateLinkPrincipalsInput>| async move {
@@ -2552,7 +2552,7 @@ pub fn remove_aa_private_link_principals(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("remove_aa_private_link_principals")
         .description("Remove AWS principals from an Active-Active PrivateLink access list.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RemoveAaPrivateLinkPrincipalsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<RemoveAaPrivateLinkPrincipalsInput>| async move {
@@ -2612,7 +2612,7 @@ pub fn get_aa_private_link_endpoint_script(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_aa_private_link_endpoint_script")
         .description("Get the endpoint creation script for an Active-Active AWS PrivateLink.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAaPrivateLinkEndpointScriptInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAaPrivateLinkEndpointScriptInput>| async move {

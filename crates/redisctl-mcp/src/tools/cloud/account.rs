@@ -38,7 +38,7 @@ pub fn get_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_account")
         .description("Get current account information.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAccountInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAccountInput>| async move {
                 let client = state
@@ -77,7 +77,7 @@ pub fn get_system_logs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_system_logs")
         .description("Get system audit logs.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSystemLogsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetSystemLogsInput>| async move {
                 let client = state
@@ -116,7 +116,7 @@ pub fn get_session_logs(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_session_logs")
         .description("Get session activity logs.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetSessionLogsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetSessionLogsInput>| async move {
@@ -153,7 +153,7 @@ pub fn get_regions(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_regions")
         .description("Get supported cloud regions. Optionally filter by provider.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetRegionsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetRegionsInput>| async move {
                 let client = state
@@ -186,7 +186,7 @@ pub fn get_modules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_modules")
         .description("Get supported database modules.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetModulesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetModulesInput>| async move {
                 let client = state
@@ -223,7 +223,7 @@ pub fn list_account_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_account_users")
         .description("List all account users (team members with console access).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListAccountUsersInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListAccountUsersInput>| async move {
@@ -259,7 +259,7 @@ pub fn get_account_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_account_user")
         .description("Get an account user by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAccountUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetAccountUserInput>| async move {
@@ -300,7 +300,7 @@ pub fn update_account_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_account_user")
         .description("Update an account user's name or role.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateAccountUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateAccountUserInput>| async move {
@@ -348,7 +348,7 @@ pub fn delete_account_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_account_user")
         .description("DANGEROUS: Delete an account user. The user will lose all access.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAccountUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteAccountUserInput>| async move {
@@ -392,7 +392,7 @@ pub fn list_acl_users(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_acl_users")
         .description("List all ACL users.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListAclUsersInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAclUsersInput>| async move {
                 let client = state
@@ -427,7 +427,7 @@ pub fn get_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_acl_user")
         .description("Get an ACL user by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetAclUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetAclUserInput>| async move {
                 let client = state
@@ -460,7 +460,7 @@ pub fn list_acl_roles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_acl_roles")
         .description("List all ACL roles.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListAclRolesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListAclRolesInput>| async move {
                 let client = state
@@ -493,7 +493,7 @@ pub fn list_redis_rules(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_redis_rules")
         .description("List all Redis ACL rules.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListRedisRulesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListRedisRulesInput>| async move {
@@ -537,7 +537,7 @@ pub fn create_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_acl_user")
         .description("Create a new ACL user with a database access role.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAclUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<CreateAclUserInput>| async move {
                 if !state.is_write_allowed() {
@@ -590,7 +590,7 @@ pub fn update_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_acl_user")
         .description("Update an ACL user's role or password.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateAclUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateAclUserInput>| async move {
                 if !state.is_write_allowed() {
@@ -637,7 +637,7 @@ pub fn delete_acl_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_acl_user")
         .description("DANGEROUS: Delete an ACL user. Active sessions will be terminated.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAclUserInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteAclUserInput>| async move {
                 if !state.is_destructive_allowed() {
@@ -701,7 +701,7 @@ pub fn create_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_acl_role")
         .description("Create a new ACL role with Redis rules and database associations.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateAclRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<CreateAclRoleInput>| async move {
                 if !state.is_write_allowed() {
@@ -768,7 +768,7 @@ pub fn update_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_acl_role")
         .description("Update an ACL role's name or Redis rule assignments.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateAclRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateAclRoleInput>| async move {
                 if !state.is_write_allowed() {
@@ -831,7 +831,7 @@ pub fn delete_acl_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_acl_role")
         .description("DANGEROUS: Delete an ACL role. Assigned users will lose their permissions.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteAclRoleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteAclRoleInput>| async move {
                 if !state.is_destructive_allowed() {
@@ -874,7 +874,7 @@ pub fn create_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_redis_rule")
         .description("Create a new Redis ACL rule defining command permissions.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateRedisRuleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateRedisRuleInput>| async move {
@@ -925,7 +925,7 @@ pub fn update_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_redis_rule")
         .description("Update a Redis ACL rule's name or pattern.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateRedisRuleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateRedisRuleInput>| async move {
@@ -973,7 +973,7 @@ pub fn delete_redis_rule(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_redis_rule")
         .description("DANGEROUS: Delete a Redis ACL rule. Roles using it will lose those permissions.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteRedisRuleInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteRedisRuleInput>| async move {
@@ -1036,7 +1036,7 @@ pub fn generate_cost_report(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("generate_cost_report")
         .description("Generate a FOCUS cost report for the specified date range.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, GenerateCostReportInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GenerateCostReportInput>| async move {
@@ -1098,7 +1098,7 @@ pub fn download_cost_report(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("download_cost_report")
         .description("Download a previously generated cost report by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, DownloadCostReportInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DownloadCostReportInput>| async move {
@@ -1139,7 +1139,7 @@ pub fn list_payment_methods(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_payment_methods")
         .description("List all payment methods.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListPaymentMethodsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListPaymentMethodsInput>| async move {
@@ -1177,7 +1177,7 @@ pub fn list_tasks(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_tasks")
         .description("List all async tasks.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListTasksInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListTasksInput>| async move {
                 let client = state
@@ -1212,7 +1212,7 @@ pub fn get_task(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_task")
         .description("Get task status by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetTaskInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetTaskInput>| async move {
                 let client = state
@@ -1261,7 +1261,7 @@ pub fn wait_for_cloud_task(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("wait_for_cloud_task")
         .description("Poll an async task until it reaches a terminal state. Useful for multi-step workflows.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, WaitForCloudTaskInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<WaitForCloudTaskInput>| async move {
@@ -1333,7 +1333,7 @@ pub fn list_cloud_accounts(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_cloud_accounts")
         .description("List all cloud provider accounts (BYOC).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListCloudAccountsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ListCloudAccountsInput>| async move {
@@ -1370,7 +1370,7 @@ pub fn get_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_cloud_account")
         .description("Get a cloud provider account (BYOC) by ID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetCloudAccountInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetCloudAccountInput>| async move {
@@ -1419,7 +1419,7 @@ pub fn create_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_cloud_account")
         .description("Create a new cloud provider account (BYOC).")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateCloudAccountInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateCloudAccountInput>| async move {
@@ -1485,7 +1485,7 @@ pub fn update_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_cloud_account")
         .description("Update a cloud provider account (BYOC) configuration.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateCloudAccountInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateCloudAccountInput>| async move {
@@ -1537,7 +1537,7 @@ pub fn delete_cloud_account(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("delete_cloud_account")
         .description("DANGEROUS: Delete a cloud provider account (BYOC).")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteCloudAccountInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DeleteCloudAccountInput>| async move {

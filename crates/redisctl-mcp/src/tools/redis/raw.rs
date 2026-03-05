@@ -96,7 +96,7 @@ pub fn redis_command(state: Arc<AppState>) -> Tool {
              Certain dangerous commands and subcommands are blocked.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, RedisCommandInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RedisCommandInput>| async move {
                 if !state.is_destructive_allowed() {

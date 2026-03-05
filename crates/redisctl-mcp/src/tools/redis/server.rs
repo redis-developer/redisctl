@@ -64,7 +64,7 @@ pub fn ping(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_ping")
         .description("Test connectivity by sending a PING command")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, PingInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PingInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -109,7 +109,7 @@ pub fn info(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_info")
         .description("Get server information and statistics (INFO command).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, InfoInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<InfoInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -153,7 +153,7 @@ pub fn dbsize(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_dbsize")
         .description("Get the number of keys in the current database.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, DbsizeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DbsizeInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -195,7 +195,7 @@ pub fn client_list(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_client_list")
         .description("List client connections (CLIENT LIST).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ClientListInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ClientListInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -239,7 +239,7 @@ pub fn cluster_info(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_cluster_info")
         .description("Get cluster information (only works on cluster-enabled instances).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ClusterInfoInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ClusterInfoInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -286,7 +286,7 @@ pub fn slowlog(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_slowlog")
         .description("Get slow query log entries for identifying performance issues.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, SlowlogInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SlowlogInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -357,7 +357,7 @@ pub fn config_get(state: Arc<AppState>) -> Tool {
              Supports glob-style patterns.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ConfigGetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ConfigGetInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -415,7 +415,7 @@ pub fn memory_stats(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_memory_stats")
         .description("Get memory usage breakdown by category (MEMORY STATS).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, MemoryStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryStatsInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -461,7 +461,7 @@ pub fn latency_history(state: Arc<AppState>) -> Tool {
              (CONFIG SET latency-monitor-threshold <ms>).",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, LatencyHistoryInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<LatencyHistoryInput>| async move {
@@ -527,7 +527,7 @@ pub fn acl_list(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_acl_list")
         .description("List all ACL rules (ACL LIST).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, AclListInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AclListInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -575,7 +575,7 @@ pub fn acl_whoami(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_acl_whoami")
         .description("Get the current authenticated username (ACL WHOAMI).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, AclWhoamiInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AclWhoamiInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -615,7 +615,7 @@ pub fn module_list(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("redis_module_list")
         .description("List loaded modules with names and versions (MODULE LIST).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ModuleListInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ModuleListInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -672,7 +672,7 @@ pub fn config_set(state: Arc<AppState>) -> Tool {
              Changes may not persist unless CONFIG REWRITE is called.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, ConfigSetInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ConfigSetInput>| async move {
                 if !state.is_write_allowed() {
@@ -729,7 +729,7 @@ pub fn flushdb(state: Arc<AppState>) -> Tool {
              Set async_flush=true for non-blocking operation.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, FlushdbInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<FlushdbInput>| async move {
                 if !state.is_destructive_allowed() {

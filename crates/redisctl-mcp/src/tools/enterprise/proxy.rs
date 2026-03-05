@@ -25,7 +25,7 @@ pub fn list_proxies(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_enterprise_proxies")
         .description("List all proxy instances.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListProxiesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListProxiesInput>| async move {
                 let client = state
@@ -60,7 +60,7 @@ pub fn get_proxy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_proxy")
         .description("Get proxy details by UID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetProxyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetProxyInput>| async move {
                 let client = state
@@ -97,7 +97,7 @@ pub fn get_proxy_stats(state: Arc<AppState>) -> Tool {
             "Get statistics for a specific proxy including connection counts and throughput.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetProxyStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetProxyStatsInput>| async move {
                 let client = state
@@ -134,7 +134,7 @@ pub fn update_proxy(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_proxy")
         .description("Update a proxy's configuration. Pass fields to update as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateProxyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateProxyInput>| async move {
                 if !state.is_write_allowed() {

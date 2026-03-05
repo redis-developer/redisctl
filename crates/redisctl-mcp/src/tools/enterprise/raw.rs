@@ -47,7 +47,7 @@ pub fn enterprise_raw_api(state: Arc<AppState>) -> Tool {
              Escape hatch for endpoints not covered by dedicated tools.",
         )
         .destructive()
-        .extractor_handler_typed::<_, _, _, EnterpriseRawApiInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<EnterpriseRawApiInput>| async move {

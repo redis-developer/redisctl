@@ -103,7 +103,7 @@ pub fn health_check(state: Arc<AppState>) -> Tool {
              covering connectivity, version, uptime, memory, ops rate, and key count.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HealthCheckInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HealthCheckInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -245,7 +245,7 @@ pub fn key_summary(state: Arc<AppState>) -> Tool {
             "Get metadata summary for a key combining TYPE, TTL, MEMORY USAGE, and OBJECT ENCODING.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, KeySummaryInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeySummaryInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -365,7 +365,7 @@ pub fn hotkeys(state: Arc<AppState>) -> Tool {
              Capped at sample_size (default 1000, max 10000) to limit impact.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, HotkeysInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HotkeysInput>| async move {
                 let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
@@ -507,7 +507,7 @@ pub fn connection_summary(state: Arc<AppState>) -> Tool {
             "Analyze client connections: totals, top IPs, idle/blocked counts, and oldest connection.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ConnectionSummaryInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ConnectionSummaryInput>| async move {

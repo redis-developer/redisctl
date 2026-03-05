@@ -52,7 +52,7 @@ pub fn list_profiles(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_list")
         .description("List all configured profiles.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListProfilesInput>(
+        .extractor_handler(
             state,
             |State(_state): State<Arc<AppState>>, Json(_input): Json<ListProfilesInput>| async move {
                 let config = Config::load()
@@ -185,7 +185,7 @@ pub fn show_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_show")
         .description("Show details of a specific profile (credentials masked).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ShowProfileInput>(
+        .extractor_handler(
             state,
             |State(_state): State<Arc<AppState>>, Json(input): Json<ShowProfileInput>| async move {
                 let config = Config::load().tool_context("Failed to load config")?;
@@ -322,7 +322,7 @@ pub fn validate_config(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_validate")
         .description("Validate configuration for structural issues. Set connect=true to test connectivity.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ValidateConfigInput>(
+        .extractor_handler(
             state,
             |State(_state): State<Arc<AppState>>, Json(input): Json<ValidateConfigInput>| async move {
             let path = Config::config_path()
@@ -597,7 +597,7 @@ pub fn set_default_cloud(state: Arc<AppState>) -> Tool {
         .description("Set the default profile for Cloud commands.")
         .idempotent()
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SetDefaultCloudInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetDefaultCloudInput>| async move {
                 // Check write permission
@@ -648,7 +648,7 @@ pub fn set_default_enterprise(state: Arc<AppState>) -> Tool {
         .description("Set the default profile for Enterprise commands.")
         .idempotent()
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, SetDefaultEnterpriseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SetDefaultEnterpriseInput>| async move {
                 // Check write permission
@@ -698,7 +698,7 @@ pub fn delete_profile(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("profile_delete")
         .description("DANGEROUS: Delete a profile from the configuration.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, DeleteProfileInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DeleteProfileInput>| async move {
                 // Check destructive permission
@@ -802,7 +802,7 @@ pub fn create_profile(state: Arc<AppState>) -> Tool {
              database (host). Auto-sets as default if first of its type.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, CreateProfileInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<CreateProfileInput>| async move {

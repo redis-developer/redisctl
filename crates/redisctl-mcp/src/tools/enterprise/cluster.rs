@@ -27,7 +27,7 @@ pub fn get_cluster(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_cluster")
         .description("Get cluster information including name, version, and configuration")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetClusterInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetClusterInput>| async move {
                 let client = state
@@ -64,7 +64,7 @@ pub fn get_license(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_license")
         .description("Get license information including type, expiration, and enabled features")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetLicenseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetLicenseInput>| async move {
                 let client = state
@@ -96,7 +96,7 @@ pub fn get_license_usage(state: Arc<AppState>) -> Tool {
             "Get license utilization statistics including shards, nodes, and RAM usage against limits",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetLicenseUsageInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetLicenseUsageInput>| async move {
@@ -136,7 +136,7 @@ pub fn update_license(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_license")
         .description("Apply a new license key to the cluster.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateLicenseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateLicenseInput>| async move {
                 // Check write permission
@@ -181,7 +181,7 @@ pub fn validate_license(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("validate_enterprise_license")
         .description("Validate a license key without applying it (dry-run).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ValidateLicenseInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ValidateLicenseInput>| async move {
@@ -221,7 +221,7 @@ pub fn update_cluster(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_cluster")
         .description("Update cluster configuration settings. Pass fields to update as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateClusterInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateClusterInput>| async move {
                 // Check write permission
@@ -264,7 +264,7 @@ pub fn get_cluster_policy(state: Arc<AppState>) -> Tool {
              rack awareness, and default Redis version.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetClusterPolicyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetClusterPolicyInput>| async move {
@@ -303,7 +303,7 @@ pub fn update_cluster_policy(state: Arc<AppState>) -> Tool {
             "Update cluster policy settings. Pass fields to update as JSON.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateClusterPolicyInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateClusterPolicyInput>| async move {
@@ -351,7 +351,7 @@ pub fn enable_maintenance_mode(state: Arc<AppState>) -> Tool {
              until maintenance mode is disabled.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, EnableMaintenanceModeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<EnableMaintenanceModeInput>| async move {
@@ -396,7 +396,7 @@ pub fn disable_maintenance_mode(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("disable_enterprise_maintenance_mode")
         .description("Disable maintenance mode and re-enable configuration changes.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, DisableMaintenanceModeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<DisableMaintenanceModeInput>| async move {
@@ -445,7 +445,7 @@ pub fn get_cluster_certificates(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_cluster_certificates")
         .description("Get all configured certificates (proxy, syncer, API).")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetClusterCertificatesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetClusterCertificatesInput>| async move {
@@ -479,7 +479,7 @@ pub fn rotate_cluster_certificates(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("rotate_enterprise_cluster_certificates")
         .description("Rotate all certificates, generating new ones to replace existing.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, RotateClusterCertificatesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<RotateClusterCertificatesInput>| async move {
@@ -532,7 +532,7 @@ pub fn update_cluster_certificates(state: Arc<AppState>) -> Tool {
              PEM-encoded certificate, and PEM-encoded private key.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateClusterCertificatesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<UpdateClusterCertificatesInput>| async move {
@@ -586,7 +586,7 @@ pub fn list_nodes(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("list_nodes")
         .description("List all nodes.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, ListNodesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ListNodesInput>| async move {
                 let client = state
@@ -618,7 +618,7 @@ pub fn get_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_node")
         .description("Get detailed information about a specific node by UID.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetNodeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeInput>| async move {
                 let client = state
@@ -665,7 +665,7 @@ pub fn get_node_stats(state: Arc<AppState>) -> Tool {
              for historical data.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetNodeStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<GetNodeStatsInput>| async move {
                 let client = state
@@ -723,7 +723,7 @@ pub fn enable_node_maintenance(state: Arc<AppState>) -> Tool {
             "Enable maintenance mode on a specific node. Shards will be migrated off first.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
                 // Check write permission
@@ -762,7 +762,7 @@ pub fn disable_node_maintenance(state: Arc<AppState>) -> Tool {
             "Disable maintenance mode on a specific node. The node will accept shards again.",
         )
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
                 // Check write permission
@@ -799,7 +799,7 @@ pub fn rebalance_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("rebalance_enterprise_node")
         .description("Rebalance shards on a specific node for optimal distribution.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
                 // Check write permission
@@ -836,7 +836,7 @@ pub fn drain_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("drain_enterprise_node")
         .description("Drain all shards from a specific node, migrating them to other nodes.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, NodeActionInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<NodeActionInput>| async move {
                 // Check write permission
@@ -889,7 +889,7 @@ pub fn update_enterprise_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("update_enterprise_node")
         .description("Update a node's configuration. Pass fields to update as JSON.")
         .non_destructive()
-        .extractor_handler_typed::<_, _, _, UpdateNodeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<UpdateNodeInput>| async move {
                 // Check write permission
@@ -931,7 +931,7 @@ pub fn remove_enterprise_node(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("remove_enterprise_node")
         .description("DANGEROUS: Remove a node. All shards must be drained first.")
         .destructive()
-        .extractor_handler_typed::<_, _, _, RemoveNodeInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<RemoveNodeInput>| async move {
                 // Check destructive permission
@@ -978,7 +978,7 @@ pub fn get_enterprise_cluster_services(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("get_enterprise_cluster_services")
         .description("Get the list of cluster services.")
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetClusterServicesInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetClusterServicesInput>| async move {
@@ -1024,7 +1024,7 @@ pub fn get_cluster_stats(state: Arc<AppState>) -> Tool {
              for historical data.",
         )
         .read_only_safe()
-        .extractor_handler_typed::<_, _, _, GetClusterStatsInput>(
+        .extractor_handler(
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<GetClusterStatsInput>| async move {
