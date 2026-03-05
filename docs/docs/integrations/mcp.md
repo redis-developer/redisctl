@@ -14,21 +14,39 @@ All operations use your existing redisctl profiles for authentication.
 
 ## Installation
 
-### macOS (Homebrew)
+The MCP server is a separate binary called `redisctl-mcp`. Install it using one of the methods below.
+
+### Installer Script (Recommended)
 
 ```bash
-brew install redis-developer/homebrew-tap/redisctl
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/redis-developer/redisctl/releases/latest/download/redisctl-mcp-installer.sh | sh
 ```
 
-### Linux/Windows
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/redis-developer/redisctl/releases/latest/download/redisctl-mcp-installer.ps1 | iex"
+```
 
-Download from [GitHub Releases](https://github.com/redis-developer/redisctl/releases) or use Docker:
+### Cargo
+
+```bash
+cargo install redisctl-mcp
+```
+
+### Binary Downloads
+
+Download pre-built binaries from [GitHub Releases](https://github.com/redis-developer/redisctl/releases/latest).
+
+### Docker
+
+No local install required:
 
 ```bash
 docker pull ghcr.io/redis-developer/redisctl
 ```
 
-See the [Installation Guide](../getting-started/installation.md) for all options.
+See the [Getting Started guide](../mcp/getting-started.md) for Docker MCP configuration examples.
 
 ## Setting Up Credentials
 

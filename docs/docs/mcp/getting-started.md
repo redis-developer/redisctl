@@ -4,17 +4,29 @@ This guide walks you through installing and configuring the redisctl MCP server 
 
 ## Installation
 
-### macOS (Homebrew)
+The MCP server is a separate binary called `redisctl-mcp`. Install it using one of the methods below.
+
+### Installer Script (Recommended)
 
 ```bash
-brew install redis-developer/homebrew-tap/redisctl
+# macOS / Linux
+curl --proto '=https' --tlsv1.2 -LsSf https://github.com/redis-developer/redisctl/releases/latest/download/redisctl-mcp-installer.sh | sh
 ```
 
-### Linux/Windows
+```powershell
+# Windows
+powershell -ExecutionPolicy Bypass -c "irm https://github.com/redis-developer/redisctl/releases/latest/download/redisctl-mcp-installer.ps1 | iex"
+```
 
-Download from [GitHub Releases](https://github.com/redis-developer/redisctl/releases).
+### Cargo
 
-See the [Installation Guide](../getting-started/installation.md) for all options.
+```bash
+cargo install redisctl-mcp
+```
+
+### Binary Downloads
+
+Download pre-built binaries from [GitHub Releases](https://github.com/redis-developer/redisctl/releases/latest).
 
 ### Docker (Zero-Install)
 
