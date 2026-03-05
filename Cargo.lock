@@ -2967,6 +2967,7 @@ dependencies = [
  "async-trait",
  "clap",
  "directories",
+ "docker-wrapper",
  "redis",
  "redis-cloud",
  "redis-enterprise",
