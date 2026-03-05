@@ -2,682 +2,348 @@
 //! config_get, memory_stats, latency_history, acl_list, acl_whoami, module_list,
 //! config_set, flushdb)
 
-use std::sync::Arc;
+use tower_mcp::{CallToolResult, ResultExt};
 
-use schemars::JsonSchema;
-use serde::Deserialize;
-use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
+use crate::tools::macros::{database_tool, mcp_module};
 
-use crate::state::AppState;
-
-/// All tool names registered by this sub-module.
-pub(super) const TOOL_NAMES: &[&str] = &[
-    "redis_ping",
-    "redis_info",
-    "redis_dbsize",
-    "redis_client_list",
-    "redis_cluster_info",
-    "redis_slowlog",
-    "redis_config_get",
-    "redis_memory_stats",
-    "redis_latency_history",
-    "redis_acl_list",
-    "redis_acl_whoami",
-    "redis_module_list",
-    "redis_config_set",
-    "redis_flushdb",
-];
-
-/// Build a sub-router containing all server-level Redis tools
-pub fn router(state: Arc<AppState>) -> McpRouter {
-    McpRouter::new()
-        .tool(ping(state.clone()))
-        .tool(info(state.clone()))
-        .tool(dbsize(state.clone()))
-        .tool(client_list(state.clone()))
-        .tool(cluster_info(state.clone()))
-        .tool(slowlog(state.clone()))
-        .tool(config_get(state.clone()))
-        .tool(memory_stats(state.clone()))
-        .tool(latency_history(state.clone()))
-        .tool(acl_list(state.clone()))
-        .tool(acl_whoami(state.clone()))
-        .tool(module_list(state.clone()))
-        .tool(config_set(state.clone()))
-        .tool(flushdb(state))
+mcp_module! {
+    ping => "redis_ping",
+    info => "redis_info",
+    dbsize => "redis_dbsize",
+    client_list => "redis_client_list",
+    cluster_info => "redis_cluster_info",
+    slowlog => "redis_slowlog",
+    config_get => "redis_config_get",
+    memory_stats => "redis_memory_stats",
+    latency_history => "redis_latency_history",
+    acl_list => "redis_acl_list",
+    acl_whoami => "redis_acl_whoami",
+    module_list => "redis_module_list",
+    config_set => "redis_config_set",
+    flushdb => "redis_flushdb",
 }
 
-/// Input for ping command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PingInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+database_tool!(read_only, ping, "redis_ping",
+    "Test connectivity by sending a PING command",
+    {} => |conn, _input| {
+        let response: String = redis::cmd("PING")
+            .query_async(&mut conn)
+            .await
+            .tool_context("PING failed")?;
 
-/// Build the ping tool
-pub fn ping(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_ping")
-        .description("Test connectivity by sending a PING command")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<PingInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        Ok(CallToolResult::text(format!(
+            "Connected successfully. Response: {}",
+            response
+        )))
+    }
+);
 
-                let response: String = redis::cmd("PING")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("PING failed")?;
+database_tool!(read_only, info, "redis_info",
+    "Get server information and statistics (INFO command).",
+    {
+        /// Optional section to retrieve (e.g., "server", "memory", "stats")
+        #[serde(default)]
+        pub section: Option<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("INFO");
+        if let Some(section) = &input.section {
+            cmd.arg(section);
+        }
 
-                Ok(CallToolResult::text(format!(
-                    "Connected successfully. Response: {}",
-                    response
-                )))
-            },
-        )
-        .build()
-}
+        let info: String = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("INFO failed")?;
 
-/// Input for info command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct InfoInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Optional section to retrieve (e.g., "server", "memory", "stats")
-    #[serde(default)]
-    pub section: Option<String>,
-}
+        Ok(CallToolResult::text(info))
+    }
+);
 
-/// Build the info tool
-pub fn info(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_info")
-        .description("Get server information and statistics (INFO command).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<InfoInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, dbsize, "redis_dbsize",
+    "Get the number of keys in the current database.",
+    {} => |conn, _input| {
+        let size: i64 = redis::cmd("DBSIZE")
+            .query_async(&mut conn)
+            .await
+            .tool_context("DBSIZE failed")?;
 
-                let mut cmd = redis::cmd("INFO");
-                if let Some(section) = &input.section {
-                    cmd.arg(section);
-                }
+        Ok(CallToolResult::text(format!(
+            "Database contains {} keys",
+            size
+        )))
+    }
+);
 
-                let info: String = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("INFO failed")?;
+database_tool!(read_only, client_list, "redis_client_list",
+    "List client connections (CLIENT LIST).",
+    {} => |conn, _input| {
+        let clients: String = redis::cmd("CLIENT")
+            .arg("LIST")
+            .query_async(&mut conn)
+            .await
+            .tool_context("CLIENT LIST failed")?;
 
-                Ok(CallToolResult::text(info))
-            },
-        )
-        .build()
-}
+        let count = clients.lines().count();
+        Ok(CallToolResult::text(format!(
+            "{} connected client(s):\n\n{}",
+            count, clients
+        )))
+    }
+);
 
-/// Input for DBSIZE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DbsizeInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+database_tool!(read_only, cluster_info, "redis_cluster_info",
+    "Get cluster information (only works on cluster-enabled instances).",
+    {} => |conn, _input| {
+        let info: String = redis::cmd("CLUSTER")
+            .arg("INFO")
+            .query_async(&mut conn)
+            .await
+            .tool_context("CLUSTER INFO failed")?;
 
-/// Build the dbsize tool
-pub fn dbsize(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_dbsize")
-        .description("Get the number of keys in the current database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<DbsizeInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let size: i64 = redis::cmd("DBSIZE")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("DBSIZE failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "Database contains {} keys",
-                    size
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for CLIENT LIST command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ClientListInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the client_list tool
-pub fn client_list(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_client_list")
-        .description("List client connections (CLIENT LIST).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ClientListInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let clients: String = redis::cmd("CLIENT")
-                    .arg("LIST")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("CLIENT LIST failed")?;
-
-                let count = clients.lines().count();
-                Ok(CallToolResult::text(format!(
-                    "{} connected client(s):\n\n{}",
-                    count, clients
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for CLUSTER INFO command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ClusterInfoInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the cluster_info tool
-pub fn cluster_info(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_cluster_info")
-        .description("Get cluster information (only works on cluster-enabled instances).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ClusterInfoInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let info: String = redis::cmd("CLUSTER")
-                    .arg("INFO")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("CLUSTER INFO failed")?;
-
-                Ok(CallToolResult::text(info))
-            },
-        )
-        .build()
-}
-
-/// Input for SLOWLOG GET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SlowlogInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Number of entries to return (default: 10)
-    #[serde(default = "default_slowlog_count")]
-    pub count: usize,
-}
+        Ok(CallToolResult::text(info))
+    }
+);
 
 fn default_slowlog_count() -> usize {
     10
 }
 
-/// Build the slowlog tool
-pub fn slowlog(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_slowlog")
-        .description("Get slow query log entries for identifying performance issues.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<SlowlogInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, slowlog, "redis_slowlog",
+    "Get slow query log entries for identifying performance issues.",
+    {
+        /// Number of entries to return (default: 10)
+        #[serde(default = "default_slowlog_count")]
+        pub count: usize,
+    } => |conn, input| {
+        // SLOWLOG GET returns nested arrays
+        let entries: Vec<Vec<redis::Value>> = redis::cmd("SLOWLOG")
+            .arg("GET")
+            .arg(input.count)
+            .query_async(&mut conn)
+            .await
+            .tool_context("SLOWLOG GET failed")?;
 
-                // SLOWLOG GET returns nested arrays
-                let entries: Vec<Vec<redis::Value>> = redis::cmd("SLOWLOG")
-                    .arg("GET")
-                    .arg(input.count)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("SLOWLOG GET failed")?;
+        if entries.is_empty() {
+            return Ok(CallToolResult::text("No slow queries recorded"));
+        }
 
-                if entries.is_empty() {
-                    return Ok(CallToolResult::text("No slow queries recorded"));
-                }
+        let mut output = format!("Slow log ({} entries):\n\n", entries.len());
 
-                let mut output = format!("Slow log ({} entries):\n\n", entries.len());
+        for entry in entries {
+            // Each entry is: [id, timestamp, duration_us, command_args, ...]
+            if entry.len() >= 4 {
+                let id = super::format_value(&entry[0]);
+                let duration_us = super::format_value(&entry[2]);
+                let command = if let redis::Value::Array(args) = &entry[3] {
+                    args.iter()
+                        .map(super::format_value)
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                } else {
+                    super::format_value(&entry[3])
+                };
 
-                for entry in entries {
-                    // Each entry is: [id, timestamp, duration_us, command_args, ...]
-                    if entry.len() >= 4 {
-                        let id = super::format_value(&entry[0]);
-                        let duration_us = super::format_value(&entry[2]);
-                        let command = if let redis::Value::Array(args) = &entry[3] {
-                            args.iter()
-                                .map(super::format_value)
-                                .collect::<Vec<_>>()
-                                .join(" ")
-                        } else {
-                            super::format_value(&entry[3])
-                        };
+                output.push_str(&format!("#{} - {} us: {}\n", id, duration_us, command));
+            }
+        }
 
-                        output.push_str(&format!("#{} - {} us: {}\n", id, duration_us, command));
-                    }
-                }
+        Ok(CallToolResult::text(output))
+    }
+);
 
-                Ok(CallToolResult::text(output))
-            },
-        )
-        .build()
-}
+database_tool!(read_only, config_get, "redis_config_get",
+    "Get configuration parameter values (CONFIG GET). \
+     Supports glob-style patterns.",
+    {
+        /// Configuration parameter pattern (e.g. "maxmemory", "save", "*")
+        pub parameter: String,
+    } => |conn, input| {
+        let result: Vec<(String, String)> = redis::cmd("CONFIG")
+            .arg("GET")
+            .arg(&input.parameter)
+            .query_async(&mut conn)
+            .await
+            .tool_context("CONFIG GET failed")?;
 
-/// Input for CONFIG GET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ConfigGetInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Configuration parameter pattern (e.g. "maxmemory", "save", "*")
-    pub parameter: String,
-}
+        if result.is_empty() {
+            return Ok(CallToolResult::text(format!(
+                "No configuration parameters matching '{}'",
+                input.parameter
+            )));
+        }
 
-/// Build the config_get tool
-pub fn config_get(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_config_get")
-        .description(
-            "Get configuration parameter values (CONFIG GET). \
-             Supports glob-style patterns.",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ConfigGetInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        let output = result
+            .iter()
+            .map(|(k, v)| format!("{}: {}", k, v))
+            .collect::<Vec<_>>()
+            .join("\n");
 
-                let result: Vec<(String, String)> = redis::cmd("CONFIG")
-                    .arg("GET")
-                    .arg(&input.parameter)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("CONFIG GET failed")?;
+        Ok(CallToolResult::text(format!(
+            "Configuration ({} parameter(s)):\n{}",
+            result.len(),
+            output
+        )))
+    }
+);
 
-                if result.is_empty() {
-                    return Ok(CallToolResult::text(format!(
-                        "No configuration parameters matching '{}'",
-                        input.parameter
-                    )));
-                }
+database_tool!(read_only, memory_stats, "redis_memory_stats",
+    "Get memory usage breakdown by category (MEMORY STATS).",
+    {} => |conn, _input| {
+        let result: redis::Value = redis::cmd("MEMORY")
+            .arg("STATS")
+            .query_async(&mut conn)
+            .await
+            .tool_context("MEMORY STATS failed")?;
 
-                let output = result
-                    .iter()
-                    .map(|(k, v)| format!("{}: {}", k, v))
-                    .collect::<Vec<_>>()
-                    .join("\n");
+        Ok(CallToolResult::text(super::format_value(&result)))
+    }
+);
 
-                Ok(CallToolResult::text(format!(
-                    "Configuration ({} parameter(s)):\n{}",
-                    result.len(),
-                    output
-                )))
-            },
-        )
-        .build()
-}
+database_tool!(read_only, latency_history, "redis_latency_history",
+    "Get latency history for a specific event (LATENCY HISTORY). \
+     May return empty if latency monitoring is not enabled \
+     (CONFIG SET latency-monitor-threshold <ms>).",
+    {
+        /// Latency event name (e.g. "command", "fast-command")
+        pub event: String,
+    } => |conn, input| {
+        let result: Vec<Vec<redis::Value>> = redis::cmd("LATENCY")
+            .arg("HISTORY")
+            .arg(&input.event)
+            .query_async(&mut conn)
+            .await
+            .tool_context("LATENCY HISTORY failed")?;
 
-/// Input for MEMORY STATS command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct MemoryStatsInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+        if result.is_empty() {
+            return Ok(CallToolResult::text(format!(
+                "No latency history for event '{}'. \
+                 Latency monitoring may not be enabled \
+                 (CONFIG SET latency-monitor-threshold <ms>).",
+                input.event
+            )));
+        }
 
-/// Build the memory_stats tool
-pub fn memory_stats(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_memory_stats")
-        .description("Get memory usage breakdown by category (MEMORY STATS).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<MemoryStatsInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        let mut output = format!(
+            "Latency history for '{}' ({} entries):\n\n",
+            input.event,
+            result.len()
+        );
 
-                let result: redis::Value = redis::cmd("MEMORY")
-                    .arg("STATS")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("MEMORY STATS failed")?;
+        for entry in &result {
+            if entry.len() >= 2 {
+                let timestamp = super::format_value(&entry[0]);
+                let latency_ms = super::format_value(&entry[1]);
+                output.push_str(&format!("  {} - {} ms\n", timestamp, latency_ms));
+            }
+        }
 
-                Ok(CallToolResult::text(super::format_value(&result)))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(output))
+    }
+);
 
-/// Input for LATENCY HISTORY command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct LatencyHistoryInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Latency event name (e.g. "command", "fast-command")
-    pub event: String,
-}
+database_tool!(read_only, acl_list, "redis_acl_list",
+    "List all ACL rules (ACL LIST).",
+    {} => |conn, _input| {
+        let rules: Vec<String> = redis::cmd("ACL")
+            .arg("LIST")
+            .query_async(&mut conn)
+            .await
+            .tool_context("ACL LIST failed")?;
 
-/// Build the latency_history tool
-pub fn latency_history(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_latency_history")
-        .description(
-            "Get latency history for a specific event (LATENCY HISTORY). \
-             May return empty if latency monitoring is not enabled \
-             (CONFIG SET latency-monitor-threshold <ms>).",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<LatencyHistoryInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        if rules.is_empty() {
+            return Ok(CallToolResult::text("No ACL rules configured"));
+        }
 
-                let result: Vec<Vec<redis::Value>> = redis::cmd("LATENCY")
-                    .arg("HISTORY")
-                    .arg(&input.event)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("LATENCY HISTORY failed")?;
+        Ok(CallToolResult::text(format!(
+            "ACL rules ({}):\n{}",
+            rules.len(),
+            rules.join("\n")
+        )))
+    }
+);
 
-                if result.is_empty() {
-                    return Ok(CallToolResult::text(format!(
-                        "No latency history for event '{}'. \
-                         Latency monitoring may not be enabled \
-                         (CONFIG SET latency-monitor-threshold <ms>).",
-                        input.event
-                    )));
-                }
+database_tool!(read_only, acl_whoami, "redis_acl_whoami",
+    "Get the current authenticated username (ACL WHOAMI).",
+    {} => |conn, _input| {
+        let username: String = redis::cmd("ACL")
+            .arg("WHOAMI")
+            .query_async(&mut conn)
+            .await
+            .tool_context("ACL WHOAMI failed")?;
 
-                let mut output = format!(
-                    "Latency history for '{}' ({} entries):\n\n",
-                    input.event,
-                    result.len()
-                );
+        Ok(CallToolResult::text(format!("Current user: {}", username)))
+    }
+);
 
-                for entry in &result {
-                    if entry.len() >= 2 {
-                        let timestamp = super::format_value(&entry[0]);
-                        let latency_ms = super::format_value(&entry[1]);
-                        output.push_str(&format!("  {} - {} ms\n", timestamp, latency_ms));
-                    }
-                }
+database_tool!(read_only, module_list, "redis_module_list",
+    "List loaded modules with names and versions (MODULE LIST).",
+    {} => |conn, _input| {
+        let result: redis::Value = redis::cmd("MODULE")
+            .arg("LIST")
+            .query_async(&mut conn)
+            .await
+            .tool_context("MODULE LIST failed")?;
 
-                Ok(CallToolResult::text(output))
-            },
-        )
-        .build()
-}
+        let formatted = super::format_value(&result);
+        if formatted == "[]" {
+            return Ok(CallToolResult::text("No modules loaded"));
+        }
 
-/// Input for ACL LIST command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AclListInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the acl_list tool
-pub fn acl_list(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_acl_list")
-        .description("List all ACL rules (ACL LIST).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<AclListInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let rules: Vec<String> = redis::cmd("ACL")
-                    .arg("LIST")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("ACL LIST failed")?;
-
-                if rules.is_empty() {
-                    return Ok(CallToolResult::text("No ACL rules configured"));
-                }
-
-                Ok(CallToolResult::text(format!(
-                    "ACL rules ({}):\n{}",
-                    rules.len(),
-                    rules.join("\n")
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for ACL WHOAMI command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AclWhoamiInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the acl_whoami tool
-pub fn acl_whoami(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_acl_whoami")
-        .description("Get the current authenticated username (ACL WHOAMI).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<AclWhoamiInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let username: String = redis::cmd("ACL")
-                    .arg("WHOAMI")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("ACL WHOAMI failed")?;
-
-                Ok(CallToolResult::text(format!("Current user: {}", username)))
-            },
-        )
-        .build()
-}
-
-/// Input for MODULE LIST command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ModuleListInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the module_list tool
-pub fn module_list(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_module_list")
-        .description("List loaded modules with names and versions (MODULE LIST).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ModuleListInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let result: redis::Value = redis::cmd("MODULE")
-                    .arg("LIST")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("MODULE LIST failed")?;
-
-                let formatted = super::format_value(&result);
-                if formatted == "[]" {
-                    return Ok(CallToolResult::text("No modules loaded"));
-                }
-
-                Ok(CallToolResult::text(format!(
-                    "Loaded modules:\n{}",
-                    formatted
-                )))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(format!(
+            "Loaded modules:\n{}",
+            formatted
+        )))
+    }
+);
 
 // --- Write tools ---
 
-/// Input for CONFIG SET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ConfigSetInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Configuration parameter name
-    pub parameter: String,
-    /// Configuration parameter value
-    pub value: String,
-}
+database_tool!(write, config_set, "redis_config_set",
+    "Set a configuration parameter at runtime (CONFIG SET). \
+     Changes may not persist unless CONFIG REWRITE is called.",
+    {
+        /// Configuration parameter name
+        pub parameter: String,
+        /// Configuration parameter value
+        pub value: String,
+    } => |conn, input| {
+        let _: () = redis::cmd("CONFIG")
+            .arg("SET")
+            .arg(&input.parameter)
+            .arg(&input.value)
+            .query_async(&mut conn)
+            .await
+            .tool_context("CONFIG SET failed")?;
 
-/// Build the config_set tool
-pub fn config_set(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_config_set")
-        .description(
-            "Set a configuration parameter at runtime (CONFIG SET). \
-             Changes may not persist unless CONFIG REWRITE is called.",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ConfigSetInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        Ok(CallToolResult::text(format!(
+            "OK - set {} = {}",
+            input.parameter, input.value
+        )))
+    }
+);
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(destructive, flushdb, "redis_flushdb",
+    "DANGEROUS: Delete all keys in the current database. \
+     Set async_flush=true for non-blocking operation.",
+    {
+        /// Use asynchronous flush (non-blocking, default: false)
+        #[serde(default)]
+        pub async_flush: bool,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FLUSHDB");
+        if input.async_flush {
+            cmd.arg("ASYNC");
+        }
 
-                let _: () = redis::cmd("CONFIG")
-                    .arg("SET")
-                    .arg(&input.parameter)
-                    .arg(&input.value)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("CONFIG SET failed")?;
+        let _: () = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FLUSHDB failed")?;
 
-                Ok(CallToolResult::text(format!(
-                    "OK - set {} = {}",
-                    input.parameter, input.value
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for FLUSHDB command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct FlushdbInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Use asynchronous flush (non-blocking, default: false)
-    #[serde(default)]
-    pub async_flush: bool,
-}
-
-/// Build the flushdb tool
-pub fn flushdb(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_flushdb")
-        .description(
-            "DANGEROUS: Delete all keys in the current database. \
-             Set async_flush=true for non-blocking operation.",
-        )
-        .destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<FlushdbInput>| async move {
-                if !state.is_destructive_allowed() {
-                    return Err(McpError::tool(
-                        "Destructive operations require policy tier 'full'",
-                    ));
-                }
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let mut cmd = redis::cmd("FLUSHDB");
-                if input.async_flush {
-                    cmd.arg("ASYNC");
-                }
-
-                let _: () = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("FLUSHDB failed")?;
-
-                let mode = if input.async_flush { " (async)" } else { "" };
-                Ok(CallToolResult::text(format!(
-                    "OK - database flushed{}",
-                    mode
-                )))
-            },
-        )
-        .build()
-}
+        let mode = if input.async_flush { " (async)" } else { "" };
+        Ok(CallToolResult::text(format!(
+            "OK - database flushed{}",
+            mode
+        )))
+    }
+);

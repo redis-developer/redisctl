@@ -1,5 +1,7 @@
 //! MCP tools for Redis Cloud, Enterprise, and direct database operations
 
+pub(crate) mod macros;
+
 /// Metadata for a toolset sub-module (e.g. `cloud:subscriptions`).
 ///
 /// Each sub-module within a toolset declares a static `TOOL_NAMES` array and
