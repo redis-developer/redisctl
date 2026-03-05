@@ -140,27 +140,186 @@ Error messages include the list of valid toolset or sub-module names.
 
 ## Safety Tiers
 
-The MCP server enforces three safety tiers that control which categories of operations are permitted:
+Every MCP tool carries annotation hints that describe its safety characteristics:
+
+- `readOnlyHint = true` -- reads data, never modifies state
+- `destructiveHint = false` -- writes data but is non-destructive (create, update, backup)
+- `destructiveHint = true` -- irreversible operation (delete, flush)
+
+The server enforces three safety tiers that control which categories of operations are permitted:
 
 | Tier | Flag / Policy Value | Behavior |
 |------|-------------------|----------|
-| **Read-only** | `--read-only` (default) / `"read-only"` | Only tools marked as read-only are allowed |
-| **Read-write** | -- / `"read-write"` | Reads + non-destructive writes (e.g., create, update) |
-| **Full** | `--read-only=false` / `"full"` | All operations including destructive ones (delete, flush) |
+| **Read-only** | `--read-only` (default) / `"read-only"` | Only tools with `readOnlyHint = true` |
+| **Read-write** | -- / `"read-write"` | Reads + non-destructive writes (`destructiveHint = false`) |
+| **Full** | `--read-only=false` / `"full"` | All operations including destructive ones |
 
-The `--read-only` flag maps to the read-only and full tiers. For the intermediate read-write tier, use a policy file:
+The `--read-only` CLI flag maps to read-only (`true`, default) and full (`false`) tiers. For the intermediate read-write tier, use a policy file.
 
-```toml
-# mcp-policy.toml
-tier = "read-write"
-```
+Tools that fall outside the active tier are hidden from the AI and return an "unauthorized" error if called directly.
 
-```bash
-redisctl-mcp --profile my-profile --policy mcp-policy.toml
-```
+## Policy Files
+
+Policy files give you granular control beyond the `--read-only` flag. A policy file is a TOML document that configures the safety tier, per-toolset overrides, explicit allow/deny lists, tool visibility presets, and audit logging.
 
 !!! warning
-    When a policy file is active, it overrides `--read-only`. The policy file is the authoritative source for safety tier configuration.
+    When a policy file is active, it overrides `--read-only`. The policy file is the authoritative source for safety configuration.
+
+### Policy File Resolution
+
+The server looks for a policy file in this order:
+
+1. **`--policy` flag** -- explicit path always wins
+2. **`REDISCTL_MCP_POLICY` env var** -- path from environment
+3. **Default location** -- `~/.config/redisctl/mcp-policy.toml` (Linux/macOS)
+4. **Built-in default** -- read-only tier with raw API tools denied
+
+```bash
+# Explicit path
+redisctl-mcp --profile my-profile --policy /path/to/mcp-policy.toml
+
+# Environment variable
+REDISCTL_MCP_POLICY=/path/to/mcp-policy.toml redisctl-mcp --profile my-profile
+
+# Auto-discovered from default location (no flags needed)
+# Place your file at ~/.config/redisctl/mcp-policy.toml
+redisctl-mcp --profile my-profile
+```
+
+Use the `show_policy` system tool at runtime to see which policy is active and where it was loaded from.
+
+### Full TOML Schema
+
+```toml
+# Global default safety tier: "read-only" (default), "read-write", or "full"
+tier = "read-write"
+
+# Deny entire categories globally (currently supports "destructive")
+deny_categories = ["destructive"]
+
+# Global explicit allow list -- these tools are allowed regardless of tier
+allow = ["backup_database"]
+
+# Global explicit deny list -- these tools are always blocked (wins over allow)
+deny = ["flush_database", "delete_subscription"]
+
+# Per-toolset overrides
+[cloud]
+enabled = true           # true (default) or false to disable the entire toolset
+tier = "read-write"      # overrides the global tier for Cloud tools
+allow = []               # per-toolset allow list
+deny = []                # per-toolset deny list
+
+[enterprise]
+enabled = true
+tier = "read-only"
+
+[database]
+tier = "read-only"
+allow = ["redis_set", "redis_expire"]  # allow specific writes despite read-only tier
+
+[app]
+# app toolset has no sub-modules; omit to use global defaults
+
+# Tool visibility presets
+[tools]
+preset = "all"           # "all" (default) or "essentials"
+include = []             # add specific tools on top of the preset
+exclude = []             # remove specific tools from the resolved set
+
+# Audit logging
+[audit]
+enabled = false          # enable/disable audit logging
+level = "all"            # "all", "denied", or "mutations"
+include_args = false     # include tool arguments in log entries
+redact_fields = ["password", "secret_key"]  # redact sensitive fields
+```
+
+All fields are optional. An empty file is equivalent to the default read-only policy.
+
+### Evaluation Order
+
+When a tool is invoked, the policy evaluates access in this order:
+
+1. **Global deny list** -- if the tool is in `deny`, it is blocked
+2. **Per-toolset deny list** -- if the tool is in its toolset's `deny`, it is blocked
+3. **Category deny** -- if `deny_categories` includes `"destructive"` and the tool has `destructiveHint = true`, it is blocked
+4. **Global allow list** -- if the tool is in `allow`, it is permitted (overrides tier)
+5. **Per-toolset allow list** -- if the tool is in its toolset's `allow`, it is permitted (overrides tier)
+6. **Per-toolset tier** -- if the toolset has a `tier` override, evaluate the tool's annotations against it
+7. **Global tier** -- evaluate the tool's annotations against the global `tier`
+
+Key rules:
+
+- **Deny always wins over allow.** A tool in both `allow` and `deny` is blocked.
+- **Per-toolset tier overrides global tier** for tools in that toolset.
+- **Allow lists override tier restrictions.** You can allow specific write tools even at read-only tier.
+
+### Per-Toolset Overrides
+
+Each toolset (`cloud`, `enterprise`, `database`, `app`) can have its own policy section that overrides the global settings:
+
+```toml
+# Global: read-only
+tier = "read-only"
+
+# Cloud: allow non-destructive writes
+[cloud]
+tier = "read-write"
+
+# Enterprise: stay read-only (inherits global)
+
+# Database: read-only but allow SET and EXPIRE
+[database]
+allow = ["redis_set", "redis_expire"]
+```
+
+You can also disable an entire toolset, preventing its tools from being registered at all:
+
+```toml
+[enterprise]
+enabled = false
+
+[database]
+enabled = false
+```
+
+!!! note
+    `enabled = false` prevents tools from being registered with the MCP router. This is different from deny lists, which register the tool but block invocation. Disabled toolsets save memory and reduce tool discovery noise.
+
+### Raw API Tools
+
+Three "raw" passthrough tools provide direct API/command access:
+
+- `cloud_raw_api` -- arbitrary Redis Cloud API calls
+- `enterprise_raw_api` -- arbitrary Redis Enterprise API calls
+- `redis_command` -- arbitrary Redis commands
+
+These are powerful but potentially dangerous. By default (when no policy file is loaded), all three are denied. When you load a custom policy file, raw tools follow normal tier/allow/deny rules -- they are not auto-denied.
+
+To explicitly enable raw tools in a policy file:
+
+```toml
+tier = "full"
+# raw tools are allowed because tier is full and deny list is empty
+```
+
+To enable raw tools selectively:
+
+```toml
+tier = "read-only"
+allow = ["redis_command"]  # allow redis_command despite read-only tier
+```
+
+To keep raw tools denied in a custom policy:
+
+```toml
+tier = "full"
+deny = ["cloud_raw_api", "enterprise_raw_api", "redis_command"]
+```
+
+!!! tip
+    The `redis_command` tool has its own built-in blocklist that prevents dangerous commands like `SHUTDOWN`, `DEBUG`, `CLUSTER FAILOVER`, and others regardless of policy tier. This provides defense-in-depth even at full tier.
 
 ## Presets
 
@@ -185,17 +344,90 @@ exclude = ["flush_database"]      # remove tools from the resolved set
 !!! tip
     Use the `list_available_tools` system tool at runtime to see which tools are active vs. hidden under the current preset. This lets you discover tools you might want to add to the `include` list.
 
+## Practical Examples
+
+### Read-only exploration (default)
+
+No policy file needed. Just run the server:
+
+```bash
+redisctl-mcp --profile my-profile
+```
+
+### Development environment with writes
+
+Allow creates and updates, but block destructive operations:
+
+```toml
+# ~/.config/redisctl/mcp-policy.toml
+tier = "read-write"
+```
+
+### Production monitoring
+
+Read-only with only Cloud and Enterprise, no database tools:
+
+```toml
+tier = "read-only"
+
+[database]
+enabled = false
+```
+
+### CI/CD automation
+
+Full access with audit logging enabled:
+
+```toml
+tier = "full"
+
+[audit]
+enabled = true
+level = "mutations"
+include_args = true
+redact_fields = ["password", "secret_key", "api_key"]
+```
+
+### Locked-down shared environment
+
+Read-only globally, allow specific Cloud writes, deny all destructive operations:
+
+```toml
+tier = "read-only"
+deny_categories = ["destructive"]
+
+[cloud]
+tier = "read-write"
+deny = ["delete_subscription", "delete_database"]
+```
+
+### Minimal tool surface
+
+Essentials preset with a few additions:
+
+```toml
+tier = "read-write"
+
+[tools]
+preset = "essentials"
+include = ["get_enterprise_crdb", "list_enterprise_crdb"]
+exclude = ["flush_database"]
+```
+
 ## Choosing the Right Approach
 
 | Goal | Approach |
 |------|----------|
+| Quick read-only exploration | Default settings (no extra flags) |
+| Allow writes but not destructive ops | Policy file with `tier = "read-write"` |
+| Full access for development | `--read-only=false` or policy with `tier = "full"` |
 | Limit to one product (Cloud or Enterprise) | `--tools cloud` or `--tools enterprise` |
 | Reduce tool surface within a product | `--tools cloud:subscriptions,cloud:account` |
-| Allow writes but not destructive ops | Policy file with `tier = "read-write"` |
 | Curate which tools the AI sees | Policy file with `preset = "essentials"` |
-| Quick read-only exploration | Default settings (no extra flags) |
-| Full access for development | `--read-only=false --tools cloud,enterprise,database` |
-| Fine-grained per-tool control | Policy file with `include` / `exclude` lists |
+| Fine-grained per-tool control | Policy file with `allow` / `deny` lists |
+| Per-toolset safety levels | Policy file with `[cloud]`, `[enterprise]` sections |
+| Block all destructive ops regardless of tier | Policy file with `deny_categories = ["destructive"]` |
+| Enable raw API passthrough | Policy file with `tier = "full"` (or `allow` specific raw tools) |
 
 ## Next Steps
 
