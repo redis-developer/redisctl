@@ -123,14 +123,8 @@ pub fn hgetall(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HgetallInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HgetallInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: Vec<(String, String)> = redis::cmd("HGETALL")
                     .arg(&input.key)
@@ -193,14 +187,8 @@ pub fn lrange(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, LrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LrangeInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: Vec<String> = redis::cmd("LRANGE")
                     .arg(&input.key)
@@ -256,14 +244,8 @@ pub fn smembers(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, SmembersInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SmembersInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: Vec<String> = redis::cmd("SMEMBERS")
                     .arg(&input.key)
@@ -319,14 +301,8 @@ pub fn zrange(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ZrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZrangeInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 if input.withscores {
                     let result: Vec<(String, f64)> = redis::cmd("ZRANGE")
@@ -414,14 +390,8 @@ pub fn xinfo_stream(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, XinfoStreamInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XinfoStreamInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: redis::Value = redis::cmd("XINFO")
                     .arg("STREAM")
@@ -478,14 +448,8 @@ pub fn xrange(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, XrangeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XrangeInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("XRANGE");
                 cmd.arg(&input.key).arg(&input.start).arg(&input.end);
@@ -543,14 +507,8 @@ pub fn xlen(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, XlenInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<XlenInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let len: i64 = redis::cmd("XLEN")
                     .arg(&input.key)
@@ -590,15 +548,8 @@ pub fn pubsub_channels(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<PubsubChannelsInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("PUBSUB");
                 cmd.arg("CHANNELS");
@@ -648,14 +599,8 @@ pub fn pubsub_numsub(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, PubsubNumsubInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PubsubNumsubInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("PUBSUB");
                 cmd.arg("NUMSUB");
@@ -722,14 +667,8 @@ pub fn hset(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("HSET");
                 cmd.arg(&input.key);
@@ -782,14 +721,8 @@ pub fn hdel(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("HDEL");
                 cmd.arg(&input.key);
@@ -842,14 +775,8 @@ pub fn lpush(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("LPUSH");
                 cmd.arg(&input.key);
@@ -902,14 +829,8 @@ pub fn rpush(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("RPUSH");
                 cmd.arg(&input.key);
@@ -963,14 +884,8 @@ pub fn lpop(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("LPOP");
                 cmd.arg(&input.key);
@@ -1023,14 +938,8 @@ pub fn rpop(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("RPOP");
                 cmd.arg(&input.key);
@@ -1082,14 +991,8 @@ pub fn sadd(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("SADD");
                 cmd.arg(&input.key);
@@ -1142,14 +1045,8 @@ pub fn srem(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("SREM");
                 cmd.arg(&input.key);
@@ -1229,14 +1126,8 @@ pub fn zadd(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("ZADD");
                 cmd.arg(&input.key);
@@ -1305,14 +1196,8 @@ pub fn zrem(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("ZREM");
                 cmd.arg(&input.key);
@@ -1382,14 +1267,8 @@ pub fn xadd(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("XADD");
                 cmd.arg(&input.key);
@@ -1470,14 +1349,8 @@ pub fn xtrim(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("XTRIM");
                 cmd.arg(&input.key);
@@ -1527,14 +1400,8 @@ pub fn hget(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HgetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HgetInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let value: Option<String> = redis::cmd("HGET")
                     .arg(&input.key)
@@ -1578,14 +1445,8 @@ pub fn hmget(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HmgetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HmgetInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("HMGET");
                 cmd.arg(&input.key);
@@ -1633,14 +1494,8 @@ pub fn hlen(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HlenInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HlenInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let count: i64 = redis::cmd("HLEN")
                     .arg(&input.key)
@@ -1680,14 +1535,8 @@ pub fn hexists(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HexistsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HexistsInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let exists: bool = redis::cmd("HEXISTS")
                     .arg(&input.key)
@@ -1728,14 +1577,8 @@ pub fn hkeys(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HkeysInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HkeysInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let fields: Vec<String> = redis::cmd("HKEYS")
                     .arg(&input.key)
@@ -1782,14 +1625,8 @@ pub fn hvals(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HvalsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HvalsInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let values: Vec<String> = redis::cmd("HVALS")
                     .arg(&input.key)
@@ -1846,14 +1683,8 @@ pub fn hincrby(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let value: i64 = redis::cmd("HINCRBY")
                     .arg(&input.key)
@@ -1895,14 +1726,8 @@ pub fn scard(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ScardInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ScardInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let count: i64 = redis::cmd("SCARD")
                     .arg(&input.key)
@@ -1942,14 +1767,8 @@ pub fn sismember(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, SismemberInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SismemberInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let is_member: bool = redis::cmd("SISMEMBER")
                     .arg(&input.key)
@@ -1990,14 +1809,8 @@ pub fn sunion(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, SunionInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SunionInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("SUNION");
                 for key in &input.keys {
@@ -2044,14 +1857,8 @@ pub fn sinter(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, SinterInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SinterInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("SINTER");
                 for key in &input.keys {
@@ -2098,14 +1905,8 @@ pub fn sdiff(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, SdiffInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SdiffInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("SDIFF");
                 for key in &input.keys {
@@ -2154,14 +1955,8 @@ pub fn zcard(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ZcardInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZcardInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let count: i64 = redis::cmd("ZCARD")
                     .arg(&input.key)
@@ -2201,14 +1996,8 @@ pub fn zscore(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ZscoreInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZscoreInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let score: Option<f64> = redis::cmd("ZSCORE")
                     .arg(&input.key)
@@ -2257,14 +2046,8 @@ pub fn zrank(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ZrankInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZrankInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let rank: Option<i64> = redis::cmd("ZRANK")
                     .arg(&input.key)
@@ -2313,14 +2096,8 @@ pub fn zcount(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ZcountInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ZcountInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let count: i64 = redis::cmd("ZCOUNT")
                     .arg(&input.key)
@@ -2374,15 +2151,8 @@ pub fn zrangebyscore(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ZrangebyscoreInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("ZRANGEBYSCORE");
                 cmd.arg(&input.key).arg(&input.min).arg(&input.max);
@@ -2472,14 +2242,8 @@ pub fn llen(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, LlenInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LlenInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let length: i64 = redis::cmd("LLEN")
                     .arg(&input.key)
@@ -2519,14 +2283,8 @@ pub fn lindex(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, LindexInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<LindexInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let value: Option<String> = redis::cmd("LINDEX")
                     .arg(&input.key)

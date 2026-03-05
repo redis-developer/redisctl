@@ -131,15 +131,8 @@ pub fn redis_command(state: Arc<AppState>) -> Tool {
                     return CallToolResult::from_serialize(&preview);
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str())
-                    .map_err(|e| McpError::tool(format!("invalid URL: {e}")))?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .map_err(|e| McpError::tool(format!("connection failed: {e}")))?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd(&input.command);
                 for arg in &input.args {

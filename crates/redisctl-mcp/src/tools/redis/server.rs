@@ -67,14 +67,8 @@ pub fn ping(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, PingInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<PingInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let response: String = redis::cmd("PING")
                     .query_async(&mut conn)
@@ -112,14 +106,8 @@ pub fn info(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, InfoInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<InfoInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("INFO");
                 if let Some(section) = &input.section {
@@ -156,14 +144,8 @@ pub fn dbsize(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, DbsizeInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<DbsizeInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let size: i64 = redis::cmd("DBSIZE")
                     .query_async(&mut conn)
@@ -198,14 +180,8 @@ pub fn client_list(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ClientListInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ClientListInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let clients: String = redis::cmd("CLIENT")
                     .arg("LIST")
@@ -242,14 +218,8 @@ pub fn cluster_info(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ClusterInfoInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ClusterInfoInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let info: String = redis::cmd("CLUSTER")
                     .arg("INFO")
@@ -289,14 +259,8 @@ pub fn slowlog(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, SlowlogInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<SlowlogInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 // SLOWLOG GET returns nested arrays
                 let entries: Vec<Vec<redis::Value>> = redis::cmd("SLOWLOG")
@@ -360,14 +324,8 @@ pub fn config_get(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ConfigGetInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ConfigGetInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: Vec<(String, String)> = redis::cmd("CONFIG")
                     .arg("GET")
@@ -418,14 +376,8 @@ pub fn memory_stats(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, MemoryStatsInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<MemoryStatsInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: redis::Value = redis::cmd("MEMORY")
                     .arg("STATS")
@@ -465,15 +417,8 @@ pub fn latency_history(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<LatencyHistoryInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: Vec<Vec<redis::Value>> = redis::cmd("LATENCY")
                     .arg("HISTORY")
@@ -530,14 +475,8 @@ pub fn acl_list(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, AclListInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AclListInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let rules: Vec<String> = redis::cmd("ACL")
                     .arg("LIST")
@@ -578,14 +517,8 @@ pub fn acl_whoami(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, AclWhoamiInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<AclWhoamiInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let username: String = redis::cmd("ACL")
                     .arg("WHOAMI")
@@ -618,14 +551,8 @@ pub fn module_list(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, ModuleListInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<ModuleListInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let result: redis::Value = redis::cmd("MODULE")
                     .arg("LIST")
@@ -681,14 +608,8 @@ pub fn config_set(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let _: () = redis::cmd("CONFIG")
                     .arg("SET")
@@ -738,14 +659,8 @@ pub fn flushdb(state: Arc<AppState>) -> Tool {
                     ));
                 }
 
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let mut cmd = redis::cmd("FLUSHDB");
                 if input.async_flush {

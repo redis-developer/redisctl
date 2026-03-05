@@ -106,14 +106,8 @@ pub fn health_check(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HealthCheckInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HealthCheckInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 // PING
                 let ping_response: String = redis::cmd("PING")
@@ -248,14 +242,8 @@ pub fn key_summary(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, KeySummaryInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<KeySummaryInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 // TYPE
                 let key_type: String = redis::cmd("TYPE")
@@ -368,14 +356,8 @@ pub fn hotkeys(state: Arc<AppState>) -> Tool {
         .extractor_handler_typed::<_, _, _, HotkeysInput>(
             state,
             |State(state): State<Arc<AppState>>, Json(input): Json<HotkeysInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str()).tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 let pattern = input.pattern.as_deref().unwrap_or("*");
                 let sample_size = input.sample_size.unwrap_or(1000).min(MAX_SAMPLE_SIZE);
@@ -511,15 +493,8 @@ pub fn connection_summary(state: Arc<AppState>) -> Tool {
             state,
             |State(state): State<Arc<AppState>>,
              Json(input): Json<ConnectionSummaryInput>| async move {
-                let url = super::resolve_redis_url(input.url, input.profile.as_deref(), &state)?;
-
-                let client = redis::Client::open(url.as_str())
-                    .tool_context("Invalid URL")?;
-
-                let mut conn = client
-                    .get_multiplexed_async_connection()
-                    .await
-                    .tool_context("Connection failed")?;
+                let mut conn =
+                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
 
                 // CLIENT LIST
                 let client_list_raw: String = redis::cmd("CLIENT")

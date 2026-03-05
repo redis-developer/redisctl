@@ -1,6 +1,6 @@
 //! Application state and credential resolution
 
-#[cfg(any(feature = "cloud", feature = "enterprise"))]
+#[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -30,12 +30,14 @@ pub enum CredentialSource {
     },
 }
 
-/// Cached API clients (per-profile for multi-cluster support)
+/// Cached API clients and connections (per-profile for multi-cluster support)
 pub struct CachedClients {
     #[cfg(feature = "cloud")]
     pub cloud: HashMap<String, CloudClient>,
     #[cfg(feature = "enterprise")]
     pub enterprise: HashMap<String, EnterpriseClient>,
+    #[cfg(feature = "database")]
+    pub database: HashMap<String, redis::aio::MultiplexedConnection>,
 }
 
 /// Shared application state
@@ -85,6 +87,8 @@ impl AppState {
                 cloud: HashMap::new(),
                 #[cfg(feature = "enterprise")]
                 enterprise: HashMap::new(),
+                #[cfg(feature = "database")]
+                database: HashMap::new(),
             }),
         })
     }
@@ -340,23 +344,46 @@ impl AppState {
         Ok(format!("{}://{}{}:{}{}", scheme, auth, host, port, db_path))
     }
 
-    /// Get Redis connection for direct database operations
+    /// Get or create a cached Redis connection for a resolved URL.
+    ///
+    /// Connections are cached by URL. If a cached connection fails a PING
+    /// health check, it is evicted and a fresh connection is created.
     #[cfg(feature = "database")]
-    #[allow(dead_code)]
-    pub async fn redis_connection(&self) -> Result<redis::aio::MultiplexedConnection> {
-        let url = self
-            .database_url
-            .as_ref()
-            .cloned()
-            .or_else(|| std::env::var("REDIS_URL").ok())
-            .context("No Redis URL configured")?;
+    pub async fn redis_connection_for_url(
+        &self,
+        url: &str,
+    ) -> Result<redis::aio::MultiplexedConnection> {
+        // Check cache first
+        {
+            let clients = self.clients.read().await;
+            if let Some(conn) = clients.database.get(url) {
+                // Quick health check -- if PING fails the connection is stale
+                let mut test_conn = conn.clone();
+                if redis::cmd("PING")
+                    .query_async::<String>(&mut test_conn)
+                    .await
+                    .is_ok()
+                {
+                    return Ok(conn.clone());
+                }
+                // Fall through to evict + reconnect
+            }
+        }
 
-        let client = redis::Client::open(url.as_str()).context("Failed to create Redis client")?;
-
-        client
+        // Create new connection (or reconnect after eviction)
+        let client = redis::Client::open(url).context("Failed to create Redis client")?;
+        let conn = client
             .get_multiplexed_async_connection()
             .await
-            .context("Failed to connect to Redis")
+            .context("Failed to connect to Redis")?;
+
+        // Cache it
+        {
+            let mut clients = self.clients.write().await;
+            clients.database.insert(url.to_string(), conn.clone());
+        }
+
+        Ok(conn)
     }
 
     /// Check if write operations are allowed by the global policy tier.
@@ -395,6 +422,8 @@ impl Clone for AppState {
                 cloud: HashMap::new(),
                 #[cfg(feature = "enterprise")]
                 enterprise: HashMap::new(),
+                #[cfg(feature = "database")]
+                database: HashMap::new(),
             }),
         }
     }
@@ -427,6 +456,8 @@ impl AppState {
                 cloud,
                 #[cfg(feature = "enterprise")]
                 enterprise: HashMap::new(),
+                #[cfg(feature = "database")]
+                database: HashMap::new(),
             }),
         }
     }
@@ -446,6 +477,8 @@ impl AppState {
                 #[cfg(feature = "cloud")]
                 cloud: HashMap::new(),
                 enterprise,
+                #[cfg(feature = "database")]
+                database: HashMap::new(),
             }),
         }
     }
@@ -466,6 +499,8 @@ impl AppState {
             clients: RwLock::new(CachedClients {
                 cloud: cloud_map,
                 enterprise: enterprise_map,
+                #[cfg(feature = "database")]
+                database: HashMap::new(),
             }),
         }
     }
