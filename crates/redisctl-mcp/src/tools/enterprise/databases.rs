@@ -406,7 +406,11 @@ pub struct CreateEnterpriseDatabaseInput {
 /// Build the create_enterprise_database tool
 pub fn create_enterprise_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_database")
-        .description("Create a new database.")
+        .description(
+            "Create a new database on the Enterprise cluster. \
+             Prerequisites: 1) get_cluster -- verify the cluster is healthy and has capacity. \
+             2) list_enterprise_databases -- review existing databases.",
+        )
         .non_destructive()
         .extractor_handler(
             state,

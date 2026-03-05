@@ -372,7 +372,10 @@ pub struct CreateDatabaseInput {
 pub fn create_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_database")
         .description(
-            "Create a new database and wait for it to be ready.",
+            "Create a new database in a Pro subscription and wait for it to be ready. \
+             Prerequisites: 1) get_subscription -- verify the target subscription exists and is active. \
+             2) get_modules -- validate desired modules. \
+             3) get_redis_versions -- pick a supported Redis version.",
         )
         .non_destructive()
         .extractor_handler(
@@ -936,7 +939,11 @@ pub struct CreateSubscriptionInput {
 pub fn create_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_subscription")
         .description(
-            "Create a new Pro subscription with an initial database.",
+            "Create a new Pro subscription with an initial database. \
+             Prerequisites: 1) list_payment_methods -- verify a payment method exists. \
+             2) get_regions -- validate the target cloud provider and region. \
+             3) get_modules -- confirm desired database modules are available. \
+             4) get_redis_versions -- pick a supported Redis version.",
         )
         .non_destructive()
         .extractor_handler(

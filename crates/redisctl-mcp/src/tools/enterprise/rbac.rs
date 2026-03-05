@@ -110,7 +110,11 @@ pub struct CreateEnterpriseUserInput {
 /// Build the create_enterprise_user tool
 pub fn create_enterprise_user(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_user")
-        .description("Create a new user.")
+        .description(
+            "Create a new user. \
+             Prerequisites: 1) list_enterprise_roles -- identify roles to assign. \
+             2) list_enterprise_users -- check for existing users to avoid duplicates.",
+        )
         .non_destructive()
         .extractor_handler(
             state,
@@ -357,7 +361,11 @@ pub struct CreateEnterpriseRoleInput {
 /// Build the create_enterprise_role tool
 pub fn create_enterprise_role(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_role")
-        .description("Create a new role.")
+        .description(
+            "Create a new role. \
+             Prerequisites: 1) get_enterprise_builtin_roles -- review built-in roles before creating custom ones. \
+             2) list_enterprise_acls -- identify Redis ACLs to attach to the role.",
+        )
         .non_destructive()
         .extractor_handler(
             state,
@@ -589,7 +597,11 @@ pub struct CreateEnterpriseAclInput {
 /// Build the create_enterprise_acl tool
 pub fn create_enterprise_acl(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_enterprise_acl")
-        .description("Create a new Redis ACL using Redis ACL syntax (e.g., \"+@all ~*\").")
+        .description(
+            "Create a new Redis ACL using Redis ACL syntax (e.g., \"+@all ~*\"). \
+             Prerequisites: 1) list_enterprise_acls -- review existing ACLs to avoid duplicates. \
+             2) validate_enterprise_acl -- validate ACL syntax before creation.",
+        )
         .non_destructive()
         .extractor_handler(
             state,

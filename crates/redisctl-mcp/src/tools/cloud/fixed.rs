@@ -112,7 +112,11 @@ pub struct CreateFixedSubscriptionInput {
 /// Build the create_fixed_subscription tool
 pub fn create_fixed_subscription(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_subscription")
-        .description("Create a new Fixed/Essentials subscription.")
+        .description(
+            "Create a new Fixed/Essentials subscription. \
+             Prerequisites: 1) list_fixed_plans -- choose a plan by size, region, and price. \
+             2) list_payment_methods -- verify a payment method exists.",
+        )
         .non_destructive()
         .extractor_handler(
             state,
@@ -536,7 +540,12 @@ pub struct CreateFixedDatabaseInput {
 /// Build the create_fixed_database tool
 pub fn create_fixed_database(state: Arc<AppState>) -> Tool {
     ToolBuilder::new("create_fixed_database")
-        .description("Create a database in a Fixed/Essentials subscription.")
+        .description(
+            "Create a database in a Fixed/Essentials subscription. \
+             Prerequisites: 1) get_fixed_subscription -- verify the subscription exists and is active. \
+             2) get_fixed_plans_by_subscription -- check compatible plans. \
+             3) get_fixed_redis_versions -- pick a supported Redis version.",
+        )
         .non_destructive()
         .extractor_handler(
             state,
