@@ -113,6 +113,22 @@ pub(crate) fn resolve_redis_url(
     })
 }
 
+/// Resolve a Redis URL and return a cached multiplexed connection.
+///
+/// This is the main entry point for tool handlers. It resolves the URL from
+/// the input parameters, then returns a pooled connection (creating one if needed).
+pub(crate) async fn get_connection(
+    url: Option<String>,
+    profile: Option<&str>,
+    state: &AppState,
+) -> Result<redis::aio::MultiplexedConnection, ToolError> {
+    let url = resolve_redis_url(url, profile, state)?;
+    state
+        .redis_connection_for_url(&url)
+        .await
+        .map_err(|e| ToolError::new(format!("Connection failed: {}", e)))
+}
+
 /// Helper to format Redis values for display
 pub(crate) fn format_value(v: &redis::Value) -> String {
     match v {
