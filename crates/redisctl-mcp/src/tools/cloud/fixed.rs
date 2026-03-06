@@ -1,7 +1,5 @@
 //! Fixed/Essentials tier subscription and database tools for Redis Cloud
 
-use std::sync::Arc;
-
 use redis_cloud::fixed::databases::{
     DatabaseTagCreateRequest, DatabaseTagUpdateRequest, DatabaseTagsUpdateRequest,
     FixedDatabaseBackupRequest, FixedDatabaseCreateRequest, FixedDatabaseHandler,
@@ -12,1172 +10,9 @@ use redis_cloud::fixed::subscriptions::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
-use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
+use tower_mcp::{CallToolResult, ResultExt};
 
-use crate::state::AppState;
-
-// ============================================================================
-// Fixed/Essentials Subscription tools
-// ============================================================================
-
-/// Input for listing fixed subscriptions
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListFixedSubscriptionsInput {
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the list_fixed_subscriptions tool
-pub fn list_fixed_subscriptions(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("list_fixed_subscriptions")
-        .description("List all Fixed/Essentials subscriptions.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<ListFixedSubscriptionsInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let subscriptions = handler
-                    .list()
-                    .await
-                    .tool_context("Failed to list fixed subscriptions")?;
-
-                CallToolResult::from_serialize(&subscriptions)
-            },
-        )
-        .build()
-}
-
-/// Input for getting a specific fixed subscription
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedSubscriptionInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_subscription tool
-pub fn get_fixed_subscription(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_subscription")
-        .description("Get subscription details by ID.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedSubscriptionInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let subscription = handler
-                    .get_by_id(input.subscription_id)
-                    .await
-                    .tool_context("Failed to get fixed subscription")?;
-
-                CallToolResult::from_serialize(&subscription)
-            },
-        )
-        .build()
-}
-
-/// Input for creating a fixed subscription
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateFixedSubscriptionInput {
-    /// New subscription name
-    pub name: String,
-    /// Essentials plan ID (use list_fixed_plans to find available plans)
-    pub plan_id: i32,
-    /// Payment method: "credit-card" or "marketplace"
-    #[serde(default)]
-    pub payment_method: Option<String>,
-    /// Payment method ID (required when payment_method is "credit-card")
-    #[serde(default)]
-    pub payment_method_id: Option<i32>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the create_fixed_subscription tool
-pub fn create_fixed_subscription(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("create_fixed_subscription")
-        .description(
-            "Create a new Fixed/Essentials subscription. \
-             Prerequisites: 1) list_fixed_plans -- choose a plan by size, region, and price. \
-             2) list_payment_methods -- verify a payment method exists.",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<CreateFixedSubscriptionInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = FixedSubscriptionCreateRequest {
-                    name: input.name,
-                    plan_id: input.plan_id,
-                    payment_method: input.payment_method,
-                    payment_method_id: input.payment_method_id,
-                    command_type: None,
-                };
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let result = handler
-                    .create(&request)
-                    .await
-                    .tool_context("Failed to create fixed subscription")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for updating a fixed subscription
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UpdateFixedSubscriptionInput {
-    /// Fixed subscription ID to update
-    pub subscription_id: i32,
-    /// Updated subscription name
-    #[serde(default)]
-    pub name: Option<String>,
-    /// New plan ID
-    #[serde(default)]
-    pub plan_id: Option<i32>,
-    /// Payment method: "credit-card" or "marketplace"
-    #[serde(default)]
-    pub payment_method: Option<String>,
-    /// Payment method ID
-    #[serde(default)]
-    pub payment_method_id: Option<i32>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the update_fixed_subscription tool
-pub fn update_fixed_subscription(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("update_fixed_subscription")
-        .description("Update a Fixed/Essentials subscription.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<UpdateFixedSubscriptionInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = FixedSubscriptionUpdateRequest {
-                    subscription_id: None,
-                    name: input.name,
-                    plan_id: input.plan_id,
-                    payment_method: input.payment_method,
-                    payment_method_id: input.payment_method_id,
-                    command_type: None,
-                };
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let result = handler
-                    .update(input.subscription_id, &request)
-                    .await
-                    .tool_context("Failed to update fixed subscription")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for deleting a fixed subscription
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DeleteFixedSubscriptionInput {
-    /// Fixed subscription ID to delete
-    pub subscription_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the delete_fixed_subscription tool
-pub fn delete_fixed_subscription(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("delete_fixed_subscription")
-        .description(
-            "DANGEROUS: Delete a Fixed/Essentials subscription. \
-             All databases must be deleted first.",
-        )
-        .destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<DeleteFixedSubscriptionInput>| async move {
-                if !state.is_destructive_allowed() {
-                    return Err(McpError::tool(
-                        "Destructive operations require policy tier 'full'",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let result = handler
-                    .delete_by_id(input.subscription_id)
-                    .await
-                    .tool_context("Failed to delete fixed subscription")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for listing fixed plans
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListFixedPlansInput {
-    /// Cloud provider filter (e.g., "AWS", "GCP", "Azure")
-    #[serde(default)]
-    pub provider: Option<String>,
-    /// Filter by Redis Flex plans
-    #[serde(default)]
-    pub redis_flex: Option<bool>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the list_fixed_plans tool
-pub fn list_fixed_plans(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("list_fixed_plans")
-        .description("List available Fixed/Essentials plans.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<ListFixedPlansInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let plans = handler
-                    .list_plans(input.provider, input.redis_flex)
-                    .await
-                    .tool_context("Failed to list fixed plans")?;
-
-                CallToolResult::from_serialize(&plans)
-            },
-        )
-        .build()
-}
-
-/// Input for getting fixed plans by subscription
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedPlansBySubscriptionInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_plans_by_subscription tool
-pub fn get_fixed_plans_by_subscription(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_plans_by_subscription")
-        .description("Get compatible plans for a subscription.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedPlansBySubscriptionInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let plans = handler
-                    .get_plans_by_subscription_id(input.subscription_id)
-                    .await
-                    .tool_context("Failed to get fixed plans by subscription")?;
-
-                CallToolResult::from_serialize(&plans)
-            },
-        )
-        .build()
-}
-
-/// Input for getting a specific fixed plan
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedPlanInput {
-    /// Plan ID
-    pub plan_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_plan tool
-pub fn get_fixed_plan(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_plan")
-        .description("Get plan details by ID.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<GetFixedPlanInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let plan = handler
-                    .get_plan_by_id(input.plan_id)
-                    .await
-                    .tool_context("Failed to get fixed plan")?;
-
-                CallToolResult::from_serialize(&plan)
-            },
-        )
-        .build()
-}
-
-/// Input for getting fixed Redis versions
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedRedisVersionsInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_redis_versions tool
-pub fn get_fixed_redis_versions(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_redis_versions")
-        .description("Get available Redis versions for a subscription.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedRedisVersionsInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedSubscriptionHandler::new(client);
-                let versions = handler
-                    .get_redis_versions(input.subscription_id)
-                    .await
-                    .tool_context("Failed to get fixed Redis versions")?;
-
-                CallToolResult::from_serialize(&versions)
-            },
-        )
-        .build()
-}
-
-// ============================================================================
-// Fixed/Essentials Database tools
-// ============================================================================
-
-/// Input for listing fixed databases
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListFixedDatabasesInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Number of entries to skip (for pagination)
-    #[serde(default)]
-    pub offset: Option<i32>,
-    /// Maximum number of entries to return
-    #[serde(default)]
-    pub limit: Option<i32>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the list_fixed_databases tool
-pub fn list_fixed_databases(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("list_fixed_databases")
-        .description("List databases in a subscription.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<ListFixedDatabasesInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let databases = handler
-                    .list(input.subscription_id, input.offset, input.limit)
-                    .await
-                    .tool_context("Failed to list fixed databases")?;
-
-                CallToolResult::from_serialize(&databases)
-            },
-        )
-        .build()
-}
-
-/// Input for getting a specific fixed database
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_database tool
-pub fn get_fixed_database(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database")
-        .description("Get database details by ID.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let database = handler
-                    .get_by_id(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database")?;
-
-                CallToolResult::from_serialize(&database)
-            },
-        )
-        .build()
-}
-
-/// Input for creating a fixed database
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateFixedDatabaseInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database name (max 40 chars, letters, digits, and hyphens only)
-    pub name: String,
-    /// Database protocol: "stack" (default) or "redis" (for Redis Flex)
-    #[serde(default)]
-    pub protocol: Option<String>,
-    /// Total memory in GB including replication overhead (Pay-as-you-go only)
-    #[serde(default)]
-    pub memory_limit_in_gb: Option<f64>,
-    /// Maximum dataset size in GB (Pay-as-you-go only)
-    #[serde(default)]
-    pub dataset_size_in_gb: Option<f64>,
-    /// Support Redis OSS Cluster API (Pay-as-you-go only)
-    #[serde(default)]
-    pub support_oss_cluster_api: Option<bool>,
-    /// Redis database version
-    #[serde(default)]
-    pub redis_version: Option<String>,
-    /// Data persistence mode (e.g., "none", "aof-every-1-second", "snapshot-every-1-hour")
-    #[serde(default)]
-    pub data_persistence: Option<String>,
-    /// Data eviction policy
-    #[serde(default)]
-    pub data_eviction_policy: Option<String>,
-    /// Enable replication for high availability
-    #[serde(default)]
-    pub replication: Option<bool>,
-    /// Enable TLS for connections
-    #[serde(default)]
-    pub enable_tls: Option<bool>,
-    /// Database password (random generated if not set)
-    #[serde(default)]
-    pub password: Option<String>,
-    /// List of source IP addresses or subnet masks to allow
-    #[serde(default)]
-    pub source_ips: Option<Vec<String>>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the create_fixed_database tool
-pub fn create_fixed_database(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("create_fixed_database")
-        .description(
-            "Create a database in a Fixed/Essentials subscription. \
-             Prerequisites: 1) get_fixed_subscription -- verify the subscription exists and is active. \
-             2) get_fixed_plans_by_subscription -- check compatible plans. \
-             3) get_fixed_redis_versions -- pick a supported Redis version.",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<CreateFixedDatabaseInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = FixedDatabaseCreateRequest {
-                    subscription_id: None,
-                    name: input.name,
-                    protocol: input.protocol,
-                    memory_limit_in_gb: input.memory_limit_in_gb,
-                    dataset_size_in_gb: input.dataset_size_in_gb,
-                    support_oss_cluster_api: input.support_oss_cluster_api,
-                    redis_version: input.redis_version,
-                    resp_version: None,
-                    use_external_endpoint_for_oss_cluster_api: None,
-                    enable_database_clustering: None,
-                    number_of_shards: None,
-                    data_persistence: input.data_persistence,
-                    data_eviction_policy: input.data_eviction_policy,
-                    replication: input.replication,
-                    periodic_backup_path: None,
-                    source_ips: input.source_ips,
-                    regex_rules: None,
-                    replica_of: None,
-                    replica: None,
-                    client_ssl_certificate: None,
-                    client_tls_certificates: None,
-                    enable_tls: input.enable_tls,
-                    password: input.password,
-                    alerts: None,
-                    modules: None,
-                    command_type: None,
-                };
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .create(input.subscription_id, &request)
-                    .await
-                    .tool_context("Failed to create fixed database")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for updating a fixed database
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UpdateFixedDatabaseInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID to update
-    pub database_id: i32,
-    /// Updated database name
-    #[serde(default)]
-    pub name: Option<String>,
-    /// Total memory in GB including replication overhead (Pay-as-you-go only)
-    #[serde(default)]
-    pub memory_limit_in_gb: Option<f64>,
-    /// Data persistence mode
-    #[serde(default)]
-    pub data_persistence: Option<String>,
-    /// Data eviction policy
-    #[serde(default)]
-    pub data_eviction_policy: Option<String>,
-    /// Enable or disable replication
-    #[serde(default)]
-    pub replication: Option<bool>,
-    /// Enable or disable TLS
-    #[serde(default)]
-    pub enable_tls: Option<bool>,
-    /// Updated database password
-    #[serde(default)]
-    pub password: Option<String>,
-    /// List of source IP addresses or subnet masks to allow
-    #[serde(default)]
-    pub source_ips: Option<Vec<String>>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the update_fixed_database tool
-pub fn update_fixed_database(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("update_fixed_database")
-        .description("Update a database in a Fixed/Essentials subscription.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<UpdateFixedDatabaseInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = FixedDatabaseUpdateRequest {
-                    subscription_id: None,
-                    database_id: None,
-                    name: input.name,
-                    memory_limit_in_gb: input.memory_limit_in_gb,
-                    dataset_size_in_gb: None,
-                    support_oss_cluster_api: None,
-                    resp_version: None,
-                    use_external_endpoint_for_oss_cluster_api: None,
-                    enable_database_clustering: None,
-                    number_of_shards: None,
-                    data_persistence: input.data_persistence,
-                    data_eviction_policy: input.data_eviction_policy,
-                    replication: input.replication,
-                    periodic_backup_path: None,
-                    source_ips: input.source_ips,
-                    replica_of: None,
-                    replica: None,
-                    regex_rules: None,
-                    client_ssl_certificate: None,
-                    client_tls_certificates: None,
-                    enable_tls: input.enable_tls,
-                    password: input.password,
-                    enable_default_user: None,
-                    alerts: None,
-                    command_type: None,
-                };
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .update(input.subscription_id, input.database_id, &request)
-                    .await
-                    .tool_context("Failed to update fixed database")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for deleting a fixed database
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DeleteFixedDatabaseInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID to delete
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the delete_fixed_database tool
-pub fn delete_fixed_database(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("delete_fixed_database")
-        .description("DANGEROUS: Delete a Fixed/Essentials database and all its data.")
-        .destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<DeleteFixedDatabaseInput>| async move {
-                if !state.is_destructive_allowed() {
-                    return Err(McpError::tool(
-                        "Destructive operations require policy tier 'full'",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .delete_by_id(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to delete fixed database")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-// ============================================================================
-// Fixed/Essentials Database operations tools
-// ============================================================================
-
-/// Input for getting fixed database backup status
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseBackupStatusInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_database_backup_status tool
-pub fn get_fixed_database_backup_status(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database_backup_status")
-        .description("Get latest backup status for a database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseBackupStatusInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let status = handler
-                    .get_backup_status(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database backup status")?;
-
-                CallToolResult::from_serialize(&status)
-            },
-        )
-        .build()
-}
-
-/// Input for backing up a fixed database
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct BackupFixedDatabaseInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Custom backup path (overrides the configured periodicBackupPath)
-    #[serde(default)]
-    pub adhoc_backup_path: Option<String>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the backup_fixed_database tool
-pub fn backup_fixed_database(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("backup_fixed_database")
-        .description("Trigger a manual backup of a database.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<BackupFixedDatabaseInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = FixedDatabaseBackupRequest {
-                    subscription_id: None,
-                    database_id: None,
-                    adhoc_backup_path: input.adhoc_backup_path,
-                    command_type: None,
-                };
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .backup(input.subscription_id, input.database_id, &request)
-                    .await
-                    .tool_context("Failed to backup fixed database")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for getting fixed database import status
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseImportStatusInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_database_import_status tool
-pub fn get_fixed_database_import_status(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database_import_status")
-        .description("Get latest import status for a database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseImportStatusInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let status = handler
-                    .get_import_status(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database import status")?;
-
-                CallToolResult::from_serialize(&status)
-            },
-        )
-        .build()
-}
-
-/// Input for importing data into a fixed database
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ImportFixedDatabaseInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Source type: "http", "redis", "ftp", "aws-s3", "azure-blob-storage", "google-blob-storage"
-    pub source_type: String,
-    /// One or more URIs to import from
-    pub import_from_uri: Vec<String>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the import_fixed_database tool
-pub fn import_fixed_database(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("import_fixed_database")
-        .description(
-            "Import data into a database from an external source. \
-             WARNING: This will overwrite existing data.",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<ImportFixedDatabaseInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = FixedDatabaseImportRequest {
-                    subscription_id: None,
-                    database_id: None,
-                    source_type: input.source_type,
-                    import_from_uri: input.import_from_uri,
-                    command_type: None,
-                };
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .import(input.subscription_id, input.database_id, &request)
-                    .await
-                    .tool_context("Failed to import fixed database")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for getting fixed database slow log
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseSlowLogInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_database_slow_log tool
-pub fn get_fixed_database_slow_log(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database_slow_log")
-        .description("Get slow log entries for a database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseSlowLogInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let log = handler
-                    .get_slow_log(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database slow log")?;
-
-                CallToolResult::from_serialize(&log)
-            },
-        )
-        .build()
-}
-
-// ============================================================================
-// Fixed/Essentials Database tag tools
-// ============================================================================
-
-/// Input for getting fixed database tags
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseTagsInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the get_fixed_database_tags tool
-pub fn get_fixed_database_tags(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database_tags")
-        .description("Get tags for a database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseTagsInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let tags = handler
-                    .get_tags(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database tags")?;
-
-                CallToolResult::from_serialize(&tags)
-            },
-        )
-        .build()
-}
-
-/// Input for creating a fixed database tag
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CreateFixedDatabaseTagInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Tag key
-    pub key: String,
-    /// Tag value
-    pub value: String,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the create_fixed_database_tag tool
-pub fn create_fixed_database_tag(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("create_fixed_database_tag")
-        .description("Create a tag on a database.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<CreateFixedDatabaseTagInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = DatabaseTagCreateRequest {
-                    key: input.key,
-                    value: input.value,
-                    subscription_id: None,
-                    database_id: None,
-                    command_type: None,
-                };
-
-                let handler = FixedDatabaseHandler::new(client);
-                let tag = handler
-                    .create_tag(input.subscription_id, input.database_id, &request)
-                    .await
-                    .tool_context("Failed to create fixed database tag")?;
-
-                CallToolResult::from_serialize(&tag)
-            },
-        )
-        .build()
-}
-
-/// Input for updating a fixed database tag
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UpdateFixedDatabaseTagInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Tag key to update
-    pub tag_key: String,
-    /// New tag value
-    pub value: String,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the update_fixed_database_tag tool
-pub fn update_fixed_database_tag(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("update_fixed_database_tag")
-        .description("Update a tag value on a database.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<UpdateFixedDatabaseTagInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let request = DatabaseTagUpdateRequest {
-                    subscription_id: None,
-                    database_id: None,
-                    key: None,
-                    value: input.value,
-                    command_type: None,
-                };
-
-                let handler = FixedDatabaseHandler::new(client);
-                let tag = handler
-                    .update_tag(
-                        input.subscription_id,
-                        input.database_id,
-                        input.tag_key,
-                        &request,
-                    )
-                    .await
-                    .tool_context("Failed to update fixed database tag")?;
-
-                CallToolResult::from_serialize(&tag)
-            },
-        )
-        .build()
-}
-
-/// Input for deleting a fixed database tag
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DeleteFixedDatabaseTagInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Tag key to delete
-    pub tag_key: String,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the delete_fixed_database_tag tool
-pub fn delete_fixed_database_tag(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("delete_fixed_database_tag")
-        .description("DANGEROUS: Delete a tag from a database.")
-        .destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<DeleteFixedDatabaseTagInput>| async move {
-                if !state.is_destructive_allowed() {
-                    return Err(McpError::tool(
-                        "Destructive operations require policy tier 'full'",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .delete_tag(input.subscription_id, input.database_id, input.tag_key)
-                    .await
-                    .tool_context("Failed to delete fixed database tag")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
+use crate::tools::macros::{cloud_tool, mcp_module};
 
 /// Input for a tag key-value pair
 #[derive(Debug, Deserialize, JsonSchema)]
@@ -1188,268 +23,761 @@ pub struct FixedTagInput {
     pub value: String,
 }
 
-/// Input for updating all fixed database tags
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UpdateFixedDatabaseTagsInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Tags to set on the database (replaces all existing tags)
-    pub tags: Vec<FixedTagInput>,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
+mcp_module! {
+    list_fixed_subscriptions => "list_fixed_subscriptions",
+    get_fixed_subscription => "get_fixed_subscription",
+    create_fixed_subscription => "create_fixed_subscription",
+    update_fixed_subscription => "update_fixed_subscription",
+    delete_fixed_subscription => "delete_fixed_subscription",
+    list_fixed_plans => "list_fixed_plans",
+    get_fixed_plans_by_subscription => "get_fixed_plans_by_subscription",
+    get_fixed_plan => "get_fixed_plan",
+    get_fixed_redis_versions => "get_fixed_redis_versions",
+    list_fixed_databases => "list_fixed_databases",
+    get_fixed_database => "get_fixed_database",
+    create_fixed_database => "create_fixed_database",
+    update_fixed_database => "update_fixed_database",
+    delete_fixed_database => "delete_fixed_database",
+    get_fixed_database_backup_status => "get_fixed_database_backup_status",
+    backup_fixed_database => "backup_fixed_database",
+    get_fixed_database_import_status => "get_fixed_database_import_status",
+    import_fixed_database => "import_fixed_database",
+    get_fixed_database_slow_log => "get_fixed_database_slow_log",
+    get_fixed_database_tags => "get_fixed_database_tags",
+    create_fixed_database_tag => "create_fixed_database_tag",
+    update_fixed_database_tag => "update_fixed_database_tag",
+    delete_fixed_database_tag => "delete_fixed_database_tag",
+    update_fixed_database_tags => "update_fixed_database_tags",
+    get_fixed_database_upgrade_versions => "get_fixed_database_upgrade_versions",
+    get_fixed_database_upgrade_status => "get_fixed_database_upgrade_status",
+    upgrade_fixed_database_redis_version => "upgrade_fixed_database_redis_version",
 }
 
-/// Build the update_fixed_database_tags tool
-pub fn update_fixed_database_tags(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("update_fixed_database_tags")
-        .description("Update all tags on a database (replaces existing tags).")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<UpdateFixedDatabaseTagsInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+// ============================================================================
+// Fixed/Essentials Subscription tools
+// ============================================================================
 
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+cloud_tool!(read_only, list_fixed_subscriptions, "list_fixed_subscriptions",
+    "List all Fixed/Essentials subscriptions.",
+    {} => |client, _input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let subscriptions = handler
+            .list()
+            .await
+            .tool_context("Failed to list fixed subscriptions")?;
 
-                let tags = input
-                    .tags
-                    .into_iter()
-                    .map(|t| Tag {
-                        key: t.key,
-                        value: t.value,
-                        command_type: None,
-                    })
-                    .collect();
+        CallToolResult::from_serialize(&subscriptions)
+    }
+);
 
-                let request = DatabaseTagsUpdateRequest {
-                    subscription_id: None,
-                    database_id: None,
-                    tags,
-                    command_type: None,
-                };
+cloud_tool!(read_only, get_fixed_subscription, "get_fixed_subscription",
+    "Get subscription details by ID.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+    } => |client, input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let subscription = handler
+            .get_by_id(input.subscription_id)
+            .await
+            .tool_context("Failed to get fixed subscription")?;
 
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .update_tags(input.subscription_id, input.database_id, &request)
-                    .await
-                    .tool_context("Failed to update fixed database tags")?;
+        CallToolResult::from_serialize(&subscription)
+    }
+);
 
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
+cloud_tool!(write, create_fixed_subscription, "create_fixed_subscription",
+    "Create a new Fixed/Essentials subscription. \
+     Prerequisites: 1) list_fixed_plans -- choose a plan by size, region, and price. \
+     2) list_payment_methods -- verify a payment method exists.",
+    {
+        /// New subscription name
+        pub name: String,
+        /// Essentials plan ID (use list_fixed_plans to find available plans)
+        pub plan_id: i32,
+        /// Payment method: "credit-card" or "marketplace"
+        #[serde(default)]
+        pub payment_method: Option<String>,
+        /// Payment method ID (required when payment_method is "credit-card")
+        #[serde(default)]
+        pub payment_method_id: Option<i32>,
+    } => |client, input| {
+        let request = FixedSubscriptionCreateRequest {
+            name: input.name,
+            plan_id: input.plan_id,
+            payment_method: input.payment_method,
+            payment_method_id: input.payment_method_id,
+            command_type: None,
+        };
+
+        let handler = FixedSubscriptionHandler::new(client);
+        let result = handler
+            .create(&request)
+            .await
+            .tool_context("Failed to create fixed subscription")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(write, update_fixed_subscription, "update_fixed_subscription",
+    "Update a Fixed/Essentials subscription.",
+    {
+        /// Fixed subscription ID to update
+        pub subscription_id: i32,
+        /// Updated subscription name
+        #[serde(default)]
+        pub name: Option<String>,
+        /// New plan ID
+        #[serde(default)]
+        pub plan_id: Option<i32>,
+        /// Payment method: "credit-card" or "marketplace"
+        #[serde(default)]
+        pub payment_method: Option<String>,
+        /// Payment method ID
+        #[serde(default)]
+        pub payment_method_id: Option<i32>,
+    } => |client, input| {
+        let request = FixedSubscriptionUpdateRequest {
+            subscription_id: None,
+            name: input.name,
+            plan_id: input.plan_id,
+            payment_method: input.payment_method,
+            payment_method_id: input.payment_method_id,
+            command_type: None,
+        };
+
+        let handler = FixedSubscriptionHandler::new(client);
+        let result = handler
+            .update(input.subscription_id, &request)
+            .await
+            .tool_context("Failed to update fixed subscription")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(destructive, delete_fixed_subscription, "delete_fixed_subscription",
+    "DANGEROUS: Delete a Fixed/Essentials subscription. \
+     All databases must be deleted first.",
+    {
+        /// Fixed subscription ID to delete
+        pub subscription_id: i32,
+    } => |client, input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let result = handler
+            .delete_by_id(input.subscription_id)
+            .await
+            .tool_context("Failed to delete fixed subscription")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(read_only, list_fixed_plans, "list_fixed_plans",
+    "List available Fixed/Essentials plans.",
+    {
+        /// Cloud provider filter (e.g., "AWS", "GCP", "Azure")
+        #[serde(default)]
+        pub provider: Option<String>,
+        /// Filter by Redis Flex plans
+        #[serde(default)]
+        pub redis_flex: Option<bool>,
+    } => |client, input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let plans = handler
+            .list_plans(input.provider, input.redis_flex)
+            .await
+            .tool_context("Failed to list fixed plans")?;
+
+        CallToolResult::from_serialize(&plans)
+    }
+);
+
+cloud_tool!(read_only, get_fixed_plans_by_subscription, "get_fixed_plans_by_subscription",
+    "Get compatible plans for a subscription.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+    } => |client, input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let plans = handler
+            .get_plans_by_subscription_id(input.subscription_id)
+            .await
+            .tool_context("Failed to get fixed plans by subscription")?;
+
+        CallToolResult::from_serialize(&plans)
+    }
+);
+
+cloud_tool!(read_only, get_fixed_plan, "get_fixed_plan",
+    "Get plan details by ID.",
+    {
+        /// Plan ID
+        pub plan_id: i32,
+    } => |client, input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let plan = handler
+            .get_plan_by_id(input.plan_id)
+            .await
+            .tool_context("Failed to get fixed plan")?;
+
+        CallToolResult::from_serialize(&plan)
+    }
+);
+
+cloud_tool!(read_only, get_fixed_redis_versions, "get_fixed_redis_versions",
+    "Get available Redis versions for a subscription.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+    } => |client, input| {
+        let handler = FixedSubscriptionHandler::new(client);
+        let versions = handler
+            .get_redis_versions(input.subscription_id)
+            .await
+            .tool_context("Failed to get fixed Redis versions")?;
+
+        CallToolResult::from_serialize(&versions)
+    }
+);
+
+// ============================================================================
+// Fixed/Essentials Database tools
+// ============================================================================
+
+cloud_tool!(read_only, list_fixed_databases, "list_fixed_databases",
+    "List databases in a subscription.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Number of entries to skip (for pagination)
+        #[serde(default)]
+        pub offset: Option<i32>,
+        /// Maximum number of entries to return
+        #[serde(default)]
+        pub limit: Option<i32>,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let databases = handler
+            .list(input.subscription_id, input.offset, input.limit)
+            .await
+            .tool_context("Failed to list fixed databases")?;
+
+        CallToolResult::from_serialize(&databases)
+    }
+);
+
+cloud_tool!(read_only, get_fixed_database, "get_fixed_database",
+    "Get database details by ID.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let database = handler
+            .get_by_id(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database")?;
+
+        CallToolResult::from_serialize(&database)
+    }
+);
+
+cloud_tool!(write, create_fixed_database, "create_fixed_database",
+    "Create a database in a Fixed/Essentials subscription. \
+     Prerequisites: 1) get_fixed_subscription -- verify the subscription exists and is active. \
+     2) get_fixed_plans_by_subscription -- check compatible plans. \
+     3) get_fixed_redis_versions -- pick a supported Redis version.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database name (max 40 chars, letters, digits, and hyphens only)
+        pub name: String,
+        /// Database protocol: "stack" (default) or "redis" (for Redis Flex)
+        #[serde(default)]
+        pub protocol: Option<String>,
+        /// Total memory in GB including replication overhead (Pay-as-you-go only)
+        #[serde(default)]
+        pub memory_limit_in_gb: Option<f64>,
+        /// Maximum dataset size in GB (Pay-as-you-go only)
+        #[serde(default)]
+        pub dataset_size_in_gb: Option<f64>,
+        /// Support Redis OSS Cluster API (Pay-as-you-go only)
+        #[serde(default)]
+        pub support_oss_cluster_api: Option<bool>,
+        /// Redis database version
+        #[serde(default)]
+        pub redis_version: Option<String>,
+        /// Data persistence mode (e.g., "none", "aof-every-1-second", "snapshot-every-1-hour")
+        #[serde(default)]
+        pub data_persistence: Option<String>,
+        /// Data eviction policy
+        #[serde(default)]
+        pub data_eviction_policy: Option<String>,
+        /// Enable replication for high availability
+        #[serde(default)]
+        pub replication: Option<bool>,
+        /// Enable TLS for connections
+        #[serde(default)]
+        pub enable_tls: Option<bool>,
+        /// Database password (random generated if not set)
+        #[serde(default)]
+        pub password: Option<String>,
+        /// List of source IP addresses or subnet masks to allow
+        #[serde(default)]
+        pub source_ips: Option<Vec<String>>,
+    } => |client, input| {
+        let request = FixedDatabaseCreateRequest {
+            subscription_id: None,
+            name: input.name,
+            protocol: input.protocol,
+            memory_limit_in_gb: input.memory_limit_in_gb,
+            dataset_size_in_gb: input.dataset_size_in_gb,
+            support_oss_cluster_api: input.support_oss_cluster_api,
+            redis_version: input.redis_version,
+            resp_version: None,
+            use_external_endpoint_for_oss_cluster_api: None,
+            enable_database_clustering: None,
+            number_of_shards: None,
+            data_persistence: input.data_persistence,
+            data_eviction_policy: input.data_eviction_policy,
+            replication: input.replication,
+            periodic_backup_path: None,
+            source_ips: input.source_ips,
+            regex_rules: None,
+            replica_of: None,
+            replica: None,
+            client_ssl_certificate: None,
+            client_tls_certificates: None,
+            enable_tls: input.enable_tls,
+            password: input.password,
+            alerts: None,
+            modules: None,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .create(input.subscription_id, &request)
+            .await
+            .tool_context("Failed to create fixed database")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(write, update_fixed_database, "update_fixed_database",
+    "Update a database in a Fixed/Essentials subscription.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID to update
+        pub database_id: i32,
+        /// Updated database name
+        #[serde(default)]
+        pub name: Option<String>,
+        /// Total memory in GB including replication overhead (Pay-as-you-go only)
+        #[serde(default)]
+        pub memory_limit_in_gb: Option<f64>,
+        /// Data persistence mode
+        #[serde(default)]
+        pub data_persistence: Option<String>,
+        /// Data eviction policy
+        #[serde(default)]
+        pub data_eviction_policy: Option<String>,
+        /// Enable or disable replication
+        #[serde(default)]
+        pub replication: Option<bool>,
+        /// Enable or disable TLS
+        #[serde(default)]
+        pub enable_tls: Option<bool>,
+        /// Updated database password
+        #[serde(default)]
+        pub password: Option<String>,
+        /// List of source IP addresses or subnet masks to allow
+        #[serde(default)]
+        pub source_ips: Option<Vec<String>>,
+    } => |client, input| {
+        let request = FixedDatabaseUpdateRequest {
+            subscription_id: None,
+            database_id: None,
+            name: input.name,
+            memory_limit_in_gb: input.memory_limit_in_gb,
+            dataset_size_in_gb: None,
+            support_oss_cluster_api: None,
+            resp_version: None,
+            use_external_endpoint_for_oss_cluster_api: None,
+            enable_database_clustering: None,
+            number_of_shards: None,
+            data_persistence: input.data_persistence,
+            data_eviction_policy: input.data_eviction_policy,
+            replication: input.replication,
+            periodic_backup_path: None,
+            source_ips: input.source_ips,
+            replica_of: None,
+            replica: None,
+            regex_rules: None,
+            client_ssl_certificate: None,
+            client_tls_certificates: None,
+            enable_tls: input.enable_tls,
+            password: input.password,
+            enable_default_user: None,
+            alerts: None,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .update(input.subscription_id, input.database_id, &request)
+            .await
+            .tool_context("Failed to update fixed database")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(destructive, delete_fixed_database, "delete_fixed_database",
+    "DANGEROUS: Delete a Fixed/Essentials database and all its data.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID to delete
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .delete_by_id(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to delete fixed database")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+// ============================================================================
+// Fixed/Essentials Database operations tools
+// ============================================================================
+
+cloud_tool!(read_only, get_fixed_database_backup_status, "get_fixed_database_backup_status",
+    "Get latest backup status for a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let status = handler
+            .get_backup_status(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database backup status")?;
+
+        CallToolResult::from_serialize(&status)
+    }
+);
+
+cloud_tool!(write, backup_fixed_database, "backup_fixed_database",
+    "Trigger a manual backup of a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Custom backup path (overrides the configured periodicBackupPath)
+        #[serde(default)]
+        pub adhoc_backup_path: Option<String>,
+    } => |client, input| {
+        let request = FixedDatabaseBackupRequest {
+            subscription_id: None,
+            database_id: None,
+            adhoc_backup_path: input.adhoc_backup_path,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .backup(input.subscription_id, input.database_id, &request)
+            .await
+            .tool_context("Failed to backup fixed database")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(read_only, get_fixed_database_import_status, "get_fixed_database_import_status",
+    "Get latest import status for a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let status = handler
+            .get_import_status(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database import status")?;
+
+        CallToolResult::from_serialize(&status)
+    }
+);
+
+cloud_tool!(write, import_fixed_database, "import_fixed_database",
+    "Import data into a database from an external source. \
+     WARNING: This will overwrite existing data.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Source type: "http", "redis", "ftp", "aws-s3", "azure-blob-storage", "google-blob-storage"
+        pub source_type: String,
+        /// One or more URIs to import from
+        pub import_from_uri: Vec<String>,
+    } => |client, input| {
+        let request = FixedDatabaseImportRequest {
+            subscription_id: None,
+            database_id: None,
+            source_type: input.source_type,
+            import_from_uri: input.import_from_uri,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .import(input.subscription_id, input.database_id, &request)
+            .await
+            .tool_context("Failed to import fixed database")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(read_only, get_fixed_database_slow_log, "get_fixed_database_slow_log",
+    "Get slow log entries for a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let log = handler
+            .get_slow_log(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database slow log")?;
+
+        CallToolResult::from_serialize(&log)
+    }
+);
+
+// ============================================================================
+// Fixed/Essentials Database tag tools
+// ============================================================================
+
+cloud_tool!(read_only, get_fixed_database_tags, "get_fixed_database_tags",
+    "Get tags for a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let tags = handler
+            .get_tags(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database tags")?;
+
+        CallToolResult::from_serialize(&tags)
+    }
+);
+
+cloud_tool!(write, create_fixed_database_tag, "create_fixed_database_tag",
+    "Create a tag on a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Tag key
+        pub key: String,
+        /// Tag value
+        pub value: String,
+    } => |client, input| {
+        let request = DatabaseTagCreateRequest {
+            key: input.key,
+            value: input.value,
+            subscription_id: None,
+            database_id: None,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let tag = handler
+            .create_tag(input.subscription_id, input.database_id, &request)
+            .await
+            .tool_context("Failed to create fixed database tag")?;
+
+        CallToolResult::from_serialize(&tag)
+    }
+);
+
+cloud_tool!(write, update_fixed_database_tag, "update_fixed_database_tag",
+    "Update a tag value on a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Tag key to update
+        pub tag_key: String,
+        /// New tag value
+        pub value: String,
+    } => |client, input| {
+        let request = DatabaseTagUpdateRequest {
+            subscription_id: None,
+            database_id: None,
+            key: None,
+            value: input.value,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let tag = handler
+            .update_tag(
+                input.subscription_id,
+                input.database_id,
+                input.tag_key,
+                &request,
+            )
+            .await
+            .tool_context("Failed to update fixed database tag")?;
+
+        CallToolResult::from_serialize(&tag)
+    }
+);
+
+cloud_tool!(destructive, delete_fixed_database_tag, "delete_fixed_database_tag",
+    "DANGEROUS: Delete a tag from a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Tag key to delete
+        pub tag_key: String,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .delete_tag(input.subscription_id, input.database_id, input.tag_key)
+            .await
+            .tool_context("Failed to delete fixed database tag")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
+
+cloud_tool!(write, update_fixed_database_tags, "update_fixed_database_tags",
+    "Update all tags on a database (replaces existing tags).",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Tags to set on the database (replaces all existing tags)
+        pub tags: Vec<FixedTagInput>,
+    } => |client, input| {
+        let tags = input
+            .tags
+            .into_iter()
+            .map(|t| Tag {
+                key: t.key,
+                value: t.value,
+                command_type: None,
+            })
+            .collect();
+
+        let request = DatabaseTagsUpdateRequest {
+            subscription_id: None,
+            database_id: None,
+            tags,
+            command_type: None,
+        };
+
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .update_tags(input.subscription_id, input.database_id, &request)
+            .await
+            .tool_context("Failed to update fixed database tags")?;
+
+        CallToolResult::from_serialize(&result)
+    }
+);
 
 // ============================================================================
 // Fixed/Essentials Database upgrade tools
 // ============================================================================
 
-/// Input for getting fixed database available upgrade versions
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseUpgradeVersionsInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+cloud_tool!(read_only, get_fixed_database_upgrade_versions, "get_fixed_database_upgrade_versions",
+    "Get available upgrade target Redis versions for a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let versions = handler
+            .get_available_target_versions(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database upgrade versions")?;
 
-/// Build the get_fixed_database_upgrade_versions tool
-pub fn get_fixed_database_upgrade_versions(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database_upgrade_versions")
-        .description("Get available upgrade target Redis versions for a database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseUpgradeVersionsInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
+        CallToolResult::from_serialize(&versions)
+    }
+);
 
-                let handler = FixedDatabaseHandler::new(client);
-                let versions = handler
-                    .get_available_target_versions(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database upgrade versions")?;
+cloud_tool!(read_only, get_fixed_database_upgrade_status, "get_fixed_database_upgrade_status",
+    "Get latest Redis version upgrade status for a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let status = handler
+            .get_upgrade_status(input.subscription_id, input.database_id)
+            .await
+            .tool_context("Failed to get fixed database upgrade status")?;
 
-                CallToolResult::from_serialize(&versions)
-            },
-        )
-        .build()
-}
+        CallToolResult::from_serialize(&status)
+    }
+);
 
-/// Input for getting fixed database upgrade status
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetFixedDatabaseUpgradeStatusInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+cloud_tool!(write, upgrade_fixed_database_redis_version, "upgrade_fixed_database_redis_version",
+    "Upgrade the Redis version of a database.",
+    {
+        /// Fixed subscription ID
+        pub subscription_id: i32,
+        /// Database ID
+        pub database_id: i32,
+        /// Target Redis version to upgrade to (use get_fixed_database_upgrade_versions to see available versions)
+        pub target_version: String,
+    } => |client, input| {
+        let handler = FixedDatabaseHandler::new(client);
+        let result = handler
+            .upgrade_redis_version(
+                input.subscription_id,
+                input.database_id,
+                &input.target_version,
+            )
+            .await
+            .tool_context("Failed to upgrade fixed database Redis version")?;
 
-/// Build the get_fixed_database_upgrade_status tool
-pub fn get_fixed_database_upgrade_status(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_fixed_database_upgrade_status")
-        .description("Get latest Redis version upgrade status for a database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetFixedDatabaseUpgradeStatusInput>| async move {
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let status = handler
-                    .get_upgrade_status(input.subscription_id, input.database_id)
-                    .await
-                    .tool_context("Failed to get fixed database upgrade status")?;
-
-                CallToolResult::from_serialize(&status)
-            },
-        )
-        .build()
-}
-
-/// Input for upgrading a fixed database Redis version
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UpgradeFixedDatabaseRedisVersionInput {
-    /// Fixed subscription ID
-    pub subscription_id: i32,
-    /// Database ID
-    pub database_id: i32,
-    /// Target Redis version to upgrade to (use get_fixed_database_upgrade_versions to see available versions)
-    pub target_version: String,
-    /// Profile name for multi-account support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the upgrade_fixed_database_redis_version tool
-pub fn upgrade_fixed_database_redis_version(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("upgrade_fixed_database_redis_version")
-        .description("Upgrade the Redis version of a database.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<UpgradeFixedDatabaseRedisVersionInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let client = state
-                    .cloud_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("cloud", e))?;
-
-                let handler = FixedDatabaseHandler::new(client);
-                let result = handler
-                    .upgrade_redis_version(
-                        input.subscription_id,
-                        input.database_id,
-                        &input.target_version,
-                    )
-                    .await
-                    .tool_context("Failed to upgrade fixed database Redis version")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-// ============================================================================
-// Instructions & Router
-// ============================================================================
-
-/// All tool names registered by this sub-module.
-pub(super) const TOOL_NAMES: &[&str] = &[
-    "list_fixed_subscriptions",
-    "get_fixed_subscription",
-    "create_fixed_subscription",
-    "update_fixed_subscription",
-    "delete_fixed_subscription",
-    "list_fixed_plans",
-    "get_fixed_plans_by_subscription",
-    "get_fixed_plan",
-    "get_fixed_redis_versions",
-    "list_fixed_databases",
-    "get_fixed_database",
-    "create_fixed_database",
-    "update_fixed_database",
-    "delete_fixed_database",
-    "get_fixed_database_backup_status",
-    "backup_fixed_database",
-    "get_fixed_database_import_status",
-    "import_fixed_database",
-    "get_fixed_database_slow_log",
-    "get_fixed_database_tags",
-    "create_fixed_database_tag",
-    "update_fixed_database_tag",
-    "delete_fixed_database_tag",
-    "update_fixed_database_tags",
-    "get_fixed_database_upgrade_versions",
-    "get_fixed_database_upgrade_status",
-    "upgrade_fixed_database_redis_version",
-];
-
-/// Build an MCP sub-router containing all Fixed/Essentials tools
-pub fn router(state: Arc<AppState>) -> McpRouter {
-    McpRouter::new()
-        // Fixed Subscription read tools
-        .tool(list_fixed_subscriptions(state.clone()))
-        .tool(get_fixed_subscription(state.clone()))
-        .tool(list_fixed_plans(state.clone()))
-        .tool(get_fixed_plans_by_subscription(state.clone()))
-        .tool(get_fixed_plan(state.clone()))
-        .tool(get_fixed_redis_versions(state.clone()))
-        // Fixed Database read tools
-        .tool(list_fixed_databases(state.clone()))
-        .tool(get_fixed_database(state.clone()))
-        .tool(get_fixed_database_backup_status(state.clone()))
-        .tool(get_fixed_database_import_status(state.clone()))
-        .tool(get_fixed_database_slow_log(state.clone()))
-        .tool(get_fixed_database_tags(state.clone()))
-        .tool(get_fixed_database_upgrade_versions(state.clone()))
-        .tool(get_fixed_database_upgrade_status(state.clone()))
-        // Fixed Subscription write tools
-        .tool(create_fixed_subscription(state.clone()))
-        .tool(update_fixed_subscription(state.clone()))
-        .tool(delete_fixed_subscription(state.clone()))
-        // Fixed Database write tools
-        .tool(create_fixed_database(state.clone()))
-        .tool(update_fixed_database(state.clone()))
-        .tool(delete_fixed_database(state.clone()))
-        .tool(backup_fixed_database(state.clone()))
-        .tool(import_fixed_database(state.clone()))
-        // Fixed Database tag write tools
-        .tool(create_fixed_database_tag(state.clone()))
-        .tool(update_fixed_database_tag(state.clone()))
-        .tool(delete_fixed_database_tag(state.clone()))
-        .tool(update_fixed_database_tags(state.clone()))
-        // Fixed Database upgrade write tool
-        .tool(upgrade_fixed_database_redis_version(state))
-}
+        CallToolResult::from_serialize(&result)
+    }
+);
