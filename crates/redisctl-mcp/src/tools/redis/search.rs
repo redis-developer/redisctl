@@ -34,11 +34,12 @@ pub struct FieldDefinition {
 
 impl FieldDefinition {
     fn to_args(&self) -> Vec<String> {
-        let mut args = vec![self.name.clone(), self.field_type.to_uppercase()];
+        let mut args = vec![self.name.clone()];
         if let Some(ref alias) = self.alias {
             args.push("AS".to_string());
             args.push(alias.clone());
         }
+        args.push(self.field_type.to_uppercase());
         if let Some(weight) = self.weight {
             args.push("WEIGHT".to_string());
             args.push(weight.to_string());
@@ -132,7 +133,7 @@ database_tool!(read_only, ft_info, "redis_ft_info",
 );
 
 database_tool!(read_only, ft_search, "redis_ft_search",
-    "Execute a full-text search query against an index. Requires the RediSearch module.",
+    "Execute a full-text search query against an index. Requires the RediSearch module.\n\nQuery syntax examples:\n- Full-text: `wireless headphones`\n- Field-specific text: `@name:wireless`\n- TAG exact match: `@category:{electronics}`\n- Multiple tags: `@category:{electronics|sports}`\n- Numeric range: `@price:[50 200]`\n- Numeric comparison: `@rating:[(4 +inf]` (greater than 4)\n- Negation: `-@category:{kitchen}`\n- Wildcard: `wire*`\n- All documents: `*`\n- Combined: `@category:{electronics} @price:[0 100]`\n\nFor JSON indexes, use field aliases (set via AS in FT.CREATE) in queries, not the raw JSONPath.",
     {
         /// Index name
         pub index: String,
@@ -243,7 +244,7 @@ database_tool!(read_only, ft_search, "redis_ft_search",
 );
 
 database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
-    "Execute an aggregation query against a search index. Use raw_args for complex pipelines (GROUPBY, REDUCE, SORTBY, APPLY). Requires the RediSearch module.",
+    "Execute an aggregation query against a search index. Use raw_args for complex pipelines. Requires the RediSearch module.\n\nCommon raw_args patterns:\n- Group by field: `[\"GROUPBY\", \"1\", \"@category\", \"REDUCE\", \"COUNT\", \"0\", \"AS\", \"count\"]`\n- Average: `[\"GROUPBY\", \"1\", \"@category\", \"REDUCE\", \"AVG\", \"1\", \"@price\", \"AS\", \"avg_price\"]`\n- Sort results: `[\"SORTBY\", \"2\", \"@count\", \"DESC\"]`\n- Computed field: `[\"APPLY\", \"@price * 1.1\", \"AS\", \"price_with_tax\"]`\n\nChain multiple pipeline steps in a single raw_args array.",
     {
         /// Index name
         pub index: String,
@@ -459,7 +460,7 @@ database_tool!(read_only, ft_dictdump, "redis_ft_dictdump",
 // ---------------------------------------------------------------------------
 
 database_tool!(write, ft_create, "redis_ft_create",
-    "Create a search index with the specified schema. Requires the RediSearch module.",
+    "Create a search index with the specified schema. Requires the RediSearch module.\n\nFor JSON indexes, set `on` to `JSON` and use JSONPath expressions as field names (e.g. `$.name`). Always set `alias` on JSON fields to provide clean query names (e.g. alias `name` for `$.name`), since raw JSONPath cannot be used in search queries.\n\nField types: TEXT (full-text searchable), NUMERIC (range queries), TAG (exact match/filtering), GEO (geo queries), VECTOR (similarity search).\n\nExample schema for JSON:\n```\n{\"name\": \"$.name\", \"alias\": \"name\", \"field_type\": \"TEXT\", \"sortable\": true}\n{\"name\": \"$.price\", \"alias\": \"price\", \"field_type\": \"NUMERIC\", \"sortable\": true}\n{\"name\": \"$.category\", \"alias\": \"category\", \"field_type\": \"TAG\"}\n```",
     {
         /// Index name
         pub index: String,
