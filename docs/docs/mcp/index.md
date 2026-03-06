@@ -32,7 +32,7 @@ With the MCP server, you can:
 
     ---
 
-    300+ tools covering Redis Cloud, Redis Enterprise, and direct database operations.
+    340 tools covering Redis Cloud, Redis Enterprise, and direct database operations.
 
 -   :material-cog:{ .lg .middle } **IDE Integration**
 
