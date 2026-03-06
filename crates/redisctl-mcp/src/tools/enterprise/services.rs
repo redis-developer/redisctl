@@ -4,7 +4,6 @@ use serde_json::Value;
 use tower_mcp::{CallToolResult, ResultExt};
 
 use crate::tools::macros::{enterprise_tool, mcp_module};
-use crate::tools::wrap_list;
 
 mcp_module! {
     list_services => "list_enterprise_services",
@@ -25,7 +24,7 @@ enterprise_tool!(read_only, list_services, "list_enterprise_services",
             .await
             .tool_context("Failed to list services")?;
 
-        wrap_list("services", &services)
+        CallToolResult::from_list("services", &services)
     }
 );
 

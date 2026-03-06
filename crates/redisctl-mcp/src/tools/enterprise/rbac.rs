@@ -8,7 +8,6 @@ use serde_json::Value;
 use tower_mcp::{CallToolResult, ResultExt};
 
 use crate::tools::macros::{enterprise_tool, mcp_module};
-use crate::tools::wrap_list;
 
 mcp_module! {
     list_users => "list_enterprise_users",
@@ -43,7 +42,7 @@ enterprise_tool!(read_only, list_users, "list_enterprise_users",
         let handler = UserHandler::new(client);
         let users = handler.list().await.tool_context("Failed to list users")?;
 
-        wrap_list("users", &users)
+        CallToolResult::from_list("users", &users)
     }
 );
 
@@ -196,7 +195,7 @@ enterprise_tool!(read_only, list_roles, "list_enterprise_roles",
         let handler = RolesHandler::new(client);
         let roles = handler.list().await.tool_context("Failed to list roles")?;
 
-        wrap_list("roles", &roles)
+        CallToolResult::from_list("roles", &roles)
     }
 );
 
@@ -312,7 +311,7 @@ enterprise_tool!(read_only, get_enterprise_builtin_roles, "get_enterprise_builti
             .await
             .tool_context("Failed to get built-in roles")?;
 
-        wrap_list("roles", &roles)
+        CallToolResult::from_list("roles", &roles)
     }
 );
 
@@ -326,7 +325,7 @@ enterprise_tool!(read_only, list_redis_acls, "list_enterprise_acls",
         let handler = RedisAclHandler::new(client);
         let acls = handler.list().await.tool_context("Failed to list ACLs")?;
 
-        wrap_list("acls", &acls)
+        CallToolResult::from_list("acls", &acls)
     }
 );
 

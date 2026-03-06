@@ -14,7 +14,6 @@ use redis_cloud::{
 use tower_mcp::{CallToolResult, ResultExt};
 
 use crate::tools::macros::{cloud_tool, mcp_module};
-use crate::tools::wrap_list;
 
 /// Database specification for ACL role assignment
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
@@ -646,7 +645,7 @@ cloud_tool!(read_only, list_tasks, "list_tasks",
             .await
             .tool_context("Failed to list tasks")?;
 
-        wrap_list("tasks", &tasks)
+        CallToolResult::from_list("tasks", &tasks)
     }
 );
 
@@ -736,7 +735,7 @@ cloud_tool!(read_only, list_cloud_accounts, "list_cloud_accounts",
             .tool_context("Failed to list cloud accounts")?;
 
         let accounts = result.cloud_accounts.unwrap_or_default();
-        wrap_list("cloud_accounts", &accounts)
+        CallToolResult::from_list("cloud_accounts", &accounts)
     }
 );
 

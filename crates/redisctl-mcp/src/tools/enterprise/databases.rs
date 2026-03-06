@@ -13,7 +13,6 @@ use serde_json::Value;
 use tower_mcp::{CallToolResult, ResultExt};
 
 use crate::tools::macros::{enterprise_tool, mcp_module};
-use crate::tools::wrap_list;
 
 mcp_module! {
     list_databases => "list_enterprise_databases",
@@ -80,7 +79,7 @@ enterprise_tool!(read_only, list_databases, "list_enterprise_databases",
             })
             .collect();
 
-        wrap_list("databases", &filtered)
+        CallToolResult::from_list("databases", &filtered)
     }
 );
 
@@ -155,7 +154,7 @@ enterprise_tool!(read_only, get_database_endpoints, "get_database_endpoints",
             .await
             .tool_context("Failed to get endpoints")?;
 
-        wrap_list("endpoints", &endpoints)
+        CallToolResult::from_list("endpoints", &endpoints)
     }
 );
 
@@ -171,7 +170,7 @@ enterprise_tool!(read_only, list_database_alerts, "list_database_alerts",
             .await
             .tool_context("Failed to list database alerts")?;
 
-        wrap_list("alerts", &alerts)
+        CallToolResult::from_list("alerts", &alerts)
     }
 );
 
@@ -438,7 +437,7 @@ enterprise_tool!(read_only, list_enterprise_crdbs, "list_enterprise_crdbs",
         let handler = CrdbHandler::new(client);
         let crdbs = handler.list().await.tool_context("Failed to list CRDBs")?;
 
-        wrap_list("crdbs", &crdbs)
+        CallToolResult::from_list("crdbs", &crdbs)
     }
 );
 
