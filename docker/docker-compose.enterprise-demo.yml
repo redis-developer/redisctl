@@ -43,8 +43,7 @@ services:
   # allowing dependent services to start.
   # ==============================================================================
   redis-enterprise:
-    image: ${REDIS_ENTERPRISE_IMAGE:-redislabs/redis:latest}
-    platform: ${REDIS_ENTERPRISE_PLATFORM:-linux/amd64}
+    image: redislabs/redis:8.0.10-81
     container_name: redis-enterprise
     tty: true
     cap_add:
