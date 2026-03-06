@@ -1,0 +1,705 @@
+//! RediSearch module tools (FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.INFO, etc.)
+
+use tower_mcp::{CallToolResult, ResultExt};
+
+use super::format_value;
+use crate::tools::macros::{database_tool, mcp_module};
+
+/// Field definition for FT.CREATE and FT.ALTER schema definitions.
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+pub struct FieldDefinition {
+    /// Field name (or JSONPath for JSON indexes)
+    pub name: String,
+    /// Field type: TEXT, NUMERIC, TAG, GEO, VECTOR
+    pub field_type: String,
+    /// Make field sortable (enables SORTBY in queries)
+    #[serde(default)]
+    pub sortable: bool,
+    /// Exclude field from indexing (store only)
+    #[serde(default)]
+    pub noindex: bool,
+    /// Disable stemming for TEXT fields
+    #[serde(default)]
+    pub nostem: bool,
+    /// Weight for TEXT fields (default 1.0)
+    #[serde(default)]
+    pub weight: Option<f64>,
+    /// Separator character for TAG fields (default ",")
+    #[serde(default)]
+    pub separator: Option<String>,
+    /// Alias for this field (AS alias)
+    #[serde(default)]
+    pub alias: Option<String>,
+}
+
+impl FieldDefinition {
+    fn to_args(&self) -> Vec<String> {
+        let mut args = vec![self.name.clone(), self.field_type.to_uppercase()];
+        if let Some(ref alias) = self.alias {
+            args.push("AS".to_string());
+            args.push(alias.clone());
+        }
+        if let Some(weight) = self.weight {
+            args.push("WEIGHT".to_string());
+            args.push(weight.to_string());
+        }
+        if let Some(ref sep) = self.separator {
+            args.push("SEPARATOR".to_string());
+            args.push(sep.clone());
+        }
+        if self.sortable {
+            args.push("SORTABLE".to_string());
+        }
+        if self.noindex {
+            args.push("NOINDEX".to_string());
+        }
+        if self.nostem {
+            args.push("NOSTEM".to_string());
+        }
+        args
+    }
+}
+
+mcp_module! {
+    ft_list => "redis_ft_list",
+    ft_info => "redis_ft_info",
+    ft_search => "redis_ft_search",
+    ft_aggregate => "redis_ft_aggregate",
+    ft_explain => "redis_ft_explain",
+    ft_profile => "redis_ft_profile",
+    ft_tagvals => "redis_ft_tagvals",
+    ft_syndump => "redis_ft_syndump",
+    ft_dictdump => "redis_ft_dictdump",
+    ft_create => "redis_ft_create",
+    ft_alter => "redis_ft_alter",
+    ft_synupdate => "redis_ft_synupdate",
+    ft_dictadd => "redis_ft_dictadd",
+    ft_aliasadd => "redis_ft_aliasadd",
+    ft_aliasupdate => "redis_ft_aliasupdate",
+    ft_dropindex => "redis_ft_dropindex",
+    ft_aliasdel => "redis_ft_aliasdel",
+    ft_dictdel => "redis_ft_dictdel"
+}
+
+// ---------------------------------------------------------------------------
+// Read-only tools
+// ---------------------------------------------------------------------------
+
+database_tool!(read_only, ft_list, "redis_ft_list",
+    "List all search indexes. Requires the RediSearch module.",
+    {} => |conn, _input| {
+        let indexes: Vec<String> = redis::cmd("FT._LIST")
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT._LIST failed")?;
+
+        if indexes.is_empty() {
+            Ok(CallToolResult::text("No search indexes found"))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "Search indexes ({}):\n{}",
+                indexes.len(),
+                indexes.join("\n")
+            )))
+        }
+    }
+);
+
+database_tool!(read_only, ft_info, "redis_ft_info",
+    "Get search index metadata including fields, document count, and indexing status. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+    } => |conn, input| {
+        let result: Vec<redis::Value> = redis::cmd("FT.INFO")
+            .arg(&input.index)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.INFO failed")?;
+
+        // FT.INFO returns alternating key-value pairs
+        let mut output = format!("Index: {}\n\n", input.index);
+        let mut i = 0;
+        while i + 1 < result.len() {
+            let key = format_value(&result[i]);
+            let val = format_value(&result[i + 1]);
+            output.push_str(&format!("{}: {}\n", key, val));
+            i += 2;
+        }
+
+        Ok(CallToolResult::text(output))
+    }
+);
+
+database_tool!(read_only, ft_search, "redis_ft_search",
+    "Execute a full-text search query against an index. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Search query (e.g. "@title:hello", "*" for all)
+        pub query: String,
+        /// Result offset for pagination
+        #[serde(default)]
+        pub limit_offset: Option<u64>,
+        /// Number of results to return
+        #[serde(default)]
+        pub limit_num: Option<u64>,
+        /// Sort by field name
+        #[serde(default)]
+        pub sortby: Option<String>,
+        /// Sort order: ASC or DESC
+        #[serde(default)]
+        pub sortby_order: Option<String>,
+        /// Fields to return (empty = all fields)
+        #[serde(default)]
+        pub return_fields: Option<Vec<String>>,
+        /// Return document IDs only (no content)
+        #[serde(default)]
+        pub nocontent: bool,
+        /// Do not stem query terms
+        #[serde(default)]
+        pub verbatim: bool,
+        /// Include match scores in results
+        #[serde(default)]
+        pub withscores: bool,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.SEARCH");
+        cmd.arg(&input.index).arg(&input.query);
+
+        if input.nocontent {
+            cmd.arg("NOCONTENT");
+        }
+        if input.verbatim {
+            cmd.arg("VERBATIM");
+        }
+        if input.withscores {
+            cmd.arg("WITHSCORES");
+        }
+        if let Some(ref fields) = input.return_fields {
+            cmd.arg("RETURN").arg(fields.len());
+            for f in fields {
+                cmd.arg(f);
+            }
+        }
+        if let Some(ref field) = input.sortby {
+            cmd.arg("SORTBY").arg(field);
+            if let Some(ref order) = input.sortby_order {
+                cmd.arg(order);
+            }
+        }
+        if input.limit_offset.is_some() || input.limit_num.is_some() {
+            cmd.arg("LIMIT")
+                .arg(input.limit_offset.unwrap_or(0))
+                .arg(input.limit_num.unwrap_or(10));
+        }
+
+        let result: Vec<redis::Value> = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.SEARCH failed")?;
+
+        if result.is_empty() {
+            return Ok(CallToolResult::text("No results"));
+        }
+
+        // First element is total count
+        let total = format_value(&result[0]);
+        let mut output = format!("Total results: {}\n\n", total);
+
+        // Remaining elements: doc_id, [field, value, ...] pairs
+        let mut i = 1;
+        let mut doc_num = 1;
+        while i < result.len() {
+            let doc_id = format_value(&result[i]);
+            output.push_str(&format!("{}. {}", doc_num, doc_id));
+            i += 1;
+
+            // If withscores, next element is the score
+            if input.withscores && i < result.len() {
+                let score = format_value(&result[i]);
+                output.push_str(&format!(" (score: {})", score));
+                i += 1;
+            }
+            output.push('\n');
+
+            // If not nocontent, next element is the field array
+            if !input.nocontent && i < result.len() {
+                if let redis::Value::Array(ref fields) = result[i] {
+                    let mut j = 0;
+                    while j + 1 < fields.len() {
+                        let field = format_value(&fields[j]);
+                        let value = format_value(&fields[j + 1]);
+                        output.push_str(&format!("  {}: {}\n", field, value));
+                        j += 2;
+                    }
+                }
+                i += 1;
+            }
+            doc_num += 1;
+        }
+
+        Ok(CallToolResult::text(output))
+    }
+);
+
+database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
+    "Execute an aggregation query against a search index. Use raw_args for complex pipelines (GROUPBY, REDUCE, SORTBY, APPLY). Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Search query (use "*" for all documents)
+        pub query: String,
+        /// Fields to load from the document
+        #[serde(default)]
+        pub load_fields: Option<Vec<String>>,
+        /// Result offset for pagination
+        #[serde(default)]
+        pub limit_offset: Option<u64>,
+        /// Number of results to return
+        #[serde(default)]
+        pub limit_num: Option<u64>,
+        /// Additional raw arguments for complex pipelines (e.g. ["GROUPBY", "1", "@city", "REDUCE", "COUNT", "0", "AS", "count"])
+        #[serde(default)]
+        pub raw_args: Option<Vec<String>>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.AGGREGATE");
+        cmd.arg(&input.index).arg(&input.query);
+
+        if let Some(ref fields) = input.load_fields {
+            cmd.arg("LOAD").arg(fields.len());
+            for f in fields {
+                cmd.arg(f);
+            }
+        }
+        if let Some(ref args) = input.raw_args {
+            for arg in args {
+                cmd.arg(arg);
+            }
+        }
+        if input.limit_offset.is_some() || input.limit_num.is_some() {
+            cmd.arg("LIMIT")
+                .arg(input.limit_offset.unwrap_or(0))
+                .arg(input.limit_num.unwrap_or(10));
+        }
+
+        let result: Vec<redis::Value> = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.AGGREGATE failed")?;
+
+        if result.is_empty() {
+            return Ok(CallToolResult::text("No results"));
+        }
+
+        let total = format_value(&result[0]);
+        let mut output = format!("Total results: {}\n\n", total);
+
+        for (idx, row) in result.iter().skip(1).enumerate() {
+            output.push_str(&format!("{}. ", idx + 1));
+            if let redis::Value::Array(fields) = row {
+                let mut j = 0;
+                while j + 1 < fields.len() {
+                    let field = format_value(&fields[j]);
+                    let value = format_value(&fields[j + 1]);
+                    if j > 0 {
+                        output.push_str(", ");
+                    }
+                    output.push_str(&format!("{}: {}", field, value));
+                    j += 2;
+                }
+            } else {
+                output.push_str(&format_value(row));
+            }
+            output.push('\n');
+        }
+
+        Ok(CallToolResult::text(output))
+    }
+);
+
+database_tool!(read_only, ft_explain, "redis_ft_explain",
+    "Get the execution plan for a search query. Useful for understanding and optimizing queries. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Search query to explain
+        pub query: String,
+    } => |conn, input| {
+        let plan: String = redis::cmd("FT.EXPLAIN")
+            .arg(&input.index)
+            .arg(&input.query)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.EXPLAIN failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Query plan for '{}' on index '{}':\n\n{}",
+            input.query, input.index, plan
+        )))
+    }
+);
+
+database_tool!(read_only, ft_profile, "redis_ft_profile",
+    "Profile a search or aggregate query to analyze performance. Shows timing and index intersection details. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Command type: SEARCH or AGGREGATE
+        pub command: String,
+        /// Query to profile
+        pub query: String,
+    } => |conn, input| {
+        let result: Vec<redis::Value> = redis::cmd("FT.PROFILE")
+            .arg(&input.index)
+            .arg(input.command.to_uppercase())
+            .arg("QUERY")
+            .arg(&input.query)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.PROFILE failed")?;
+
+        // FT.PROFILE returns [results, profile_data]
+        let mut output = format!(
+            "Profile for {} '{}' on '{}':\n\n",
+            input.command.to_uppercase(), input.query, input.index
+        );
+        for (i, val) in result.iter().enumerate() {
+            output.push_str(&format!("[{}]: {}\n", i, format_value(val)));
+        }
+
+        Ok(CallToolResult::text(output))
+    }
+);
+
+database_tool!(read_only, ft_tagvals, "redis_ft_tagvals",
+    "Get all distinct values of a TAG field in an index. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// TAG field name
+        pub field: String,
+    } => |conn, input| {
+        let values: Vec<String> = redis::cmd("FT.TAGVALS")
+            .arg(&input.index)
+            .arg(&input.field)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.TAGVALS failed")?;
+
+        if values.is_empty() {
+            Ok(CallToolResult::text(format!(
+                "No values for tag field '{}' in index '{}'", input.field, input.index
+            )))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "Tag values for '{}' ({}):\n{}",
+                input.field, values.len(), values.join("\n")
+            )))
+        }
+    }
+);
+
+database_tool!(read_only, ft_syndump, "redis_ft_syndump",
+    "Dump synonym groups for an index. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+    } => |conn, input| {
+        let result: Vec<redis::Value> = redis::cmd("FT.SYNDUMP")
+            .arg(&input.index)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.SYNDUMP failed")?;
+
+        if result.is_empty() {
+            Ok(CallToolResult::text(format!(
+                "No synonym groups for index '{}'", input.index
+            )))
+        } else {
+            let mut output = format!("Synonym groups for '{}':\n\n", input.index);
+            let mut i = 0;
+            while i + 1 < result.len() {
+                let term = format_value(&result[i]);
+                let groups = format_value(&result[i + 1]);
+                output.push_str(&format!("{}: {}\n", term, groups));
+                i += 2;
+            }
+            Ok(CallToolResult::text(output))
+        }
+    }
+);
+
+database_tool!(read_only, ft_dictdump, "redis_ft_dictdump",
+    "Dump all terms in a dictionary. Requires the RediSearch module.",
+    {
+        /// Dictionary name
+        pub dict: String,
+    } => |conn, input| {
+        let terms: Vec<String> = redis::cmd("FT.DICTDUMP")
+            .arg(&input.dict)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.DICTDUMP failed")?;
+
+        if terms.is_empty() {
+            Ok(CallToolResult::text(format!(
+                "Dictionary '{}' is empty", input.dict
+            )))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "Dictionary '{}' ({} terms):\n{}",
+                input.dict, terms.len(), terms.join("\n")
+            )))
+        }
+    }
+);
+
+// ---------------------------------------------------------------------------
+// Write tools (non-destructive)
+// ---------------------------------------------------------------------------
+
+database_tool!(write, ft_create, "redis_ft_create",
+    "Create a search index with the specified schema. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Data type to index: HASH or JSON (default: HASH)
+        #[serde(default)]
+        pub on: Option<String>,
+        /// Key prefixes to index (e.g. ["user:", "product:"])
+        #[serde(default)]
+        pub prefixes: Option<Vec<String>>,
+        /// Schema field definitions
+        pub schema: Vec<FieldDefinition>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.CREATE");
+        cmd.arg(&input.index);
+
+        if let Some(ref on) = input.on {
+            cmd.arg("ON").arg(on.to_uppercase());
+        }
+        if let Some(ref prefixes) = input.prefixes {
+            cmd.arg("PREFIX").arg(prefixes.len());
+            for p in prefixes {
+                cmd.arg(p);
+            }
+        }
+
+        cmd.arg("SCHEMA");
+        for field in &input.schema {
+            for arg in field.to_args() {
+                cmd.arg(arg);
+            }
+        }
+
+        let _: () = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.CREATE failed")?;
+
+        let field_summary = input.schema.iter()
+            .map(|f| format!("{} ({})", f.name, f.field_type))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Ok(CallToolResult::text(format!(
+            "Created index '{}' with {} field(s): {}",
+            input.index, input.schema.len(), field_summary
+        )))
+    }
+);
+
+database_tool!(write, ft_alter, "redis_ft_alter",
+    "Add a field to an existing search index. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Field definition to add
+        pub field: FieldDefinition,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.ALTER");
+        cmd.arg(&input.index).arg("SCHEMA").arg("ADD");
+        for arg in input.field.to_args() {
+            cmd.arg(arg);
+        }
+
+        let _: () = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.ALTER failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Added field '{}' ({}) to index '{}'",
+            input.field.name, input.field.field_type, input.index
+        )))
+    }
+);
+
+database_tool!(write, ft_synupdate, "redis_ft_synupdate",
+    "Update a synonym group for an index. Requires the RediSearch module.",
+    {
+        /// Index name
+        pub index: String,
+        /// Synonym group ID
+        pub group_id: String,
+        /// Terms in the synonym group
+        pub terms: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.SYNUPDATE");
+        cmd.arg(&input.index).arg(&input.group_id);
+        for term in &input.terms {
+            cmd.arg(term);
+        }
+
+        let _: () = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.SYNUPDATE failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Updated synonym group '{}' in index '{}' with {} term(s)",
+            input.group_id, input.index, input.terms.len()
+        )))
+    }
+);
+
+database_tool!(write, ft_dictadd, "redis_ft_dictadd",
+    "Add terms to a dictionary for spell checking or auto-complete. Requires the RediSearch module.",
+    {
+        /// Dictionary name
+        pub dict: String,
+        /// Terms to add
+        pub terms: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.DICTADD");
+        cmd.arg(&input.dict);
+        for term in &input.terms {
+            cmd.arg(term);
+        }
+
+        let added: i64 = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.DICTADD failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Added {} term(s) to dictionary '{}'", added, input.dict
+        )))
+    }
+);
+
+database_tool!(write, ft_aliasadd, "redis_ft_aliasadd",
+    "Add an alias for a search index. Requires the RediSearch module.",
+    {
+        /// Alias name
+        pub alias: String,
+        /// Index name
+        pub index: String,
+    } => |conn, input| {
+        let _: () = redis::cmd("FT.ALIASADD")
+            .arg(&input.alias)
+            .arg(&input.index)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.ALIASADD failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Added alias '{}' for index '{}'", input.alias, input.index
+        )))
+    }
+);
+
+database_tool!(write, ft_aliasupdate, "redis_ft_aliasupdate",
+    "Update an alias to point to a different index. Useful for zero-downtime index migrations. Requires the RediSearch module.",
+    {
+        /// Alias name
+        pub alias: String,
+        /// New index name
+        pub index: String,
+    } => |conn, input| {
+        let _: () = redis::cmd("FT.ALIASUPDATE")
+            .arg(&input.alias)
+            .arg(&input.index)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.ALIASUPDATE failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Updated alias '{}' to point to index '{}'", input.alias, input.index
+        )))
+    }
+);
+
+// ---------------------------------------------------------------------------
+// Destructive tools
+// ---------------------------------------------------------------------------
+
+database_tool!(destructive, ft_dropindex, "redis_ft_dropindex",
+    "DANGEROUS: Drop a search index. Use delete_docs=true to also delete the indexed documents.",
+    {
+        /// Index name to drop
+        pub index: String,
+        /// Also delete the indexed documents (DD flag)
+        #[serde(default)]
+        pub delete_docs: bool,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.DROPINDEX");
+        cmd.arg(&input.index);
+        if input.delete_docs {
+            cmd.arg("DD");
+        }
+
+        let _: () = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.DROPINDEX failed")?;
+
+        let dd_note = if input.delete_docs { " (documents also deleted)" } else { "" };
+        Ok(CallToolResult::text(format!(
+            "Dropped index '{}'{}",  input.index, dd_note
+        )))
+    }
+);
+
+database_tool!(destructive, ft_aliasdel, "redis_ft_aliasdel",
+    "DANGEROUS: Delete a search index alias.",
+    {
+        /// Alias name to delete
+        pub alias: String,
+    } => |conn, input| {
+        let _: () = redis::cmd("FT.ALIASDEL")
+            .arg(&input.alias)
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.ALIASDEL failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Deleted alias '{}'", input.alias
+        )))
+    }
+);
+
+database_tool!(destructive, ft_dictdel, "redis_ft_dictdel",
+    "DANGEROUS: Remove terms from a dictionary.",
+    {
+        /// Dictionary name
+        pub dict: String,
+        /// Terms to remove
+        pub terms: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("FT.DICTDEL");
+        cmd.arg(&input.dict);
+        for term in &input.terms {
+            cmd.arg(term);
+        }
+
+        let removed: i64 = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("FT.DICTDEL failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Removed {} term(s) from dictionary '{}'", removed, input.dict
+        )))
+    }
+);

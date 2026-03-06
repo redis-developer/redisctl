@@ -1,17 +1,23 @@
 //! Direct Redis database tools
 
 mod diagnostics;
+mod json;
 mod keys;
 mod raw;
+mod search;
 mod server;
 mod structures;
 
 #[allow(unused_imports)]
 pub use diagnostics::*;
 #[allow(unused_imports)]
+pub use json::*;
+#[allow(unused_imports)]
 pub use keys::*;
 #[allow(unused_imports)]
 pub use raw::*;
+#[allow(unused_imports)]
+pub use search::*;
 #[allow(unused_imports)]
 pub use server::*;
 #[allow(unused_imports)]
@@ -43,6 +49,14 @@ pub const SUB_MODULES: &[SubModule] = &[
         tool_names: diagnostics::TOOL_NAMES,
     },
     SubModule {
+        name: "json",
+        tool_names: json::TOOL_NAMES,
+    },
+    SubModule {
+        name: "search",
+        tool_names: search::TOOL_NAMES,
+    },
+    SubModule {
         name: "raw",
         tool_names: raw::TOOL_NAMES,
     },
@@ -71,6 +85,8 @@ pub fn sub_router(name: &str, state: Arc<AppState>) -> Option<McpRouter> {
         "keys" => Some(keys::router(state)),
         "structures" => Some(structures::router(state)),
         "diagnostics" => Some(diagnostics::router(state)),
+        "json" => Some(json::router(state)),
+        "search" => Some(search::router(state)),
         "raw" => Some(raw::router(state)),
         _ => None,
     }
@@ -151,5 +167,7 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(keys::router(state.clone()))
         .merge(structures::router(state.clone()))
         .merge(diagnostics::router(state.clone()))
+        .merge(json::router(state.clone()))
+        .merge(search::router(state.clone()))
         .merge(raw::router(state))
 }
