@@ -14,7 +14,7 @@ use redisctl_core::Config;
 use redisctl_core::DeploymentType;
 use tower_mcp::{
     CapabilityFilter, DenialBehavior, McpRouter, Tool,
-    transport::{GenericStdioTransport, StdioTransport},
+    transport::StdioTransport,
 };
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
@@ -32,7 +32,6 @@ use audit::AuditLayer;
 use policy::{Policy, PolicyConfig, SafetyTier, ToolsetKind};
 use presets::{ToolVisibility, ToolsConfig};
 use state::{AppState, CredentialSource};
-use tower::Layer;
 
 /// Transport mode for the MCP server
 #[derive(Debug, Clone, Copy, Default, ValueEnum)]
@@ -558,9 +557,10 @@ async fn main() -> Result<()> {
             info!("Running with stdio transport");
             if audit_config.enabled {
                 info!("Audit logging enabled (level: {:?})", audit_config.level);
-                let audit_layer = AuditLayer::new(audit_config, tool_toolset_arc);
-                let service = audit_layer.layer(router);
-                GenericStdioTransport::new(service).run().await?;
+                StdioTransport::new(router)
+                    .layer(AuditLayer::new(audit_config, tool_toolset_arc))
+                    .run()
+                    .await?;
             } else {
                 StdioTransport::new(router).run().await?;
             }
