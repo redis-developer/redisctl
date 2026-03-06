@@ -1,0 +1,142 @@
+# ==============================================================================
+# MCP Server Demo with Redis Enterprise
+# ==============================================================================
+# Spins up a Redis Enterprise cluster and an MCP server in HTTP mode,
+# ready for any MCP client to connect.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.mcp-demo.yml up -d
+#   docker compose -f docker/docker-compose.mcp-demo.yml logs -f
+#   docker compose -f docker/docker-compose.mcp-demo.yml down -v
+#
+# Once running, configure your MCP client to connect:
+#
+#   Claude Desktop / Claude Code / Cursor (streamable HTTP):
+#     {
+#       "mcpServers": {
+#         "redisctl": {
+#           "type": "streamable-http",
+#           "url": "http://localhost:3001/"
+#         }
+#       }
+#     }
+#
+#   The MCP server exposes 92 Enterprise tools and 90 database tools
+#   in read-only mode by default. The database tools connect directly
+#   to the default database on the Enterprise cluster (port 12000).
+#
+# To enable write operations:
+#   Change --read-only to --read-only=false in the mcp-server command.
+# ==============================================================================
+
+x-redis-enterprise-env: &redis-enterprise-env
+  REDIS_ENTERPRISE_URL: "https://redis-enterprise:9443"
+  REDIS_ENTERPRISE_USER: "admin@redis.local"
+  REDIS_ENTERPRISE_PASSWORD: "Redis123!"
+  REDIS_ENTERPRISE_INSECURE: "true"
+
+services:
+  # ==============================================================================
+  # Redis Enterprise Cluster
+  # ==============================================================================
+  redis-enterprise:
+    image: redislabs/redis:8.0.10-81
+    container_name: mcp-demo-enterprise
+    tty: true
+    cap_add:
+      - ALL
+    ports:
+      - "9443:9443"   # REST API
+      - "8443:8443"   # Admin UI
+      - "12000:12000" # Default database port
+    networks:
+      - mcp-demo-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "-k", "https://localhost:9443/v1/bootstrap"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 10s
+
+  # ==============================================================================
+  # Cluster Initialization
+  # ==============================================================================
+  # Creates the cluster, admin user, and default database.
+  redis-enterprise-init:
+    image: ghcr.io/redis-developer/redisctl:latest
+    container_name: mcp-demo-init
+    depends_on:
+      redis-enterprise:
+        condition: service_healthy
+    networks:
+      - mcp-demo-network
+    environment:
+      REDIS_ENTERPRISE_URL: "https://redis-enterprise:9443"
+      REDIS_ENTERPRISE_INSECURE: "true"
+    command:
+      [
+        "enterprise", "workflow", "init-cluster",
+        "--name", "mcp-demo-cluster",
+        "--username", "admin@redis.local",
+        "--password", "Redis123!",
+      ]
+
+  # ==============================================================================
+  # Seed Data
+  # ==============================================================================
+  # Adds sample data to the default database so the MCP tools have
+  # something to query out of the box.
+  seed-data:
+    image: redis:7-alpine
+    container_name: mcp-demo-seed
+    depends_on:
+      redis-enterprise-init:
+        condition: service_completed_successfully
+    networks:
+      - mcp-demo-network
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - |
+        echo "Waiting for database to be ready..."
+        sleep 5
+        echo "Seeding sample data..."
+        redis-cli -h redis-enterprise -p 12000 SET greeting "Hello from the MCP demo"
+        redis-cli -h redis-enterprise -p 12000 HSET user:1 name Alice email alice@example.com role admin
+        redis-cli -h redis-enterprise -p 12000 HSET user:2 name Bob email bob@example.com role developer
+        redis-cli -h redis-enterprise -p 12000 HSET user:3 name Charlie email charlie@example.com role viewer
+        redis-cli -h redis-enterprise -p 12000 ZADD leaderboard 100 alice 85 bob 92 charlie 78 dave 95 eve
+        redis-cli -h redis-enterprise -p 12000 LPUSH recent:events "user:1 logged in" "user:2 deployed v2.1" "user:3 viewed dashboard"
+        redis-cli -h redis-enterprise -p 12000 SADD tags:project:alpha redis enterprise mcp demo
+        echo "Sample data seeded"
+
+  # ==============================================================================
+  # MCP Server (HTTP mode)
+  # ==============================================================================
+  # Runs redisctl-mcp in HTTP mode with Enterprise and database tools.
+  # Connects to the Enterprise cluster API and directly to the default
+  # database for Redis data operations.
+  mcp-server:
+    image: ghcr.io/redis-developer/redisctl:latest
+    container_name: mcp-demo-server
+    depends_on:
+      seed-data:
+        condition: service_completed_successfully
+    networks:
+      - mcp-demo-network
+    ports:
+      - "3001:3001"
+    environment:
+      <<: *redis-enterprise-env
+      REDIS_URL: "redis://redis-enterprise:12000"
+    entrypoint: ["redisctl-mcp"]
+    command:
+      [
+        "--transport", "http",
+        "--host", "0.0.0.0",
+        "--port", "3001",
+        "--tools", "enterprise,database",
+      ]
+
+networks:
+  mcp-demo-network:
+    driver: bridge
