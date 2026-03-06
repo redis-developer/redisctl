@@ -2946,7 +2946,7 @@ dependencies = [
 
 [[package]]
 name = "redisctl-core"
-version = "0.2.0"
+version = "0.8.2"
 dependencies = [
  "clap",
  "directories",
@@ -2967,7 +2967,7 @@ dependencies = [
 
 [[package]]
 name = "redisctl-mcp"
-version = "0.5.0"
+version = "0.8.2"
 dependencies = [
  "anyhow",
  "async-trait",
