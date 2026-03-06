@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.8.3...redisctl-mcp-v0.9.0) - 2026-03-06
+
+### Added
+
+- *(mcp)* add Docker Compose demo and upgrade tower-mcp to 0.8.1 ([#831](https://github.com/redis-developer/redisctl/pull/831))
+
+### Fixed
+
+- *(mcp)* accept --read-only=false and add REV to redis_zrange ([#827](https://github.com/redis-developer/redisctl/pull/827))
+
+### Other
+
+- *(mcp)* upgrade tower-mcp to 0.8.0 ([#830](https://github.com/redis-developer/redisctl/pull/830))
+
 ## [0.8.3](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.8.2...redisctl-mcp-v0.8.3) - 2026-03-06
 
 ### Other
