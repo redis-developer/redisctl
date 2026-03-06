@@ -47,7 +47,7 @@ The slides use [reveal.js](https://revealjs.com/). To customize:
 
 Need a one-liner?
 
-> **redisctl** is the first CLI for Redis Cloud and Enterprise. Type-safe API clients, async operation handling, support package automation, and structured output for scripting.
+> **redisctl** manages Redis Cloud, Redis Enterprise, and Redis databases from one tool -- as a CLI for humans or an MCP server for AI agents.
 
 ## Demo Script
 
@@ -59,9 +59,10 @@ brew install redis-developer/homebrew-tap/redisctl
 
 # Configure profile
 redisctl profile set demo \
-  --enterprise-url "https://cluster:9443" \
-  --enterprise-user "admin@cluster.local" \
-  --enterprise-password "$PASSWORD"
+  --type enterprise \
+  --url "https://cluster:9443" \
+  --username "admin@cluster.local" \
+  --password "$PASSWORD"
 ```
 
 ### 2. Basic Commands (1 minute)
@@ -175,20 +176,20 @@ redisctl provides unified multi-cluster management through profiles:
 
 ```bash
 # Add each cluster as a profile
-redisctl profile create cluster-west --type enterprise \
-  --enterprise-url https://west.example.com:9443 \
-  --enterprise-user admin@redis.local \
-  --enterprise-password "$PASSWORD"
+redisctl profile set cluster-west --type enterprise \
+  --url https://west.example.com:9443 \
+  --username admin@redis.local \
+  --password "$PASSWORD"
 
-redisctl profile create cluster-east --type enterprise \
-  --enterprise-url https://east.example.com:9443 \
-  --enterprise-user admin@redis.local \
-  --enterprise-password "$PASSWORD"
+redisctl profile set cluster-east --type enterprise \
+  --url https://east.example.com:9443 \
+  --username admin@redis.local \
+  --password "$PASSWORD"
 
-redisctl profile create cluster-central --type enterprise \
-  --enterprise-url https://central.example.com:9443 \
-  --enterprise-user admin@redis.local \
-  --enterprise-password "$PASSWORD"
+redisctl profile set cluster-central --type enterprise \
+  --url https://central.example.com:9443 \
+  --username admin@redis.local \
+  --password "$PASSWORD"
 ```
 
 ### 2. Cross-Cluster CLI Queries
@@ -227,7 +228,7 @@ With MCP, the AI can query across clusters conversationally:
 - "Which databases across all clusters don't have persistence enabled?"
 - "Total up all the databases across my fleet"
 
-The AI uses `profile_list` to discover clusters and `profile_set_default_enterprise` to switch between them, then aggregates the results.
+The AI uses `profile_list` to discover clusters and targets each one via the `profile` parameter on tool calls, then aggregates the results.
 
 ### Key Differentiators
 
