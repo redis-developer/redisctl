@@ -21,8 +21,8 @@ Configure both MCP servers in your AI assistant:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "redisctl",
-          "args": ["-p", "my-profile", "mcp", "serve", "--allow-writes"]
+          "command": "redisctl-mcp",
+          "args": ["--profile", "my-profile", "--read-only=false"]
         },
         "jpx": {
           "command": "jpx",
@@ -38,11 +38,11 @@ Configure both MCP servers in your AI assistant:
     {
       "mcpServers": {
         "redisctl": {
-          "command": "/path/to/redisctl",
-          "args": ["-p", "my-profile", "mcp", "serve"]
+          "command": "redisctl-mcp",
+          "args": ["--profile", "my-profile"]
         },
         "jpx": {
-          "command": "/path/to/jpx",
+          "command": "jpx",
           "args": ["mcp"]
         }
       }

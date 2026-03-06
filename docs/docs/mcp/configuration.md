@@ -67,7 +67,7 @@ The server resolves which toolsets to load in this order:
 |---------|-------------|-------------|
 | `cloud` | `subscriptions`, `account`, `networking`, `fixed`, `raw` | 148 |
 | `enterprise` | `cluster`, `databases`, `rbac`, `observability`, `proxy`, `services`, `raw` | 92 |
-| `database` | `server`, `keys`, `structures`, `diagnostics`, `raw` | 55 |
+| `database` | `server`, `keys`, `structures`, `diagnostics`, `raw` | 90 |
 | `app` | *(none -- flat toolset)* | 8 |
 | *(system)* | *(always loaded)* | 2 |
 
@@ -93,7 +93,7 @@ redisctl-mcp --profile my-cloud --tools cloud:subscriptions,cloud:networking
 redisctl-mcp --profile my-re --tools enterprise:cluster,enterprise:observability
 ```
 
-**Database only** -- direct Redis operations (55 tools + system):
+**Database only** -- direct Redis operations (90 tools + system):
 
 ```bash
 redisctl-mcp --database-url redis://localhost:6379 --tools database

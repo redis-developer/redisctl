@@ -92,7 +92,7 @@ Then create a PR on GitHub.
 
 ```
 crates/
-├── redisctl-config/    # Profile and credential management
+├── redisctl-core/      # Core library - config, workflows, and shared logic
 ├── redisctl/           # CLI
 │   ├── src/commands/   # Command implementations
 │   ├── src/workflows/  # Multi-step workflows
