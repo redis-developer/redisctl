@@ -12,7 +12,7 @@ The Redis API client libraries are available for both Rust and Python:
 |-------|-------------|---------|
 | `redis-cloud` | Redis Cloud API client | [docs](https://docs.rs/redis-cloud) |
 | `redis-enterprise` | Redis Enterprise API client | [docs](https://docs.rs/redis-enterprise) |
-| `redisctl-config` | Profile and credential management | [docs](https://docs.rs/redisctl-config) |
+| `redisctl-core` | Profile and credential management | [docs](https://docs.rs/redisctl-core) |
 
 ### Python Packages
 

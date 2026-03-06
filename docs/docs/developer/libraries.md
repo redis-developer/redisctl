@@ -8,7 +8,7 @@ Use the Redis API client libraries in your own Rust or Python projects.
 |-------|-------------|---------|------------|
 | `redis-cloud` | Redis Cloud API client | [docs](https://docs.rs/redis-cloud) | [redis-cloud-rs](https://github.com/redis-developer/redis-cloud-rs) |
 | `redis-enterprise` | Redis Enterprise API client | [docs](https://docs.rs/redis-enterprise) | [redis-enterprise-rs](https://github.com/redis-developer/redis-enterprise-rs) |
-| `redisctl-config` | Profile and credential management | [docs](https://docs.rs/redisctl-config) | [redisctl](https://github.com/redis-developer/redisctl) |
+| `redisctl-core` | Profile and credential management | [docs](https://docs.rs/redisctl-core) | [redisctl](https://github.com/redis-developer/redisctl) |
 
 **Note:** `redis-cloud` and `redis-enterprise` are maintained in separate repositories and also provide Python bindings via PyPI.
 
@@ -101,21 +101,21 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-## redisctl-config
+## redisctl-core
 
-Profile and credential management.
+Core library for config, workflows, and shared logic.
 
 ### Installation
 
 ```toml
 [dependencies]
-redisctl-config = "0.1"
+redisctl-core = "0.8"
 ```
 
 ### Example
 
 ```rust
-use redisctl_config::{Config, Profile};
+use redisctl_core::{Config, Profile};
 
 fn main() -> anyhow::Result<()> {
     // Load config
