@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.3](https://github.com/redis-developer/redisctl/compare/redisctl-v0.8.2...redisctl-v0.8.3) - 2026-03-06
+
+### Other
+
+- clarify Docker env var forwarding for password in README ([#819](https://github.com/redis-developer/redisctl/pull/819))
+- rewrite README with elevator pitch and streamlined structure ([#817](https://github.com/redis-developer/redisctl/pull/817)) ([#818](https://github.com/redis-developer/redisctl/pull/818))
+- sync all workspace crate versions to 0.8.2 ([#816](https://github.com/redis-developer/redisctl/pull/816))
+
 ## [0.8.2](https://github.com/redis-developer/redisctl/compare/redisctl-v0.8.1...redisctl-v0.8.2) - 2026-03-04
 
 ### Added
