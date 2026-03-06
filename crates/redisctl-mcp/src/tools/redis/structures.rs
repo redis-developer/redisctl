@@ -194,13 +194,20 @@ database_tool!(read_only, zrange, "redis_zrange",
         /// Include scores in output
         #[serde(default)]
         pub withscores: bool,
+        /// Reverse the order (highest to lowest)
+        #[serde(default)]
+        pub rev: bool,
     } => |conn, input| {
         if input.withscores {
-            let result: Vec<(String, f64)> = redis::cmd("ZRANGE")
-                .arg(&input.key)
+            let mut cmd = redis::cmd("ZRANGE");
+            cmd.arg(&input.key)
                 .arg(input.start)
-                .arg(input.stop)
-                .arg("WITHSCORES")
+                .arg(input.stop);
+            if input.rev {
+                cmd.arg("REV");
+            }
+            cmd.arg("WITHSCORES");
+            let result: Vec<(String, f64)> = cmd
                 .query_async(&mut conn)
                 .await
                 .tool_context("ZRANGE failed")?;
@@ -226,10 +233,14 @@ database_tool!(read_only, zrange, "redis_zrange",
                 output
             )))
         } else {
-            let result: Vec<String> = redis::cmd("ZRANGE")
-                .arg(&input.key)
+            let mut cmd = redis::cmd("ZRANGE");
+            cmd.arg(&input.key)
                 .arg(input.start)
-                .arg(input.stop)
+                .arg(input.stop);
+            if input.rev {
+                cmd.arg("REV");
+            }
+            let result: Vec<String> = cmd
                 .query_async(&mut conn)
                 .await
                 .tool_context("ZRANGE failed")?;
