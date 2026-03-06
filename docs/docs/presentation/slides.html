@@ -226,12 +226,12 @@ ENDPOINT=$(curl -s ... | jq -r '.publicEndpoint')
                     <h2><span class="redis-red">Layer 1:</span> Profiles</h2>
                     <p>Manage credentials across environments</p>
                     <pre><code class="language-bash"># Set up profiles for each environment
-redisctl profile set dev --cloud-api-key $DEV_KEY --cloud-secret-key $DEV_SECRET
-redisctl profile set staging --cloud-api-key $STG_KEY --cloud-secret-key $STG_SECRET
-redisctl profile set prod --cloud-api-key $PROD_KEY --cloud-secret-key $PROD_SECRET
+redisctl profile set dev --type cloud --api-key $DEV_KEY --api-secret $DEV_SECRET
+redisctl profile set staging --type cloud --api-key $STG_KEY --api-secret $STG_SECRET
+redisctl profile set prod --type cloud --api-key $PROD_KEY --api-secret $PROD_SECRET
 
 # Set a default
-redisctl profile set-default prod
+redisctl profile default-cloud prod
 
 # Switch easily
 redisctl --profile dev cloud database list
@@ -245,19 +245,19 @@ redisctl --profile prod cloud database list</code></pre>
                     </h2>
                     <p>Keep credentials out of scripts and env vars</p>
                     <pre><code class="language-bash"># Store credentials in OS keychain (macOS Keychain, Windows Credential Manager)
-redisctl profile set prod \
-  --cloud-api-key $KEY \
-  --cloud-secret-key $SECRET \
+redisctl profile set prod --type cloud \
+  --api-key $KEY \
+  --api-secret $SECRET \
   --use-keyring
 
 # Or reference environment variables
-redisctl profile set prod \
-  --cloud-api-key '${REDIS_CLOUD_API_KEY}' \
-  --cloud-secret-key '${REDIS_CLOUD_SECRET_KEY}'
+redisctl profile set prod --type cloud \
+  --api-key '${REDIS_CLOUD_API_KEY}' \
+  --api-secret '${REDIS_CLOUD_SECRET_KEY}'
 
 # Credentials never appear in config file
 cat ~/.config/redisctl/config.toml
-# cloud_api_key = "keyring:prod-api-key"</code></pre>
+# api_key = "keyring:prod-api-key"</code></pre>
                 </section>
 
                 <!-- Layer 2: Raw API -->
@@ -441,25 +441,33 @@ Case: https://files.redis.com/f/abc123</code></pre>
                     <h2>MCP: AI-Powered Redis Management</h2>
                     <p>
                         redisctl includes an MCP server with
-                        <strong>~100 tools</strong> for AI assistants
+                        <strong>340 tools</strong> for AI assistants
                     </p>
                     <div class="columns">
                         <div class="column">
-                            <h3 class="cloud-blue small">Cloud Operations</h3>
+                            <h3 class="cloud-blue small">Cloud (148 tools)</h3>
                             <ul class="small">
                                 <li>Subscriptions & databases</li>
-                                <li>Create, update, delete databases</li>
-                                <li>Backup & import operations</li>
-                                <li>ACL & user management</li>
+                                <li>VPC peering, PrivateLink, PSC</li>
+                                <li>ACLs, users, cloud accounts</li>
+                            </ul>
+                            <h3 class="green small">Database (90 tools)</h3>
+                            <ul class="small">
+                                <li>Keys, data structures, diagnostics</li>
+                                <li>Server info, health checks</li>
                             </ul>
                         </div>
                         <div class="column">
-                            <h3 class="orange small">Enterprise Operations</h3>
+                            <h3 class="orange small">Enterprise (92 tools)</h3>
                             <ul class="small">
-                                <li>License management & validation</li>
-                                <li>Cluster & policy configuration</li>
-                                <li>Maintenance mode control</li>
-                                <li>Certificate management</li>
+                                <li>License, cluster, maintenance</li>
+                                <li>Databases, RBAC, certificates</li>
+                                <li>Observability, proxy, services</li>
+                            </ul>
+                            <h3 class="redis-red small">Safety</h3>
+                            <ul class="small">
+                                <li>Read-only by default</li>
+                                <li>Policy tiers: read-only / standard / full</li>
                             </ul>
                         </div>
                     </div>
@@ -731,7 +739,7 @@ curl -L https://github.com/redis-developer/redisctl/releases/latest/download/red
 brew install redis-developer/homebrew-tap/redisctl
 
 # Setup profile
-redisctl profile set mycloud --cloud-api-key $KEY --cloud-secret-key $SECRET
+redisctl profile set mycloud --type cloud --api-key $KEY --api-secret $SECRET
 
 # Start using
 redisctl cloud subscription list
