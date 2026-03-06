@@ -403,5 +403,7 @@ Want a faster path to try things out? Check out our quickstart guides:
 
 - [Configuration](configuration.md) - Tool selection, safety tiers, and presets
 - [Tools Reference](tools-reference.md) - Complete list of available tools
+- [Architecture](architecture.md) - How the server works internally
+- [Audit Logging](audit-logging.md) - Compliance and operational visibility
 - [Advanced Usage](advanced-usage.md) - JMESPath integration and analytics
 - [Workflows](workflows.md) - Real-world use cases and examples
