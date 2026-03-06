@@ -1,288 +1,130 @@
 //! Cluster service management tools for Redis Enterprise
 
-use std::sync::Arc;
-
-use redis_enterprise::services::ServicesHandler;
-use schemars::JsonSchema;
-use serde::Deserialize;
 use serde_json::Value;
-use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
+use tower_mcp::{CallToolResult, ResultExt};
 
-use crate::state::AppState;
+use crate::tools::macros::{enterprise_tool, mcp_module};
 use crate::tools::wrap_list;
 
-/// Input for listing services
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ListServicesInput {
-    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
+mcp_module! {
+    list_services => "list_enterprise_services",
+    get_service => "get_enterprise_service",
+    get_service_status => "get_enterprise_service_status",
+    update_service => "update_enterprise_service",
+    start_service => "start_enterprise_service",
+    stop_service => "stop_enterprise_service",
+    restart_service => "restart_enterprise_service",
 }
 
-/// Build the list_enterprise_services tool
-pub fn list_services(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("list_enterprise_services")
-        .description("List all cluster services.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ListServicesInput>| async move {
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+enterprise_tool!(read_only, list_services, "list_enterprise_services",
+    "List all cluster services.",
+    {} => |client, _input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let services = handler
+            .list()
+            .await
+            .tool_context("Failed to list services")?;
 
-                let handler = ServicesHandler::new(client);
-                let services = handler
-                    .list()
-                    .await
-                    .tool_context("Failed to list services")?;
+        wrap_list("services", &services)
+    }
+);
 
-                wrap_list("services", &services)
-            },
-        )
-        .build()
-}
+enterprise_tool!(read_only, get_service, "get_enterprise_service",
+    "Get service details by ID.",
+    {
+        /// Service ID (e.g., "cm_server", "mdns_server", "stats_archiver")
+        pub service_id: String,
+    } => |client, input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let service = handler
+            .get(&input.service_id)
+            .await
+            .tool_context("Failed to get service")?;
 
-/// Input for getting a specific service
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetServiceInput {
-    /// Service ID (e.g., "cm_server", "mdns_server", "stats_archiver")
-    pub service_id: String,
-    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+        CallToolResult::from_serialize(&service)
+    }
+);
 
-/// Build the get_enterprise_service tool
-pub fn get_service(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_enterprise_service")
-        .description("Get service details by ID.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<GetServiceInput>| async move {
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+enterprise_tool!(read_only, get_service_status, "get_enterprise_service_status",
+    "Get service status including per-node status.",
+    {
+        /// Service ID
+        pub service_id: String,
+    } => |client, input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let status = handler
+            .status(&input.service_id)
+            .await
+            .tool_context("Failed to get service status")?;
 
-                let handler = ServicesHandler::new(client);
-                let service = handler
-                    .get(&input.service_id)
-                    .await
-                    .tool_context("Failed to get service")?;
+        CallToolResult::from_serialize(&status)
+    }
+);
 
-                CallToolResult::from_serialize(&service)
-            },
-        )
-        .build()
-}
+enterprise_tool!(write, update_service, "update_enterprise_service",
+    "Update a service's configuration. Pass fields as JSON.",
+    {
+        /// Service ID to update
+        pub service_id: String,
+        /// Updated service configuration as JSON (e.g., enabled, config, node_uids)
+        pub config: Value,
+    } => |client, input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let request = serde_json::from_value(input.config)
+            .map_err(|e| tower_mcp::Error::tool(format!("Invalid service config: {}", e)))?;
+        let result = handler
+            .update(&input.service_id, request)
+            .await
+            .tool_context("Failed to update service")?;
 
-/// Input for getting service status
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetServiceStatusInput {
-    /// Service ID
-    pub service_id: String,
-    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+        CallToolResult::from_serialize(&result)
+    }
+);
 
-/// Build the get_enterprise_service_status tool
-pub fn get_service_status(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("get_enterprise_service_status")
-        .description("Get service status including per-node status.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<GetServiceStatusInput>| async move {
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
+enterprise_tool!(write, start_service, "start_enterprise_service",
+    "Start a stopped service.",
+    {
+        /// Service ID
+        pub service_id: String,
+    } => |client, input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let result = handler
+            .start(&input.service_id)
+            .await
+            .tool_context("Failed to start service")?;
 
-                let handler = ServicesHandler::new(client);
-                let status = handler
-                    .status(&input.service_id)
-                    .await
-                    .tool_context("Failed to get service status")?;
+        CallToolResult::from_serialize(&result)
+    }
+);
 
-                CallToolResult::from_serialize(&status)
-            },
-        )
-        .build()
-}
+enterprise_tool!(write, stop_service, "stop_enterprise_service",
+    "Stop a running service.",
+    {
+        /// Service ID
+        pub service_id: String,
+    } => |client, input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let result = handler
+            .stop(&input.service_id)
+            .await
+            .tool_context("Failed to stop service")?;
 
-/// Input for updating a service
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UpdateServiceInput {
-    /// Service ID to update
-    pub service_id: String,
-    /// Updated service configuration as JSON (e.g., enabled, config, node_uids)
-    pub config: Value,
-    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
+        CallToolResult::from_serialize(&result)
+    }
+);
 
-/// Build the update_enterprise_service tool
-pub fn update_service(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("update_enterprise_service")
-        .description("Update a service's configuration. Pass fields as JSON.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<UpdateServiceInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations require policy tier 'read-write' or 'full'",
-                    ));
-                }
+enterprise_tool!(write, restart_service, "restart_enterprise_service",
+    "Restart a service (stop then start).",
+    {
+        /// Service ID
+        pub service_id: String,
+    } => |client, input| {
+        let handler = redis_enterprise::services::ServicesHandler::new(client);
+        let result = handler
+            .restart(&input.service_id)
+            .await
+            .tool_context("Failed to restart service")?;
 
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
-
-                let handler = ServicesHandler::new(client);
-                let request = serde_json::from_value(input.config)
-                    .map_err(|e| McpError::tool(format!("Invalid service config: {}", e)))?;
-                let result = handler
-                    .update(&input.service_id, request)
-                    .await
-                    .tool_context("Failed to update service")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Input for service action (start/stop/restart)
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ServiceActionInput {
-    /// Service ID
-    pub service_id: String,
-    /// Profile name for multi-cluster support. If not specified, uses the first configured profile or default.
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the start_enterprise_service tool
-pub fn start_service(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("start_enterprise_service")
-        .description("Start a stopped service.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ServiceActionInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations require policy tier 'read-write' or 'full'",
-                    ));
-                }
-
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
-
-                let handler = ServicesHandler::new(client);
-                let result = handler
-                    .start(&input.service_id)
-                    .await
-                    .tool_context("Failed to start service")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Build the stop_enterprise_service tool
-pub fn stop_service(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("stop_enterprise_service")
-        .description("Stop a running service.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ServiceActionInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations require policy tier 'read-write' or 'full'",
-                    ));
-                }
-
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
-
-                let handler = ServicesHandler::new(client);
-                let result = handler
-                    .stop(&input.service_id)
-                    .await
-                    .tool_context("Failed to stop service")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// Build the restart_enterprise_service tool
-pub fn restart_service(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("restart_enterprise_service")
-        .description("Restart a service (stop then start).")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ServiceActionInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations require policy tier 'read-write' or 'full'",
-                    ));
-                }
-
-                let client = state
-                    .enterprise_client_for_profile(input.profile.as_deref())
-                    .await
-                    .map_err(|e| crate::tools::credential_error("enterprise", e))?;
-
-                let handler = ServicesHandler::new(client);
-                let result = handler
-                    .restart(&input.service_id)
-                    .await
-                    .tool_context("Failed to restart service")?;
-
-                CallToolResult::from_serialize(&result)
-            },
-        )
-        .build()
-}
-
-/// All tool names registered by this sub-module.
-pub(super) const TOOL_NAMES: &[&str] = &[
-    "list_enterprise_services",
-    "get_enterprise_service",
-    "get_enterprise_service_status",
-    "update_enterprise_service",
-    "start_enterprise_service",
-    "stop_enterprise_service",
-    "restart_enterprise_service",
-];
-
-/// Build the services sub-router
-pub fn router(state: Arc<AppState>) -> McpRouter {
-    McpRouter::new()
-        .tool(list_services(state.clone()))
-        .tool(get_service(state.clone()))
-        .tool(get_service_status(state.clone()))
-        .tool(update_service(state.clone()))
-        .tool(start_service(state.clone()))
-        .tool(stop_service(state.clone()))
-        .tool(restart_service(state.clone()))
-}
+        CallToolResult::from_serialize(&result)
+    }
+);
