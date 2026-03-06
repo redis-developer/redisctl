@@ -3,103 +3,43 @@
 //! unlink, copy, dump, restore, randomkey, touch, incr, decr, append, strlen, getrange, setrange,
 //! setnx)
 
-use std::sync::Arc;
-
-use schemars::JsonSchema;
-use serde::Deserialize;
-use tower_mcp::extract::{Json, State};
-use tower_mcp::{CallToolResult, Error as McpError, McpRouter, ResultExt, Tool, ToolBuilder};
+use tower_mcp::{CallToolResult, ResultExt};
 
 use super::format_value;
+use crate::tools::macros::{database_tool, mcp_module};
 
-use crate::state::AppState;
-
-/// All tool names registered by this sub-module.
-pub(super) const TOOL_NAMES: &[&str] = &[
-    "redis_keys",
-    "redis_get",
-    "redis_type",
-    "redis_ttl",
-    "redis_exists",
-    "redis_memory_usage",
-    "redis_scan",
-    "redis_object_encoding",
-    "redis_object_freq",
-    "redis_object_idletime",
-    "redis_object_help",
-    "redis_set",
-    "redis_del",
-    "redis_expire",
-    "redis_rename",
-    "redis_mget",
-    "redis_mset",
-    "redis_persist",
-    "redis_unlink",
-    "redis_copy",
-    "redis_dump",
-    "redis_restore",
-    "redis_randomkey",
-    "redis_touch",
-    "redis_incr",
-    "redis_decr",
-    "redis_append",
-    "redis_strlen",
-    "redis_getrange",
-    "redis_setrange",
-    "redis_setnx",
-];
-
-/// Build a sub-router containing all key-level Redis tools
-pub fn router(state: Arc<AppState>) -> McpRouter {
-    McpRouter::new()
-        .tool(keys(state.clone()))
-        .tool(scan(state.clone()))
-        .tool(get(state.clone()))
-        .tool(key_type(state.clone()))
-        .tool(ttl(state.clone()))
-        .tool(exists(state.clone()))
-        .tool(memory_usage(state.clone()))
-        .tool(object_encoding(state.clone()))
-        .tool(object_freq(state.clone()))
-        .tool(object_idletime(state.clone()))
-        .tool(object_help(state.clone()))
-        .tool(set(state.clone()))
-        .tool(del(state.clone()))
-        .tool(expire(state.clone()))
-        .tool(rename(state.clone()))
-        .tool(mget(state.clone()))
-        .tool(mset(state.clone()))
-        .tool(persist(state.clone()))
-        .tool(unlink(state.clone()))
-        .tool(copy(state.clone()))
-        .tool(dump(state.clone()))
-        .tool(restore(state.clone()))
-        .tool(randomkey(state.clone()))
-        .tool(touch(state.clone()))
-        .tool(incr(state.clone()))
-        .tool(decr(state.clone()))
-        .tool(append(state.clone()))
-        .tool(strlen(state.clone()))
-        .tool(getrange(state.clone()))
-        .tool(setrange(state.clone()))
-        .tool(setnx(state))
-}
-
-/// Input for keys command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct KeysInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key pattern to match (default: "*")
-    #[serde(default = "default_pattern")]
-    pub pattern: String,
-    /// Maximum number of keys to return (default: 100)
-    #[serde(default = "default_limit")]
-    pub limit: usize,
+mcp_module! {
+    keys => "redis_keys",
+    scan => "redis_scan",
+    get => "redis_get",
+    key_type => "redis_type",
+    ttl => "redis_ttl",
+    exists => "redis_exists",
+    memory_usage => "redis_memory_usage",
+    object_encoding => "redis_object_encoding",
+    object_freq => "redis_object_freq",
+    object_idletime => "redis_object_idletime",
+    object_help => "redis_object_help",
+    set => "redis_set",
+    del => "redis_del",
+    expire => "redis_expire",
+    rename => "redis_rename",
+    mget => "redis_mget",
+    mset => "redis_mset",
+    persist => "redis_persist",
+    unlink => "redis_unlink",
+    copy => "redis_copy",
+    dump => "redis_dump",
+    restore => "redis_restore",
+    randomkey => "redis_randomkey",
+    touch => "redis_touch",
+    incr => "redis_incr",
+    decr => "redis_decr",
+    append => "redis_append",
+    strlen => "redis_strlen",
+    getrange => "redis_getrange",
+    setrange => "redis_setrange",
+    setnx => "redis_setnx",
 }
 
 fn default_pattern() -> String {
@@ -110,819 +50,479 @@ fn default_limit() -> usize {
     100
 }
 
-/// Build the keys tool
-pub fn keys(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_keys")
-        .description("List keys matching a pattern using SCAN (production-safe, non-blocking).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<KeysInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, keys, "redis_keys",
+    "List keys matching a pattern using SCAN (production-safe, non-blocking).",
+    {
+        /// Key pattern to match (default: "*")
+        #[serde(default = "default_pattern")]
+        pub pattern: String,
+        /// Maximum number of keys to return (default: 100)
+        #[serde(default = "default_limit")]
+        pub limit: usize,
+    } => |conn, input| {
+        // Use SCAN to safely iterate keys
+        let mut cursor: u64 = 0;
+        let mut all_keys: Vec<String> = Vec::new();
 
-                // Use SCAN to safely iterate keys
-                let mut cursor: u64 = 0;
-                let mut all_keys: Vec<String> = Vec::new();
+        loop {
+            let (new_cursor, keys): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(&input.pattern)
+                .arg("COUNT")
+                .arg(100)
+                .query_async(&mut conn)
+                .await
+                .tool_context("SCAN failed")?;
 
-                loop {
-                    let (new_cursor, keys): (u64, Vec<String>) = redis::cmd("SCAN")
-                        .arg(cursor)
-                        .arg("MATCH")
-                        .arg(&input.pattern)
-                        .arg("COUNT")
-                        .arg(100)
-                        .query_async(&mut conn)
-                        .await
-                        .tool_context("SCAN failed")?;
+            all_keys.extend(keys);
+            cursor = new_cursor;
 
-                    all_keys.extend(keys);
-                    cursor = new_cursor;
+            if cursor == 0 || all_keys.len() >= input.limit {
+                break;
+            }
+        }
 
-                    if cursor == 0 || all_keys.len() >= input.limit {
-                        break;
-                    }
-                }
+        // Truncate to limit
+        all_keys.truncate(input.limit);
 
-                // Truncate to limit
-                all_keys.truncate(input.limit);
+        let output = if all_keys.is_empty() {
+            format!("No keys found matching pattern '{}'", input.pattern)
+        } else {
+            format!(
+                "Found {} key(s) matching '{}'\n\n{}",
+                all_keys.len(),
+                input.pattern,
+                all_keys.join("\n")
+            )
+        };
 
-                let output = if all_keys.is_empty() {
-                    format!("No keys found matching pattern '{}'", input.pattern)
-                } else {
-                    format!(
-                        "Found {} key(s) matching '{}'\n\n{}",
-                        all_keys.len(),
-                        input.pattern,
-                        all_keys.join("\n")
-                    )
-                };
+        Ok(CallToolResult::text(output))
+    }
+);
 
-                Ok(CallToolResult::text(output))
-            },
-        )
-        .build()
-}
+database_tool!(read_only, scan, "redis_scan",
+    "Scan keys with optional type filter. Prefer over redis_keys when filtering by type.",
+    {
+        /// Key pattern to match (default: "*")
+        #[serde(default = "default_pattern")]
+        pub pattern: String,
+        /// Filter by key type (e.g., "string", "list", "set", "zset", "hash", "stream")
+        #[serde(default)]
+        pub key_type: Option<String>,
+        /// Maximum number of keys to return (default: 100)
+        #[serde(default = "default_limit")]
+        pub limit: usize,
+    } => |conn, input| {
+        let mut cursor: u64 = 0;
+        let mut all_keys: Vec<String> = Vec::new();
 
-/// Input for GET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to get
-    pub key: String,
-}
+        loop {
+            let mut cmd = redis::cmd("SCAN");
+            cmd.arg(cursor)
+                .arg("MATCH")
+                .arg(&input.pattern)
+                .arg("COUNT")
+                .arg(100);
 
-/// Build the get tool
-pub fn get(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_get")
-        .description("Get the value of a key.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<GetInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+            // Add TYPE filter if specified
+            if let Some(ref key_type) = input.key_type {
+                cmd.arg("TYPE").arg(key_type);
+            }
 
-                let value: Option<String> = redis::cmd("GET")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("GET failed")?;
+            let (new_cursor, keys): (u64, Vec<String>) = cmd
+                .query_async(&mut conn)
+                .await
+                .tool_context("SCAN failed")?;
 
-                match value {
-                    Some(v) => Ok(CallToolResult::text(v)),
-                    None => Ok(CallToolResult::text(format!(
-                        "(nil) - key '{}' not found",
-                        input.key
-                    ))),
-                }
-            },
-        )
-        .build()
-}
+            all_keys.extend(keys);
+            cursor = new_cursor;
 
-/// Input for TYPE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct TypeInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to check type
-    pub key: String,
-}
+            if cursor == 0 || all_keys.len() >= input.limit {
+                break;
+            }
+        }
 
-/// Build the type tool
-pub fn key_type(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_type")
-        .description("Get the data type of a key.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<TypeInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        all_keys.truncate(input.limit);
 
-                let key_type: String = redis::cmd("TYPE")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("TYPE failed")?;
+        let type_info = input
+            .key_type
+            .as_ref()
+            .map(|t| format!(" of type '{}'", t))
+            .unwrap_or_default();
 
-                Ok(CallToolResult::text(format!("{}: {}", input.key, key_type)))
-            },
-        )
-        .build()
-}
+        let output = if all_keys.is_empty() {
+            format!(
+                "No keys{} found matching pattern '{}'",
+                type_info, input.pattern
+            )
+        } else {
+            format!(
+                "Found {} key(s){} matching '{}'\n\n{}",
+                all_keys.len(),
+                type_info,
+                input.pattern,
+                all_keys.join("\n")
+            )
+        };
 
-/// Input for TTL command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct TtlInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to check TTL
-    pub key: String,
-}
+        Ok(CallToolResult::text(output))
+    }
+);
 
-/// Build the ttl tool
-pub fn ttl(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_ttl")
-        .description("Get the TTL of a key in seconds (-1 = no expiry, -2 = missing).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<TtlInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, get, "redis_get",
+    "Get the value of a key.",
+    {
+        /// Key to get
+        pub key: String,
+    } => |conn, input| {
+        let value: Option<String> = redis::cmd("GET")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("GET failed")?;
 
-                let ttl: i64 = redis::cmd("TTL")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("TTL failed")?;
+        match value {
+            Some(v) => Ok(CallToolResult::text(v)),
+            None => Ok(CallToolResult::text(format!(
+                "(nil) - key '{}' not found",
+                input.key
+            ))),
+        }
+    }
+);
 
-                let message = match ttl {
-                    -2 => format!("{}: key does not exist", input.key),
-                    -1 => format!("{}: no expiry set", input.key),
-                    _ => format!("{}: {} seconds remaining", input.key, ttl),
-                };
+database_tool!(read_only, key_type, "redis_type",
+    "Get the data type of a key.",
+    {
+        /// Key to check type
+        pub key: String,
+    } => |conn, input| {
+        let key_type: String = redis::cmd("TYPE")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("TYPE failed")?;
 
-                Ok(CallToolResult::text(message))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(format!("{}: {}", input.key, key_type)))
+    }
+);
 
-/// Input for EXISTS command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ExistsInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Keys to check existence
-    pub keys: Vec<String>,
-}
+database_tool!(read_only, ttl, "redis_ttl",
+    "Get the TTL of a key in seconds (-1 = no expiry, -2 = missing).",
+    {
+        /// Key to check TTL
+        pub key: String,
+    } => |conn, input| {
+        let ttl: i64 = redis::cmd("TTL")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("TTL failed")?;
 
-/// Build the exists tool
-pub fn exists(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_exists")
-        .description("Check if one or more keys exist.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ExistsInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        let message = match ttl {
+            -2 => format!("{}: key does not exist", input.key),
+            -1 => format!("{}: no expiry set", input.key),
+            _ => format!("{}: {} seconds remaining", input.key, ttl),
+        };
 
-                let mut cmd = redis::cmd("EXISTS");
-                for key in &input.keys {
-                    cmd.arg(key);
-                }
+        Ok(CallToolResult::text(message))
+    }
+);
 
-                let count: i64 = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("EXISTS failed")?;
+database_tool!(read_only, exists, "redis_exists",
+    "Check if one or more keys exist.",
+    {
+        /// Keys to check existence
+        pub keys: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("EXISTS");
+        for key in &input.keys {
+            cmd.arg(key);
+        }
 
-                Ok(CallToolResult::text(format!(
-                    "{} of {} key(s) exist",
-                    count,
-                    input.keys.len()
-                )))
-            },
-        )
-        .build()
-}
+        let count: i64 = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("EXISTS failed")?;
 
-/// Input for MEMORY USAGE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct MemoryUsageInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to check memory usage
-    pub key: String,
-}
+        Ok(CallToolResult::text(format!(
+            "{} of {} key(s) exist",
+            count,
+            input.keys.len()
+        )))
+    }
+);
 
-/// Build the memory_usage tool
-pub fn memory_usage(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_memory_usage")
-        .description("Get memory usage of a key in bytes (MEMORY USAGE).")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<MemoryUsageInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, memory_usage, "redis_memory_usage",
+    "Get memory usage of a key in bytes (MEMORY USAGE).",
+    {
+        /// Key to check memory usage
+        pub key: String,
+    } => |conn, input| {
+        let bytes: Option<i64> = redis::cmd("MEMORY")
+            .arg("USAGE")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("MEMORY USAGE failed")?;
 
-                let bytes: Option<i64> = redis::cmd("MEMORY")
-                    .arg("USAGE")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("MEMORY USAGE failed")?;
+        match bytes {
+            Some(b) => Ok(CallToolResult::text(format!("{}: {} bytes", input.key, b))),
+            None => Ok(CallToolResult::text(format!(
+                "{}: key does not exist",
+                input.key
+            ))),
+        }
+    }
+);
 
-                match bytes {
-                    Some(b) => Ok(CallToolResult::text(format!("{}: {} bytes", input.key, b))),
-                    None => Ok(CallToolResult::text(format!(
-                        "{}: key does not exist",
-                        input.key
-                    ))),
-                }
-            },
-        )
-        .build()
-}
+database_tool!(read_only, object_encoding, "redis_object_encoding",
+    "Get the internal encoding of a key. Useful for understanding memory usage patterns.",
+    {
+        /// Key to check encoding
+        pub key: String,
+    } => |conn, input| {
+        let encoding: Option<String> = redis::cmd("OBJECT")
+            .arg("ENCODING")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("OBJECT ENCODING failed")?;
 
-/// Input for SCAN with type filter
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ScanInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key pattern to match (default: "*")
-    #[serde(default = "default_pattern")]
-    pub pattern: String,
-    /// Filter by key type (e.g., "string", "list", "set", "zset", "hash", "stream")
-    #[serde(default)]
-    pub key_type: Option<String>,
-    /// Maximum number of keys to return (default: 100)
-    #[serde(default = "default_limit")]
-    pub limit: usize,
-}
+        match encoding {
+            Some(enc) => Ok(CallToolResult::text(format!("{}: {}", input.key, enc))),
+            None => Ok(CallToolResult::text(format!(
+                "{}: key does not exist",
+                input.key
+            ))),
+        }
+    }
+);
 
-/// Build the scan tool with type filter
-pub fn scan(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_scan")
-        .description(
-            "Scan keys with optional type filter. Prefer over redis_keys when filtering by type.",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ScanInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, object_freq, "redis_object_freq",
+    "Get the LFU access frequency counter for a key. \
+     Only works with allkeys-lfu or volatile-lfu eviction policy.",
+    {
+        /// Key to get LFU access frequency for
+        pub key: String,
+    } => |conn, input| {
+        let freq: i64 = redis::cmd("OBJECT")
+            .arg("FREQ")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("OBJECT FREQ failed")?;
 
-                let mut cursor: u64 = 0;
-                let mut all_keys: Vec<String> = Vec::new();
+        Ok(CallToolResult::text(format!(
+            "{}: LFU frequency counter = {}",
+            input.key, freq
+        )))
+    }
+);
 
-                loop {
-                    let mut cmd = redis::cmd("SCAN");
-                    cmd.arg(cursor)
-                        .arg("MATCH")
-                        .arg(&input.pattern)
-                        .arg("COUNT")
-                        .arg(100);
+database_tool!(read_only, object_idletime, "redis_object_idletime",
+    "Get idle time of a key in seconds since last access.",
+    {
+        /// Key to get idle time for
+        pub key: String,
+    } => |conn, input| {
+        let idle: i64 = redis::cmd("OBJECT")
+            .arg("IDLETIME")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("OBJECT IDLETIME failed")?;
 
-                    // Add TYPE filter if specified
-                    if let Some(ref key_type) = input.key_type {
-                        cmd.arg("TYPE").arg(key_type);
-                    }
+        Ok(CallToolResult::text(format!(
+            "{}: idle for {} seconds",
+            input.key, idle
+        )))
+    }
+);
 
-                    let (new_cursor, keys): (u64, Vec<String>) = cmd
-                        .query_async(&mut conn)
-                        .await
-                        .tool_context("SCAN failed")?;
+database_tool!(read_only, object_help, "redis_object_help",
+    "Get available OBJECT subcommands.",
+    {} => |conn, _input| {
+        let result: Vec<String> = redis::cmd("OBJECT")
+            .arg("HELP")
+            .query_async(&mut conn)
+            .await
+            .tool_context("OBJECT HELP failed")?;
 
-                    all_keys.extend(keys);
-                    cursor = new_cursor;
-
-                    if cursor == 0 || all_keys.len() >= input.limit {
-                        break;
-                    }
-                }
-
-                all_keys.truncate(input.limit);
-
-                let type_info = input
-                    .key_type
-                    .as_ref()
-                    .map(|t| format!(" of type '{}'", t))
-                    .unwrap_or_default();
-
-                let output = if all_keys.is_empty() {
-                    format!(
-                        "No keys{} found matching pattern '{}'",
-                        type_info, input.pattern
-                    )
-                } else {
-                    format!(
-                        "Found {} key(s){} matching '{}'\n\n{}",
-                        all_keys.len(),
-                        type_info,
-                        input.pattern,
-                        all_keys.join("\n")
-                    )
-                };
-
-                Ok(CallToolResult::text(output))
-            },
-        )
-        .build()
-}
-
-/// Input for OBJECT ENCODING command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ObjectEncodingInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to check encoding
-    pub key: String,
-}
-
-/// Build the object_encoding tool
-pub fn object_encoding(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_object_encoding")
-        .description(
-            "Get the internal encoding of a key. Useful for understanding memory usage patterns.",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<ObjectEncodingInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let encoding: Option<String> = redis::cmd("OBJECT")
-                    .arg("ENCODING")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("OBJECT ENCODING failed")?;
-
-                match encoding {
-                    Some(enc) => Ok(CallToolResult::text(format!("{}: {}", input.key, enc))),
-                    None => Ok(CallToolResult::text(format!(
-                        "{}: key does not exist",
-                        input.key
-                    ))),
-                }
-            },
-        )
-        .build()
-}
-
-/// Input for OBJECT FREQ command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ObjectFreqInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to get LFU access frequency for
-    pub key: String,
-}
-
-/// Build the object_freq tool
-pub fn object_freq(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_object_freq")
-        .description(
-            "Get the LFU access frequency counter for a key. \
-             Only works with allkeys-lfu or volatile-lfu eviction policy.",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ObjectFreqInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let freq: i64 = redis::cmd("OBJECT")
-                    .arg("FREQ")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("OBJECT FREQ failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "{}: LFU frequency counter = {}",
-                    input.key, freq
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for OBJECT IDLETIME command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ObjectIdletimeInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to get idle time for
-    pub key: String,
-}
-
-/// Build the object_idletime tool
-pub fn object_idletime(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_object_idletime")
-        .description("Get idle time of a key in seconds since last access.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>,
-             Json(input): Json<ObjectIdletimeInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let idle: i64 = redis::cmd("OBJECT")
-                    .arg("IDLETIME")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("OBJECT IDLETIME failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "{}: idle for {} seconds",
-                    input.key, idle
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for OBJECT HELP command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ObjectHelpInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the object_help tool
-pub fn object_help(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_object_help")
-        .description("Get available OBJECT subcommands.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ObjectHelpInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let result: Vec<String> = redis::cmd("OBJECT")
-                    .arg("HELP")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("OBJECT HELP failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "OBJECT subcommands:\n{}",
-                    result.join("\n")
-                )))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(format!(
+            "OBJECT subcommands:\n{}",
+            result.join("\n")
+        )))
+    }
+);
 
 // --- Write tools ---
 
-/// Input for SET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to set
-    pub key: String,
-    /// Value to set
-    pub value: String,
-    /// Expire time in seconds
-    #[serde(default)]
-    pub ex: Option<u64>,
-    /// Expire time in milliseconds
-    #[serde(default)]
-    pub px: Option<u64>,
-    /// Only set if key does not already exist
-    #[serde(default)]
-    pub nx: bool,
-    /// Only set if key already exists
-    #[serde(default)]
-    pub xx: bool,
-}
+database_tool!(write, set, "redis_set",
+    "Set a key to a string value with optional expiry and conditional flags (NX/XX).",
+    {
+        /// Key to set
+        pub key: String,
+        /// Value to set
+        pub value: String,
+        /// Expire time in seconds
+        #[serde(default)]
+        pub ex: Option<u64>,
+        /// Expire time in milliseconds
+        #[serde(default)]
+        pub px: Option<u64>,
+        /// Only set if key does not already exist
+        #[serde(default)]
+        pub nx: bool,
+        /// Only set if key already exists
+        #[serde(default)]
+        pub xx: bool,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("SET");
+        cmd.arg(&input.key).arg(&input.value);
 
-/// Build the set tool
-pub fn set(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_set")
-        .description(
-            "Set a key to a string value with optional expiry and conditional flags (NX/XX).",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<SetInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        if let Some(ex) = input.ex {
+            cmd.arg("EX").arg(ex);
+        }
+        if let Some(px) = input.px {
+            cmd.arg("PX").arg(px);
+        }
+        if input.nx {
+            cmd.arg("NX");
+        }
+        if input.xx {
+            cmd.arg("XX");
+        }
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        let result: Option<String> = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("SET failed")?;
 
-                let mut cmd = redis::cmd("SET");
-                cmd.arg(&input.key).arg(&input.value);
-
-                if let Some(ex) = input.ex {
-                    cmd.arg("EX").arg(ex);
-                }
-                if let Some(px) = input.px {
-                    cmd.arg("PX").arg(px);
-                }
+        match result {
+            Some(_) => Ok(CallToolResult::text(format!(
+                "OK - set '{}' successfully",
+                input.key
+            ))),
+            None => Ok(CallToolResult::text(format!(
+                "Key '{}' not set (condition not met: {})",
+                input.key,
                 if input.nx {
-                    cmd.arg("NX");
-                }
-                if input.xx {
-                    cmd.arg("XX");
-                }
-
-                let result: Option<String> = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("SET failed")?;
-
-                match result {
-                    Some(_) => Ok(CallToolResult::text(format!(
-                        "OK - set '{}' successfully",
-                        input.key
-                    ))),
-                    None => Ok(CallToolResult::text(format!(
-                        "Key '{}' not set (condition not met: {})",
-                        input.key,
-                        if input.nx {
-                            "NX - key already exists"
-                        } else {
-                            "XX - key does not exist"
-                        }
-                    ))),
-                }
-            },
-        )
-        .build()
-}
-
-/// Input for DEL command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DelInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Keys to delete
-    pub keys: Vec<String>,
-}
-
-/// Build the del tool
-pub fn del(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_del")
-        .description("DANGEROUS: Delete one or more keys.")
-        .destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<DelInput>| async move {
-                if !state.is_destructive_allowed() {
-                    return Err(McpError::tool(
-                        "Destructive operations require policy tier 'full'",
-                    ));
-                }
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let mut cmd = redis::cmd("DEL");
-                for key in &input.keys {
-                    cmd.arg(key);
-                }
-
-                let count: i64 = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("DEL failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "Deleted {} of {} key(s)",
-                    count,
-                    input.keys.len()
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for EXPIRE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct ExpireInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to set expiry on
-    pub key: String,
-    /// TTL in seconds
-    pub seconds: i64,
-}
-
-/// Build the expire tool
-pub fn expire(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_expire")
-        .description("Set a timeout on a key in seconds. Key auto-deletes after expiry.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<ExpireInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let result: bool = redis::cmd("EXPIRE")
-                    .arg(&input.key)
-                    .arg(input.seconds)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("EXPIRE failed")?;
-
-                if result {
-                    Ok(CallToolResult::text(format!(
-                        "OK - TTL set to {} seconds on '{}'",
-                        input.seconds, input.key
-                    )))
+                    "NX - key already exists"
                 } else {
-                    Ok(CallToolResult::text(format!(
-                        "Key '{}' does not exist or timeout could not be set",
-                        input.key
-                    )))
+                    "XX - key does not exist"
                 }
-            },
-        )
-        .build()
-}
+            ))),
+        }
+    }
+);
 
-/// Input for RENAME command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RenameInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Current key name
-    pub key: String,
-    /// New key name
-    pub newkey: String,
-}
+database_tool!(destructive, del, "redis_del",
+    "DANGEROUS: Delete one or more keys.",
+    {
+        /// Keys to delete
+        pub keys: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("DEL");
+        for key in &input.keys {
+            cmd.arg(key);
+        }
 
-/// Build the rename tool
-pub fn rename(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_rename")
-        .description("Rename a key. Overwrites the destination key if it exists.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<RenameInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        let count: i64 = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("DEL failed")?;
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        Ok(CallToolResult::text(format!(
+            "Deleted {} of {} key(s)",
+            count,
+            input.keys.len()
+        )))
+    }
+);
 
-                let _: () = redis::cmd("RENAME")
-                    .arg(&input.key)
-                    .arg(&input.newkey)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("RENAME failed")?;
+database_tool!(write, expire, "redis_expire",
+    "Set a timeout on a key in seconds. Key auto-deletes after expiry.",
+    {
+        /// Key to set expiry on
+        pub key: String,
+        /// TTL in seconds
+        pub seconds: i64,
+    } => |conn, input| {
+        let result: bool = redis::cmd("EXPIRE")
+            .arg(&input.key)
+            .arg(input.seconds)
+            .query_async(&mut conn)
+            .await
+            .tool_context("EXPIRE failed")?;
 
-                Ok(CallToolResult::text(format!(
-                    "OK - renamed '{}' to '{}'",
-                    input.key, input.newkey
-                )))
-            },
-        )
-        .build()
-}
+        if result {
+            Ok(CallToolResult::text(format!(
+                "OK - TTL set to {} seconds on '{}'",
+                input.seconds, input.key
+            )))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "Key '{}' does not exist or timeout could not be set",
+                input.key
+            )))
+        }
+    }
+);
 
-// --- P0 Key Operations ---
+database_tool!(write, rename, "redis_rename",
+    "Rename a key. Overwrites the destination key if it exists.",
+    {
+        /// Current key name
+        pub key: String,
+        /// New key name
+        pub newkey: String,
+    } => |conn, input| {
+        let _: () = redis::cmd("RENAME")
+            .arg(&input.key)
+            .arg(&input.newkey)
+            .query_async(&mut conn)
+            .await
+            .tool_context("RENAME failed")?;
 
-/// Input for MGET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct MgetInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Keys to get
-    pub keys: Vec<String>,
-}
+        Ok(CallToolResult::text(format!(
+            "OK - renamed '{}' to '{}'",
+            input.key, input.newkey
+        )))
+    }
+);
 
-/// Build the mget tool
-pub fn mget(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_mget")
-        .description("Get the values of multiple keys in a single call.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<MgetInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(read_only, mget, "redis_mget",
+    "Get the values of multiple keys in a single call.",
+    {
+        /// Keys to get
+        pub keys: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("MGET");
+        for key in &input.keys {
+            cmd.arg(key);
+        }
 
-                let mut cmd = redis::cmd("MGET");
-                for key in &input.keys {
-                    cmd.arg(key);
-                }
+        let values: Vec<redis::Value> = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("MGET failed")?;
 
-                let values: Vec<redis::Value> = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("MGET failed")?;
+        let output = input
+            .keys
+            .iter()
+            .zip(values.iter())
+            .map(|(k, v)| format!("{}: {}", k, format_value(v)))
+            .collect::<Vec<_>>()
+            .join("\n");
 
-                let output = input
-                    .keys
-                    .iter()
-                    .zip(values.iter())
-                    .map(|(k, v)| format!("{}: {}", k, format_value(v)))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-
-                Ok(CallToolResult::text(output))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(output))
+    }
+);
 
 /// A key-value pair for MSET
-#[derive(Debug, Deserialize, JsonSchema)]
+#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct KeyValuePair {
     /// Key name
     pub key: String,
@@ -930,750 +530,379 @@ pub struct KeyValuePair {
     pub value: String,
 }
 
-/// Input for MSET command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct MsetInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key-value pairs to set
-    pub entries: Vec<KeyValuePair>,
-}
+database_tool!(write, mset, "redis_mset",
+    "Set multiple key-value pairs in a single atomic call.",
+    {
+        /// Key-value pairs to set
+        pub entries: Vec<KeyValuePair>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("MSET");
+        for entry in &input.entries {
+            cmd.arg(&entry.key).arg(&entry.value);
+        }
 
-/// Build the mset tool
-pub fn mset(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_mset")
-        .description("Set multiple key-value pairs in a single atomic call.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<MsetInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        let _: () = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("MSET failed")?;
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        Ok(CallToolResult::text(format!(
+            "OK - set {} key(s)",
+            input.entries.len()
+        )))
+    }
+);
 
-                let mut cmd = redis::cmd("MSET");
-                for entry in &input.entries {
-                    cmd.arg(&entry.key).arg(&entry.value);
-                }
+database_tool!(write, persist, "redis_persist",
+    "Remove the expiry from a key, making it persistent.",
+    {
+        /// Key to remove expiry from
+        pub key: String,
+    } => |conn, input| {
+        let result: bool = redis::cmd("PERSIST")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("PERSIST failed")?;
 
-                let _: () = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("MSET failed")?;
+        if result {
+            Ok(CallToolResult::text(format!(
+                "OK - expiry removed from '{}'",
+                input.key
+            )))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "Key '{}' does not exist or has no expiry",
+                input.key
+            )))
+        }
+    }
+);
 
+database_tool!(destructive, unlink, "redis_unlink",
+    "DANGEROUS: Asynchronously delete one or more keys (non-blocking version of DEL).",
+    {
+        /// Keys to unlink (async delete)
+        pub keys: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("UNLINK");
+        for key in &input.keys {
+            cmd.arg(key);
+        }
+
+        let count: i64 = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("UNLINK failed")?;
+
+        Ok(CallToolResult::text(format!(
+            "Unlinked {} of {} key(s)",
+            count,
+            input.keys.len()
+        )))
+    }
+);
+
+database_tool!(write, copy, "redis_copy",
+    "Copy a key to a new key. Use replace=true to overwrite the destination.",
+    {
+        /// Source key
+        pub source: String,
+        /// Destination key
+        pub destination: String,
+        /// Replace destination key if it already exists
+        #[serde(default)]
+        pub replace: bool,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("COPY");
+        cmd.arg(&input.source).arg(&input.destination);
+        if input.replace {
+            cmd.arg("REPLACE");
+        }
+
+        let result: bool = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("COPY failed")?;
+
+        if result {
+            Ok(CallToolResult::text(format!(
+                "OK - copied '{}' to '{}'",
+                input.source, input.destination
+            )))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "COPY failed: destination '{}' already exists (use replace=true to overwrite)",
+                input.destination
+            )))
+        }
+    }
+);
+
+database_tool!(read_only, dump, "redis_dump",
+    "Serialize a key's value using Redis internal format. Returns hex-encoded bytes \
+     for use with RESTORE.",
+    {
+        /// Key to dump
+        pub key: String,
+    } => |conn, input| {
+        let value: redis::Value = redis::cmd("DUMP")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("DUMP failed")?;
+
+        match value {
+            redis::Value::BulkString(bytes) => {
+                let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
                 Ok(CallToolResult::text(format!(
-                    "OK - set {} key(s)",
-                    input.entries.len()
+                    "{}: {} bytes\n{}",
+                    input.key,
+                    bytes.len(),
+                    hex
                 )))
-            },
-        )
-        .build()
-}
+            }
+            redis::Value::Nil => Ok(CallToolResult::text(format!(
+                "(nil) - key '{}' not found",
+                input.key
+            ))),
+            _ => Ok(CallToolResult::text(format_value(&value))),
+        }
+    }
+);
 
-/// Input for PERSIST command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct PersistInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to remove expiry from
-    pub key: String,
-}
+database_tool!(write, restore, "redis_restore",
+    "Restore a key from a serialized value (from DUMP). \
+     The serialized_value must be hex-encoded.",
+    {
+        /// Key to restore
+        pub key: String,
+        /// TTL in milliseconds (0 = no expiry)
+        pub ttl_ms: u64,
+        /// Hex-encoded serialized value from DUMP
+        pub serialized_value: String,
+    } => |conn, input| {
+        // Decode hex string to bytes
+        let bytes: Result<Vec<u8>, _> = (0..input.serialized_value.len())
+            .step_by(2)
+            .map(|i| {
+                u8::from_str_radix(
+                    &input.serialized_value[i..i.min(input.serialized_value.len()) + 2],
+                    16,
+                )
+            })
+            .collect();
 
-/// Build the persist tool
-pub fn persist(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_persist")
-        .description("Remove the expiry from a key, making it persistent.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<PersistInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        let bytes =
+            bytes.map_err(|_| tower_mcp::Error::tool("Invalid hex string in serialized_value"))?;
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        let _: () = redis::cmd("RESTORE")
+            .arg(&input.key)
+            .arg(input.ttl_ms)
+            .arg(bytes.as_slice())
+            .query_async(&mut conn)
+            .await
+            .tool_context("RESTORE failed")?;
 
-                let result: bool = redis::cmd("PERSIST")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("PERSIST failed")?;
+        Ok(CallToolResult::text(format!(
+            "OK - restored key '{}'",
+            input.key
+        )))
+    }
+);
 
-                if result {
-                    Ok(CallToolResult::text(format!(
-                        "OK - expiry removed from '{}'",
-                        input.key
-                    )))
-                } else {
-                    Ok(CallToolResult::text(format!(
-                        "Key '{}' does not exist or has no expiry",
-                        input.key
-                    )))
-                }
-            },
-        )
-        .build()
-}
+database_tool!(read_only, randomkey, "redis_randomkey",
+    "Return a random key from the database.",
+    {} => |conn, _input| {
+        let key: Option<String> = redis::cmd("RANDOMKEY")
+            .query_async(&mut conn)
+            .await
+            .tool_context("RANDOMKEY failed")?;
 
-/// Input for UNLINK command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct UnlinkInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Keys to unlink (async delete)
-    pub keys: Vec<String>,
-}
+        match key {
+            Some(k) => Ok(CallToolResult::text(k)),
+            None => Ok(CallToolResult::text("(empty) - database has no keys")),
+        }
+    }
+);
 
-/// Build the unlink tool
-pub fn unlink(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_unlink")
-        .description(
-            "DANGEROUS: Asynchronously delete one or more keys (non-blocking version of DEL).",
-        )
-        .destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<UnlinkInput>| async move {
-                if !state.is_destructive_allowed() {
-                    return Err(McpError::tool(
-                        "Destructive operations require policy tier 'full'",
-                    ));
-                }
+database_tool!(read_only, touch, "redis_touch",
+    "Update the last access time of one or more keys without modifying them.",
+    {
+        /// Keys to touch (update last access time)
+        pub keys: Vec<String>,
+    } => |conn, input| {
+        let mut cmd = redis::cmd("TOUCH");
+        for key in &input.keys {
+            cmd.arg(key);
+        }
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        let count: i64 = cmd
+            .query_async(&mut conn)
+            .await
+            .tool_context("TOUCH failed")?;
 
-                let mut cmd = redis::cmd("UNLINK");
-                for key in &input.keys {
-                    cmd.arg(key);
-                }
-
-                let count: i64 = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("UNLINK failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "Unlinked {} of {} key(s)",
-                    count,
-                    input.keys.len()
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for COPY command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct CopyInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Source key
-    pub source: String,
-    /// Destination key
-    pub destination: String,
-    /// Replace destination key if it already exists
-    #[serde(default)]
-    pub replace: bool,
-}
-
-/// Build the copy tool
-pub fn copy(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_copy")
-        .description("Copy a key to a new key. Use replace=true to overwrite the destination.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<CopyInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let mut cmd = redis::cmd("COPY");
-                cmd.arg(&input.source).arg(&input.destination);
-                if input.replace {
-                    cmd.arg("REPLACE");
-                }
-
-                let result: bool = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("COPY failed")?;
-
-                if result {
-                    Ok(CallToolResult::text(format!(
-                        "OK - copied '{}' to '{}'",
-                        input.source, input.destination
-                    )))
-                } else {
-                    Ok(CallToolResult::text(format!(
-                        "COPY failed: destination '{}' already exists (use replace=true to overwrite)",
-                        input.destination
-                    )))
-                }
-            },
-        )
-        .build()
-}
-
-/// Input for DUMP command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DumpInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to dump
-    pub key: String,
-}
-
-/// Build the dump tool
-pub fn dump(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_dump")
-        .description(
-            "Serialize a key's value using Redis internal format. Returns hex-encoded bytes \
-             for use with RESTORE.",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<DumpInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let value: redis::Value = redis::cmd("DUMP")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("DUMP failed")?;
-
-                match value {
-                    redis::Value::BulkString(bytes) => {
-                        let hex: String = bytes.iter().map(|b| format!("{:02x}", b)).collect();
-                        Ok(CallToolResult::text(format!(
-                            "{}: {} bytes\n{}",
-                            input.key,
-                            bytes.len(),
-                            hex
-                        )))
-                    }
-                    redis::Value::Nil => Ok(CallToolResult::text(format!(
-                        "(nil) - key '{}' not found",
-                        input.key
-                    ))),
-                    _ => Ok(CallToolResult::text(format_value(&value))),
-                }
-            },
-        )
-        .build()
-}
-
-/// Input for RESTORE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RestoreInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to restore
-    pub key: String,
-    /// TTL in milliseconds (0 = no expiry)
-    pub ttl_ms: u64,
-    /// Hex-encoded serialized value from DUMP
-    pub serialized_value: String,
-}
-
-/// Build the restore tool
-pub fn restore(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_restore")
-        .description(
-            "Restore a key from a serialized value (from DUMP). \
-             The serialized_value must be hex-encoded.",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<RestoreInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                // Decode hex string to bytes
-                let bytes: Result<Vec<u8>, _> = (0..input.serialized_value.len())
-                    .step_by(2)
-                    .map(|i| {
-                        u8::from_str_radix(
-                            &input.serialized_value[i..i.min(input.serialized_value.len()) + 2],
-                            16,
-                        )
-                    })
-                    .collect();
-
-                let bytes =
-                    bytes.map_err(|_| McpError::tool("Invalid hex string in serialized_value"))?;
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let _: () = redis::cmd("RESTORE")
-                    .arg(&input.key)
-                    .arg(input.ttl_ms)
-                    .arg(bytes.as_slice())
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("RESTORE failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "OK - restored key '{}'",
-                    input.key
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for RANDOMKEY command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct RandomkeyInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-}
-
-/// Build the randomkey tool
-pub fn randomkey(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_randomkey")
-        .description("Return a random key from the database.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<RandomkeyInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let key: Option<String> = redis::cmd("RANDOMKEY")
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("RANDOMKEY failed")?;
-
-                match key {
-                    Some(k) => Ok(CallToolResult::text(k)),
-                    None => Ok(CallToolResult::text("(empty) - database has no keys")),
-                }
-            },
-        )
-        .build()
-}
-
-/// Input for TOUCH command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct TouchInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Keys to touch (update last access time)
-    pub keys: Vec<String>,
-}
-
-/// Build the touch tool
-pub fn touch(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_touch")
-        .description("Update the last access time of one or more keys without modifying them.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<TouchInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let mut cmd = redis::cmd("TOUCH");
-                for key in &input.keys {
-                    cmd.arg(key);
-                }
-
-                let count: i64 = cmd
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("TOUCH failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "Touched {} of {} key(s)",
-                    count,
-                    input.keys.len()
-                )))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(format!(
+            "Touched {} of {} key(s)",
+            count,
+            input.keys.len()
+        )))
+    }
+);
 
 // --- P1 String Operations ---
 
-/// Input for INCR command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct IncrInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to increment
-    pub key: String,
-}
+database_tool!(write, incr, "redis_incr",
+    "Increment the integer value of a key by 1. Creates the key with value 1 if it does not exist.",
+    {
+        /// Key to increment
+        pub key: String,
+    } => |conn, input| {
+        let value: i64 = redis::cmd("INCR")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("INCR failed")?;
 
-/// Build the incr tool
-pub fn incr(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_incr")
-        .description("Increment the integer value of a key by 1. Creates the key with value 1 if it does not exist.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<IncrInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        Ok(CallToolResult::text(format!(
+            "{}: {}",
+            input.key, value
+        )))
+    }
+);
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(write, decr, "redis_decr",
+    "Decrement the integer value of a key by 1. Creates the key with value -1 if it does not exist.",
+    {
+        /// Key to decrement
+        pub key: String,
+    } => |conn, input| {
+        let value: i64 = redis::cmd("DECR")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("DECR failed")?;
 
-                let value: i64 = redis::cmd("INCR")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("INCR failed")?;
+        Ok(CallToolResult::text(format!(
+            "{}: {}",
+            input.key, value
+        )))
+    }
+);
 
-                Ok(CallToolResult::text(format!(
-                    "{}: {}",
-                    input.key, value
-                )))
-            },
-        )
-        .build()
-}
+database_tool!(write, append, "redis_append",
+    "Append a value to a key. Creates the key if it does not exist. Returns the new string length.",
+    {
+        /// Key to append to
+        pub key: String,
+        /// Value to append
+        pub value: String,
+    } => |conn, input| {
+        let length: i64 = redis::cmd("APPEND")
+            .arg(&input.key)
+            .arg(&input.value)
+            .query_async(&mut conn)
+            .await
+            .tool_context("APPEND failed")?;
 
-/// Input for DECR command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct DecrInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to decrement
-    pub key: String,
-}
+        Ok(CallToolResult::text(format!(
+            "OK - '{}' new length: {}",
+            input.key, length
+        )))
+    }
+);
 
-/// Build the decr tool
-pub fn decr(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_decr")
-        .description("Decrement the integer value of a key by 1. Creates the key with value -1 if it does not exist.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<DecrInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+database_tool!(read_only, strlen, "redis_strlen",
+    "Get the length of the string value stored at a key.",
+    {
+        /// Key to get string length of
+        pub key: String,
+    } => |conn, input| {
+        let length: i64 = redis::cmd("STRLEN")
+            .arg(&input.key)
+            .query_async(&mut conn)
+            .await
+            .tool_context("STRLEN failed")?;
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+        Ok(CallToolResult::text(format!(
+            "{}: {} bytes",
+            input.key, length
+        )))
+    }
+);
 
-                let value: i64 = redis::cmd("DECR")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("DECR failed")?;
+database_tool!(read_only, getrange, "redis_getrange",
+    "Get a substring of the string value at a key by start and end offsets (inclusive).",
+    {
+        /// Key to get substring from
+        pub key: String,
+        /// Start offset (0-based, negative counts from end)
+        pub start: i64,
+        /// End offset (inclusive, negative counts from end)
+        pub end: i64,
+    } => |conn, input| {
+        let value: String = redis::cmd("GETRANGE")
+            .arg(&input.key)
+            .arg(input.start)
+            .arg(input.end)
+            .query_async(&mut conn)
+            .await
+            .tool_context("GETRANGE failed")?;
 
-                Ok(CallToolResult::text(format!(
-                    "{}: {}",
-                    input.key, value
-                )))
-            },
-        )
-        .build()
-}
+        Ok(CallToolResult::text(value))
+    }
+);
 
-/// Input for APPEND command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct AppendInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to append to
-    pub key: String,
-    /// Value to append
-    pub value: String,
-}
+database_tool!(write, setrange, "redis_setrange",
+    "Overwrite part of a string value at the given byte offset. Returns the new string length.",
+    {
+        /// Key to overwrite substring in
+        pub key: String,
+        /// Byte offset to start overwriting at
+        pub offset: u64,
+        /// Value to write at the offset
+        pub value: String,
+    } => |conn, input| {
+        let length: i64 = redis::cmd("SETRANGE")
+            .arg(&input.key)
+            .arg(input.offset)
+            .arg(&input.value)
+            .query_async(&mut conn)
+            .await
+            .tool_context("SETRANGE failed")?;
 
-/// Build the append tool
-pub fn append(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_append")
-        .description("Append a value to a key. Creates the key if it does not exist. Returns the new string length.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<AppendInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
+        Ok(CallToolResult::text(format!(
+            "OK - '{}' new length: {}",
+            input.key, length
+        )))
+    }
+);
 
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
+database_tool!(write, setnx, "redis_setnx",
+    "Set a key only if it does not already exist. Returns whether the key was set.",
+    {
+        /// Key to set
+        pub key: String,
+        /// Value to set
+        pub value: String,
+    } => |conn, input| {
+        let was_set: bool = redis::cmd("SETNX")
+            .arg(&input.key)
+            .arg(&input.value)
+            .query_async(&mut conn)
+            .await
+            .tool_context("SETNX failed")?;
 
-                let length: i64 = redis::cmd("APPEND")
-                    .arg(&input.key)
-                    .arg(&input.value)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("APPEND failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "OK - '{}' new length: {}",
-                    input.key, length
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for STRLEN command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct StrlenInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to get string length of
-    pub key: String,
-}
-
-/// Build the strlen tool
-pub fn strlen(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_strlen")
-        .description("Get the length of the string value stored at a key.")
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<StrlenInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let length: i64 = redis::cmd("STRLEN")
-                    .arg(&input.key)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("STRLEN failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "{}: {} bytes",
-                    input.key, length
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for GETRANGE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct GetrangeInput {
-    /// Optional Redis URL (overrides profile, uses configured URL if not provided)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name to resolve connection from (uses default profile if not set)
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to get substring from
-    pub key: String,
-    /// Start offset (0-based, negative counts from end)
-    pub start: i64,
-    /// End offset (inclusive, negative counts from end)
-    pub end: i64,
-}
-
-/// Build the getrange tool
-pub fn getrange(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_getrange")
-        .description(
-            "Get a substring of the string value at a key by start and end offsets (inclusive).",
-        )
-        .read_only_safe()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<GetrangeInput>| async move {
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let value: String = redis::cmd("GETRANGE")
-                    .arg(&input.key)
-                    .arg(input.start)
-                    .arg(input.end)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("GETRANGE failed")?;
-
-                Ok(CallToolResult::text(value))
-            },
-        )
-        .build()
-}
-
-/// Input for SETRANGE command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetrangeInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to overwrite substring in
-    pub key: String,
-    /// Byte offset to start overwriting at
-    pub offset: u64,
-    /// Value to write at the offset
-    pub value: String,
-}
-
-/// Build the setrange tool
-pub fn setrange(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_setrange")
-        .description("Overwrite part of a string value at the given byte offset. Returns the new string length.")
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<SetrangeInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let length: i64 = redis::cmd("SETRANGE")
-                    .arg(&input.key)
-                    .arg(input.offset)
-                    .arg(&input.value)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("SETRANGE failed")?;
-
-                Ok(CallToolResult::text(format!(
-                    "OK - '{}' new length: {}",
-                    input.key, length
-                )))
-            },
-        )
-        .build()
-}
-
-/// Input for SETNX command
-#[derive(Debug, Deserialize, JsonSchema)]
-pub struct SetnxInput {
-    /// Optional Redis URL (overrides profile)
-    #[serde(default)]
-    pub url: Option<String>,
-    /// Optional profile name for connection resolution
-    #[serde(default)]
-    pub profile: Option<String>,
-    /// Key to set
-    pub key: String,
-    /// Value to set
-    pub value: String,
-}
-
-/// Build the setnx tool
-pub fn setnx(state: Arc<AppState>) -> Tool {
-    ToolBuilder::new("redis_setnx")
-        .description(
-            "Set a key only if it does not already exist. Returns whether the key was set.",
-        )
-        .non_destructive()
-        .extractor_handler(
-            state,
-            |State(state): State<Arc<AppState>>, Json(input): Json<SetnxInput>| async move {
-                if !state.is_write_allowed() {
-                    return Err(McpError::tool(
-                        "Write operations not allowed in read-only mode",
-                    ));
-                }
-
-                let mut conn =
-                    super::get_connection(input.url, input.profile.as_deref(), &state).await?;
-
-                let was_set: bool = redis::cmd("SETNX")
-                    .arg(&input.key)
-                    .arg(&input.value)
-                    .query_async(&mut conn)
-                    .await
-                    .tool_context("SETNX failed")?;
-
-                if was_set {
-                    Ok(CallToolResult::text(format!(
-                        "OK - set '{}' (key was new)",
-                        input.key
-                    )))
-                } else {
-                    Ok(CallToolResult::text(format!(
-                        "Key '{}' already exists, not set",
-                        input.key
-                    )))
-                }
-            },
-        )
-        .build()
-}
+        if was_set {
+            Ok(CallToolResult::text(format!(
+                "OK - set '{}' (key was new)",
+                input.key
+            )))
+        } else {
+            Ok(CallToolResult::text(format!(
+                "Key '{}' already exists, not set",
+                input.key
+            )))
+        }
+    }
+);
