@@ -35,6 +35,9 @@ urlencoding = { workspace = true, optional = true }
 toml = { workspace = true }
 directories = { workspace = true }
 
+# Macro utilities
+pastey = "0.2"
+
 # Core dependencies
 anyhow = { workspace = true }
 thiserror = { workspace = true }
