@@ -11,31 +11,27 @@
 #   docker compose -f docker/docker-compose.multi-cluster.yml down -v
 #
 # After startup, configure profiles:
-#   redisctl profile create cluster-west \
-#     --type enterprise \
-#     --enterprise-url https://localhost:9443 \
-#     --enterprise-user admin@redis.local \
-#     --enterprise-password Redis123! \
-#     --enterprise-insecure
+#   redisctl profile set cluster-west --type enterprise \
+#     --url https://localhost:9443 \
+#     --username admin@redis.local \
+#     --password Redis123! \
+#     --insecure
 #
-#   redisctl profile create cluster-east \
-#     --type enterprise \
-#     --enterprise-url https://localhost:9543 \
-#     --enterprise-user admin@redis.local \
-#     --enterprise-password Redis123! \
-#     --enterprise-insecure
+#   redisctl profile set cluster-east --type enterprise \
+#     --url https://localhost:9543 \
+#     --username admin@redis.local \
+#     --password Redis123! \
+#     --insecure
 #
-#   redisctl profile create cluster-central \
-#     --type enterprise \
-#     --enterprise-url https://localhost:9643 \
-#     --enterprise-user admin@redis.local \
-#     --enterprise-password Redis123! \
-#     --enterprise-insecure
+#   redisctl profile set cluster-central --type enterprise \
+#     --url https://localhost:9643 \
+#     --username admin@redis.local \
+#     --password Redis123! \
+#     --insecure
 # ==============================================================================
 
 x-redis-enterprise-base: &redis-enterprise-base
-  image: ${REDIS_ENTERPRISE_IMAGE:-redislabs/redis:latest}
-  platform: ${REDIS_ENTERPRISE_PLATFORM:-linux/amd64}
+  image: redislabs/redis:8.0.10-81
   tty: true
   cap_add:
     - ALL
