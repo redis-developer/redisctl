@@ -1,22 +1,22 @@
 # MCP Server
 
-redisctl includes a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that enables AI assistants to manage your Redis deployments through natural language.
+redisctl includes a built-in [Model Context Protocol (MCP)](https://modelcontextprotocol.io/) server that turns your AI assistant into a Redis power tool -- for working with data, exploring databases, and managing infrastructure.
 
 ## What is MCP?
 
-The Model Context Protocol is an open standard that allows AI systems to securely interact with external tools and data sources. The redisctl MCP server exposes Redis management operations as tools that AI assistants like Claude, Cursor, and others can discover and invoke.
+The Model Context Protocol is an open standard that allows AI systems to securely interact with external tools and data sources. The redisctl MCP server exposes Redis operations as tools that AI assistants like Claude, Cursor, and others can discover and invoke.
 
 ## What Can You Do?
 
 With the MCP server, you can:
 
-- **Query infrastructure** - "List all my Redis databases" or "Show cluster health"
-- **Manage licenses** - "Check license expiration" or "Update the cluster license"
-- **Configure clusters** - "Enable maintenance mode" or "Update cluster policy"
-- **Create resources** - "Create a new 256MB database called cache-db"
-- **Monitor status** - "Any active alerts?" or "Show me cluster stats"
-- **Manage certificates** - "Show certificates" or "Rotate cluster certificates"
-- **Work with data directly** - "Add this user to my hash" or "Show me the top 10 leaderboard scores"
+- **Explore your data** - "What keys are in my database?" or "Show me the top 10 leaderboard scores"
+- **Work with any data structure** - Hashes, sets, sorted sets, lists, streams, JSON documents
+- **Search and index** - "Create a search index on my products" or "Search for wireless headphones"
+- **Debug and diagnose** - "What are the slowest queries?" or "Which keys use the most memory?"
+- **Monitor health** - "How much memory is Redis using?" or "Show me connected clients"
+- **Query infrastructure** - "List all my Cloud subscriptions" or "Show cluster health"
+- **Manage deployments** - "Create a new database" or "Backup database 67890"
 
 ## Key Features
 
@@ -50,31 +50,48 @@ With the MCP server, you can:
 
 ## Quick Example
 
-Once configured, interact naturally with your Redis infrastructure:
+Once configured, interact naturally with your Redis data:
 
-> **You**: What databases do I have in my enterprise cluster?
+> **You**: What's in my database?
 >
-> **Claude**: You have 2 databases:
+> **Claude**: You have 1,247 keys. Here's the breakdown:
 >
-> - `default-db` (uid: 1) - 1GB, active, with modules: RediSearch, RedisJSON
-> - `cache-db` (uid: 2) - 256MB, active
+> | Type | Count | Examples |
+> |------|-------|---------|
+> | hash | 892 | `user:*`, `session:*` |
+> | string | 203 | `config:*`, `cache:*` |
+> | sorted set | 98 | `leaderboard:*` |
+> | set | 42 | `tags:*` |
 
-> **You**: Show me the license status
+> **You**: Show me the top 5 leaderboard scores
 >
-> **Claude**: Your cluster is running a Trial license:
+> **Claude**: Top 5 in `leaderboard:global`:
 >
-> - **Expires**: February 11, 2026 (30 days remaining)
-> - **Shards**: 1 of 4 used (25% utilization)
-> - **Features**: bigstore enabled
+> | Rank | Member | Score |
+> |------|--------|-------|
+> | 1 | player:alice | 15,230 |
+> | 2 | player:bob | 14,890 |
+> | 3 | player:carol | 12,450 |
+
+> **You**: Which keys are using the most memory?
+>
+> **Claude**: Largest keys by memory usage:
+>
+> | Key | Type | Memory |
+> |-----|------|--------|
+> | `session:index` | sorted set | 4.2 MB |
+> | `user:cache` | hash | 2.8 MB |
+> | `events:main` | stream | 1.9 MB |
 
 ## Getting Started
 
 Ready to set up MCP? Choose your path:
 
+- **[Database Quickstart](database-quickstart.md)** - Connect to any Redis instance and start exploring
+- **[Cloud Quickstart](cloud-quickstart.md)** - Redis Cloud users: manage subscriptions and databases
+- **[Enterprise Quickstart](enterprise-quickstart.md)** - Redis Enterprise users: includes multi-cluster setup
 - **[Getting Started](getting-started.md)** - Full installation and configuration guide
 - **[Configuration](configuration.md)** - Tool selection, safety tiers, and presets
-- **[Cloud Quickstart](cloud-quickstart.md)** - Redis Cloud users: get running in 5 minutes
-- **[Enterprise Quickstart](enterprise-quickstart.md)** - Redis Enterprise users: includes multi-cluster setup
 
 Want to see what's possible? Check out [Advanced Usage](advanced-usage.md) for JMESPath integration and complex analytics pipelines.
 
