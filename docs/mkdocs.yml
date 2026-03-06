@@ -171,6 +171,8 @@ nav:
       - Cloud Quickstart: mcp/cloud-quickstart.md
       - Enterprise Quickstart: mcp/enterprise-quickstart.md
       - Tools Reference: mcp/tools-reference.md
+      - Architecture: mcp/architecture.md
+      - Audit Logging: mcp/audit-logging.md
       - Advanced Usage: mcp/advanced-usage.md
       - Workflows: mcp/workflows.md
   - Developer:
