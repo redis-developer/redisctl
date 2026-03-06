@@ -1,6 +1,6 @@
 [package]
 name = "redisctl"
-version = "0.8.2"
+version.workspace = true
 edition.workspace = true
 authors.workspace = true
 license.workspace = true
@@ -18,7 +18,7 @@ path = "src/main.rs"
 
 
 [dependencies]
-redisctl-core = { version = "0.2.0", path = "../redisctl-core" }
+redisctl-core = { version = "0.8.2", path = "../redisctl-core" }
 redis-cloud = { workspace = true, features = ["tower-integration"] }
 redis-enterprise = { workspace = true, features = ["tower-integration"] }
 files-sdk = { workspace = true, optional = true }
