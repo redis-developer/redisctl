@@ -220,7 +220,7 @@ pub(crate) use cloud_tool;
 ///         let handler = DatabaseHandler::new(client);
 ///         let databases = handler.list().await
 ///             .tool_context("Failed to list databases")?;
-///         wrap_list("databases", &databases)
+///         CallToolResult::from_list("databases", &databases)
 ///     }
 /// );
 /// ```

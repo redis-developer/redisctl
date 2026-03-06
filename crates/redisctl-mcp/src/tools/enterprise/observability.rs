@@ -5,7 +5,6 @@ use redis_enterprise::logs::{LogsHandler, LogsQuery};
 use tower_mcp::{CallToolResult, ResultExt};
 
 use crate::tools::macros::{enterprise_tool, mcp_module};
-use crate::tools::wrap_list;
 
 mcp_module! {
     list_alerts => "list_alerts",
@@ -35,7 +34,7 @@ enterprise_tool!(read_only, list_alerts, "list_alerts",
     {} => |client, _input| {
         let handler = redis_enterprise::alerts::AlertHandler::new(client);
         let alerts = handler.list().await.tool_context("Failed to list alerts")?;
-        wrap_list("alerts", &alerts)
+        CallToolResult::from_list("alerts", &alerts)
     }
 );
 
@@ -104,7 +103,7 @@ enterprise_tool!(read_only, list_logs, "list_logs",
             .await
             .tool_context("Failed to list logs")?;
 
-        wrap_list("logs", &logs)
+        CallToolResult::from_list("logs", &logs)
     }
 );
 
@@ -188,7 +187,7 @@ enterprise_tool!(read_only, list_shards, "list_shards",
             handler.list().await.tool_context("Failed to list shards")?
         };
 
-        wrap_list("shards", &shards)
+        CallToolResult::from_list("shards", &shards)
     }
 );
 
@@ -220,7 +219,7 @@ enterprise_tool!(read_only, list_shards_by_database, "list_shards_by_database",
             .await
             .tool_context("Failed to list shards by database")?;
 
-        wrap_list("shards", &shards)
+        CallToolResult::from_list("shards", &shards)
     }
 );
 
@@ -236,7 +235,7 @@ enterprise_tool!(read_only, list_shards_by_node, "list_shards_by_node",
             .await
             .tool_context("Failed to list shards by node")?;
 
-        wrap_list("shards", &shards)
+        CallToolResult::from_list("shards", &shards)
     }
 );
 
@@ -253,7 +252,7 @@ enterprise_tool!(read_only, list_debug_info_tasks, "list_debug_info_tasks",
             .await
             .tool_context("Failed to list debug info tasks")?;
 
-        wrap_list("tasks", &tasks)
+        CallToolResult::from_list("tasks", &tasks)
     }
 );
 
@@ -315,7 +314,7 @@ enterprise_tool!(read_only, list_modules, "list_modules",
             .await
             .tool_context("Failed to list modules")?;
 
-        wrap_list("modules", &modules)
+        CallToolResult::from_list("modules", &modules)
     }
 );
 

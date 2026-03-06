@@ -313,7 +313,7 @@ enterprise_tool!(read_only, list_nodes, "list_nodes",
         let handler = NodeHandler::new(client);
         let nodes = handler.list().await.tool_context("Failed to list nodes")?;
 
-        crate::tools::wrap_list("nodes", &nodes)
+        CallToolResult::from_list("nodes", &nodes)
     }
 );
 
