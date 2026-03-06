@@ -167,7 +167,7 @@ struct Args {
 
     /// Read-only mode (enabled by default; use --read-only=false to allow writes).
     /// Ignored when a policy file is active.
-    #[arg(long, default_value = "true")]
+    #[arg(long, default_value_t = true, action = clap::ArgAction::Set)]
     read_only: bool,
 
     /// Path to MCP policy file for granular tool access control.

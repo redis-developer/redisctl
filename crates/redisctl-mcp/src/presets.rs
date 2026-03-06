@@ -257,7 +257,7 @@ pub fn list_available_tools_tool(visibility: Arc<ToolVisibility>) -> Tool {
              tools you can request be enabled via the include list in the policy config.",
         )
         .read_only_safe()
-        .handler(move |_: serde_json::Value| {
+        .handler(move |_: tower_mcp::NoParams| {
             let vis = visibility.clone();
             async move {
                 let mut toolsets: BTreeMap<String, ToolsetGroup> = BTreeMap::new();

@@ -542,7 +542,7 @@ pub fn show_policy_tool(policy: Arc<Policy>) -> Tool {
              Use this to understand what operations are permitted.",
         )
         .read_only_safe()
-        .handler(move |_: serde_json::Value| {
+        .handler(move |_: tower_mcp::NoParams| {
             let policy = policy.clone();
             async move {
                 let summary = policy.to_summary();
