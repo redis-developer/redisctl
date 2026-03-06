@@ -212,10 +212,6 @@ struct Args {
     #[arg(long, default_value = "10")]
     max_concurrent: usize,
 
-    /// Rate limit interval in milliseconds
-    #[arg(long, default_value = "100")]
-    rate_limit_ms: u64,
-
     /// Request timeout in seconds (HTTP mode)
     #[arg(long, default_value = "30")]
     request_timeout_secs: u64,
