@@ -12,10 +12,7 @@ use clap::{Parser, ValueEnum};
 use redisctl_core::Config;
 #[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
 use redisctl_core::DeploymentType;
-use tower_mcp::{
-    CapabilityFilter, DenialBehavior, McpRouter, Tool,
-    transport::StdioTransport,
-};
+use tower_mcp::{CapabilityFilter, DenialBehavior, McpRouter, Tool, transport::StdioTransport};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
