@@ -97,6 +97,8 @@ tier = "standard"  # read-only (default) | standard (read-write) | full (destruc
 
 ### Zero-Install with Docker
 
+`REDIS_ENTERPRISE_PASSWORD` is passed without a value so Docker forwards it from your host environment (keeps the secret out of the config file):
+
 ```json
 {
   "mcpServers": {
