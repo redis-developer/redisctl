@@ -12,7 +12,10 @@ use clap::{Parser, ValueEnum};
 use redisctl_core::Config;
 #[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
 use redisctl_core::DeploymentType;
-use tower_mcp::{CapabilityFilter, DenialBehavior, McpRouter, Tool, transport::StdioTransport};
+use tower_mcp::{
+    CapabilityFilter, DenialBehavior, DynamicPromptRegistry, McpRouter, PromptBuilder, Tool,
+    transport::StdioTransport,
+};
 use tracing::info;
 use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
@@ -215,6 +218,12 @@ struct Args {
     /// Request timeout in seconds (HTTP mode)
     #[arg(long, default_value = "30")]
     request_timeout_secs: u64,
+
+    // --- Skills ---
+    /// Directory containing SKILL.md files to load as MCP prompts.
+    /// Each subdirectory should contain a SKILL.md with YAML frontmatter.
+    #[arg(long, env = "REDISCTL_MCP_SKILLS_DIR")]
+    skills_dir: Option<PathBuf>,
 
     // --- Logging ---
     /// Log level
@@ -542,8 +551,18 @@ async fn main() -> Result<()> {
         args.database_url.clone(),
     )?);
 
+    // Resolve skills directory
+    let skills_dir = resolve_skills_dir(&args);
+
     // Build router with tools and policy-based filter
-    let router = build_router(state.clone(), policy, &enabled, tools_config, &tool_toolset)?;
+    let router = build_router(
+        state.clone(),
+        policy,
+        &enabled,
+        tools_config,
+        &tool_toolset,
+        skills_dir.as_deref(),
+    )?;
 
     match args.transport {
         Transport::Stdio => {
@@ -608,6 +627,108 @@ fn init_tracing(log_level: &str, audit_enabled: bool) {
     }
 }
 
+/// A parsed skill from a SKILL.md file.
+struct Skill {
+    name: String,
+    description: String,
+    body: String,
+}
+
+/// Parse a SKILL.md file with YAML frontmatter.
+fn parse_skill(content: &str) -> Option<Skill> {
+    let content = content.trim();
+    if !content.starts_with("---") {
+        return None;
+    }
+    let after_first = &content[3..];
+    let end = after_first.find("---")?;
+    let frontmatter = &after_first[..end];
+    let body = after_first[end + 3..].trim().to_string();
+
+    let mut name = None;
+    let mut description = None;
+    for line in frontmatter.lines() {
+        let line = line.trim();
+        if let Some(val) = line.strip_prefix("name:") {
+            name = Some(val.trim().to_string());
+        } else if let Some(val) = line.strip_prefix("description:") {
+            description = Some(val.trim().to_string());
+        }
+    }
+
+    Some(Skill {
+        name: name?,
+        description: description?,
+        body,
+    })
+}
+
+/// Load skills from a directory and register them as dynamic prompts.
+fn load_skills(dir: &std::path::Path, registry: &DynamicPromptRegistry) -> usize {
+    let entries = match std::fs::read_dir(dir) {
+        Ok(entries) => entries,
+        Err(e) => {
+            tracing::warn!("Failed to read skills directory {}: {e}", dir.display());
+            return 0;
+        }
+    };
+
+    let mut count = 0;
+    for entry in entries.flatten() {
+        if !entry.file_type().map(|t| t.is_dir()).unwrap_or(false) {
+            continue;
+        }
+        let skill_file = entry.path().join("SKILL.md");
+        if let Ok(content) = std::fs::read_to_string(&skill_file)
+            && let Some(skill) = parse_skill(&content)
+        {
+            info!(skill = %skill.name, "Loaded skill prompt");
+            let body = skill.body.clone();
+            let description = skill.description.clone();
+            let prompt = PromptBuilder::new(&skill.name)
+                .description(&skill.description)
+                .handler(move |_args| {
+                    let body = body.clone();
+                    let description = description.clone();
+                    async move {
+                        Ok(tower_mcp::GetPromptResult::user_message_with_description(
+                            body,
+                            description,
+                        ))
+                    }
+                })
+                .build();
+            registry.register(prompt);
+            count += 1;
+        }
+    }
+    count
+}
+
+/// Resolve the skills directory: explicit flag > bundled skills.
+fn resolve_skills_dir(args: &Args) -> Option<PathBuf> {
+    if let Some(ref dir) = args.skills_dir {
+        if dir.is_dir() {
+            return Some(dir.clone());
+        }
+        tracing::warn!("Skills directory not found: {}", dir.display());
+        return None;
+    }
+
+    // Fall back to bundled skills next to the binary
+    if let Ok(exe) = std::env::current_exe() {
+        let bundled = exe
+            .parent()
+            .unwrap_or(std::path::Path::new("."))
+            .join("skills");
+        if bundled.is_dir() {
+            return Some(bundled);
+        }
+    }
+
+    None
+}
+
 /// Build the tool name -> toolset kind mapping for policy evaluation.
 fn build_tool_toolset_mapping(enabled: &EnabledToolsets) -> HashMap<String, ToolsetKind> {
     let mut mapping = HashMap::new();
@@ -667,12 +788,24 @@ fn build_router(
     enabled: &EnabledToolsets,
     tools_config: ToolsConfig,
     tool_toolset: &HashMap<String, ToolsetKind>,
+    skills_dir: Option<&std::path::Path>,
 ) -> Result<McpRouter> {
-    let mut router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
+    let router = McpRouter::new().server_info("redisctl-mcp", env!("CARGO_PKG_VERSION"));
+
+    // Enable dynamic prompts for skill loading
+    let (mut router, prompt_registry) = router.with_dynamic_prompts();
 
     // Merge toolsets, respecting sub-module selection
     for (toolset, selection) in &enabled.selections {
         router = merge_toolset_router(router, toolset, selection, state.clone());
+    }
+
+    // Load skills as dynamic prompts
+    if let Some(dir) = skills_dir {
+        let count = load_skills(dir, &prompt_registry);
+        if count > 0 {
+            info!(count, dir = %dir.display(), "Loaded skill prompts");
+        }
     }
 
     // Register the show_policy tool (always available, bypasses visibility)
@@ -1315,6 +1448,7 @@ mod tests {
             &enabled,
             ToolsConfig::default(),
             &tool_toolset,
+            None,
         )
         .unwrap();
         // Verify the build succeeds (no panics) for both modes.
@@ -1325,6 +1459,7 @@ mod tests {
             &enabled,
             ToolsConfig::default(),
             &tool_toolset,
+            None,
         )
         .unwrap();
     }
@@ -1342,6 +1477,7 @@ mod tests {
             &enabled,
             ToolsConfig::default(),
             &tool_toolset,
+            None,
         )
         .unwrap();
     }
@@ -1357,7 +1493,8 @@ mod tests {
             ..Default::default()
         };
         // Build should succeed with essentials preset
-        let _router = build_router(state, policy, &enabled, tools_config, &tool_toolset).unwrap();
+        let _router =
+            build_router(state, policy, &enabled, tools_config, &tool_toolset, None).unwrap();
     }
 
     #[test]
