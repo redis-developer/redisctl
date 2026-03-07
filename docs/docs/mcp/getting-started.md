@@ -396,6 +396,7 @@ For MCP protocol details, see the [MCP Specification](https://spec.modelcontextp
 
 Want a faster path to try things out? Check out our quickstart guides:
 
+- **[Database Quickstart](database-quickstart.md)** - Connect to any Redis instance and explore your data
 - **[Cloud Quickstart](cloud-quickstart.md)** - Redis Cloud setup with example prompts
 - **[Enterprise Quickstart](enterprise-quickstart.md)** - Redis Enterprise setup with multi-cluster examples
 

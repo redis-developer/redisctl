@@ -1,5 +1,5 @@
 site_name: redisctl
-site_description: CLI for Redis Cloud and Redis Enterprise
+site_description: The CLI and MCP Server for Redis
 site_url: https://redis-field-engineering.github.io/redisctl-docs
 repo_url: https://github.com/redis-developer/redisctl
 repo_name: redis-developer/redisctl
@@ -168,6 +168,7 @@ nav:
       - mcp/index.md
       - Getting Started: mcp/getting-started.md
       - Configuration: mcp/configuration.md
+      - Database Quickstart: mcp/database-quickstart.md
       - Cloud Quickstart: mcp/cloud-quickstart.md
       - Enterprise Quickstart: mcp/enterprise-quickstart.md
       - Tools Reference: mcp/tools-reference.md

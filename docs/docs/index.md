@@ -5,7 +5,7 @@ hide:
 
 # redisctl
 
-**The CLI for Redis Cloud and Redis Enterprise**
+**The CLI and MCP Server for Redis**
 
 ---
 
@@ -35,6 +35,14 @@ hide:
 
     [:octicons-arrow-right-24: Enterprise Commands](enterprise/index.md)
 
+-   :material-robot:{ .lg .middle } __MCP Server__
+
+    ---
+
+    AI-powered Redis operations -- explore data, debug performance, manage infrastructure
+
+    [:octicons-arrow-right-24: Database Quickstart](mcp/database-quickstart.md)
+
 -   :material-book-open-variant:{ .lg .middle } __Cookbook__
 
     ---
@@ -49,7 +57,7 @@ hide:
 
 ## What is redisctl?
 
-redisctl is the **first** command-line tool for managing Redis Cloud and Redis Enterprise deployments. Before redisctl, operators had to use web UIs or write fragile bash scripts with curl and polling loops.
+redisctl is a command-line tool and MCP server for Redis. It covers Redis Cloud and Redis Enterprise management, plus direct database operations with 90+ tools for data exploration, diagnostics, and module support (RedisJSON, RediSearch). The built-in MCP server lets AI assistants work with your Redis data through natural language.
 
 ```bash
 # Before redisctl
@@ -151,6 +159,9 @@ graph LR
 
 !!! example "Solutions Architects"
     Quickly spin up demo environments and PoCs
+
+!!! example "Developers"
+    Explore and debug Redis data through AI-assisted natural language queries
 
 ---
 
