@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.2](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.9.1...redisctl-mcp-v0.9.2) - 2026-03-07
+
+### Added
+
+- *(mcp)* add RediSearch skill prompts for index optimization workflows ([#843](https://github.com/redis-developer/redisctl/pull/843))
+
 ## [0.9.1](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.9.0...redisctl-mcp-v0.9.1) - 2026-03-07
 
 ### Added
