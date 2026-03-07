@@ -691,12 +691,10 @@ fn load_skills(dir: &std::path::Path, registry: &DynamicPromptRegistry) -> usize
                     let body = body.clone();
                     let description = description.clone();
                     async move {
-                        Ok(
-                            tower_mcp::GetPromptResult::user_message_with_description(
-                                body,
-                                description,
-                            ),
-                        )
+                        Ok(tower_mcp::GetPromptResult::user_message_with_description(
+                            body,
+                            description,
+                        ))
                     }
                 })
                 .build();
