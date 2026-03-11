@@ -907,7 +907,9 @@ async fn run_http_server(
 
     if args.oauth {
         // OAuth-enabled HTTP transport
-        bail!("OAuth support is not yet implemented. Remove --oauth to start the server without authentication.");
+        bail!(
+            "OAuth support is not yet implemented. Remove --oauth to start the server without authentication."
+        );
     }
 
     transport.serve(&addr).await?;
