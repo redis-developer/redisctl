@@ -118,7 +118,6 @@ struct EnabledToolsets {
     selections: HashMap<Toolset, SubModuleSelection>,
 }
 
-#[allow(dead_code)]
 impl EnabledToolsets {
     /// Create an `EnabledToolsets` with all sub-modules for each given toolset.
     fn all_of(toolsets: impl IntoIterator<Item = Toolset>) -> Self {
@@ -131,11 +130,13 @@ impl EnabledToolsets {
     }
 
     /// Check whether a toolset is enabled (with any selection).
+    #[allow(dead_code)]
     fn contains(&self, toolset: &Toolset) -> bool {
         self.selections.contains_key(toolset)
     }
 
     /// Get the sub-module selection for a toolset.
+    #[allow(dead_code)]
     fn selection(&self, toolset: &Toolset) -> Option<&SubModuleSelection> {
         self.selections.get(toolset)
     }
@@ -297,14 +298,15 @@ fn parse_tool_specs(specs: &[String]) -> Result<EnabledToolsets> {
 }
 
 /// Check whether a sub-module name is valid for a given toolset.
-fn is_valid_sub_module(toolset: &Toolset, _name: &str) -> bool {
+#[allow(unused_variables)]
+fn is_valid_sub_module(toolset: &Toolset, name: &str) -> bool {
     match toolset {
         #[cfg(feature = "cloud")]
-        Toolset::Cloud => tools::cloud::sub_tool_names(_name).is_some(),
+        Toolset::Cloud => tools::cloud::sub_tool_names(name).is_some(),
         #[cfg(feature = "enterprise")]
-        Toolset::Enterprise => tools::enterprise::sub_tool_names(_name).is_some(),
+        Toolset::Enterprise => tools::enterprise::sub_tool_names(name).is_some(),
         #[cfg(feature = "database")]
-        Toolset::Database => tools::redis::sub_tool_names(_name).is_some(),
+        Toolset::Database => tools::redis::sub_tool_names(name).is_some(),
         Toolset::App => false,
     }
 }
