@@ -534,12 +534,11 @@ async fn main() -> Result<()> {
 
     // Build tool-to-toolset mapping for policy evaluation
     let tool_toolset = build_tool_toolset_mapping(&enabled);
-    let tool_toolset_arc = Arc::new(tool_toolset.clone());
 
     // Extract tools visibility config before consuming policy_config
     let tools_config = policy_config.tools.clone();
 
-    // Build resolved policy
+    // Build resolved policy (consumes a clone of the mapping)
     let policy = Arc::new(Policy::new(
         policy_config,
         tool_toolset.clone(),
@@ -565,6 +564,9 @@ async fn main() -> Result<()> {
         &tool_toolset,
         skills_dir.as_deref(),
     )?;
+
+    // Wrap mapping in Arc for shared use (after last borrow)
+    let tool_toolset_arc = Arc::new(tool_toolset);
 
     match args.transport {
         Transport::Stdio => {
