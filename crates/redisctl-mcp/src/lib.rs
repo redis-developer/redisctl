@@ -58,6 +58,7 @@ pub mod policy;
 pub mod presets;
 pub mod prompts;
 pub mod resources;
+pub mod serde_helpers;
 pub mod state;
 pub mod tools;
 

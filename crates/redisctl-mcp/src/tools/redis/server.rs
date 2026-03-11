@@ -4,6 +4,7 @@
 
 use tower_mcp::{CallToolResult, ResultExt};
 
+use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
 
 mcp_module! {
@@ -112,7 +113,7 @@ database_tool!(read_only, slowlog, "redis_slowlog",
     "Get slow query log entries for identifying performance issues.",
     {
         /// Number of entries to return (default: 10)
-        #[serde(default = "default_slowlog_count")]
+        #[serde(default = "default_slowlog_count", deserialize_with = "serde_helpers::string_or_usize::deserialize")]
         pub count: usize,
     } => |conn, input| {
         // SLOWLOG GET returns nested arrays

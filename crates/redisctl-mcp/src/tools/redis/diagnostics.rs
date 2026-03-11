@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use tower_mcp::{CallToolResult, ResultExt};
 
+use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
 
 mcp_module! {
@@ -269,7 +270,7 @@ database_tool!(read_only, hotkeys, "redis_hotkeys",
         #[serde(default)]
         pub pattern: Option<String>,
         /// Maximum number of keys to sample (default: 1000, max: 10000)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_usize::deserialize")]
         pub sample_size: Option<usize>,
     } => |conn, input| {
         let pattern = input.pattern.as_deref().unwrap_or("*");

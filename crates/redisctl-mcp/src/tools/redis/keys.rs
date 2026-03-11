@@ -6,6 +6,7 @@
 use tower_mcp::{CallToolResult, ResultExt};
 
 use super::format_value;
+use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
 
 mcp_module! {
@@ -57,7 +58,7 @@ database_tool!(read_only, keys, "redis_keys",
         #[serde(default = "default_pattern")]
         pub pattern: String,
         /// Maximum number of keys to return (default: 100)
-        #[serde(default = "default_limit")]
+        #[serde(default = "default_limit", deserialize_with = "serde_helpers::string_or_usize::deserialize")]
         pub limit: usize,
     } => |conn, input| {
         // Use SCAN to safely iterate keys
@@ -111,7 +112,7 @@ database_tool!(read_only, scan, "redis_scan",
         #[serde(default)]
         pub key_type: Option<String>,
         /// Maximum number of keys to return (default: 100)
-        #[serde(default = "default_limit")]
+        #[serde(default = "default_limit", deserialize_with = "serde_helpers::string_or_usize::deserialize")]
         pub limit: usize,
     } => |conn, input| {
         let mut cursor: u64 = 0;
@@ -367,10 +368,10 @@ database_tool!(write, set, "redis_set",
         /// Value to set
         pub value: String,
         /// Expire time in seconds
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub ex: Option<u64>,
         /// Expire time in milliseconds
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub px: Option<u64>,
         /// Only set if key does not already exist
         #[serde(default)]
@@ -448,6 +449,7 @@ database_tool!(write, expire, "redis_expire",
         /// Key to set expiry on
         pub key: String,
         /// TTL in seconds
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub seconds: i64,
     } => |conn, input| {
         let result: bool = redis::cmd("EXPIRE")
@@ -678,6 +680,7 @@ database_tool!(write, restore, "redis_restore",
         /// Key to restore
         pub key: String,
         /// TTL in milliseconds (0 = no expiry)
+        #[serde(deserialize_with = "serde_helpers::string_or_u64::deserialize")]
         pub ttl_ms: u64,
         /// Hex-encoded serialized value from DUMP
         pub serialized_value: String,
@@ -837,8 +840,10 @@ database_tool!(read_only, getrange, "redis_getrange",
         /// Key to get substring from
         pub key: String,
         /// Start offset (0-based, negative counts from end)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub start: i64,
         /// End offset (inclusive, negative counts from end)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub end: i64,
     } => |conn, input| {
         let value: String = redis::cmd("GETRANGE")
@@ -859,6 +864,7 @@ database_tool!(write, setrange, "redis_setrange",
         /// Key to overwrite substring in
         pub key: String,
         /// Byte offset to start overwriting at
+        #[serde(deserialize_with = "serde_helpers::string_or_u64::deserialize")]
         pub offset: u64,
         /// Value to write at the offset
         pub value: String,

@@ -3,6 +3,7 @@
 use tower_mcp::{CallToolResult, ResultExt};
 
 use super::format_value;
+use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
 
 mcp_module! {
@@ -309,6 +310,7 @@ database_tool!(write, json_arrinsert, "redis_json_arrinsert",
         #[serde(default = "default_root_path")]
         pub path: String,
         /// Index to insert at (0-based, negative counts from end)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub index: i64,
         /// JSON values to insert
         pub values: Vec<String>,
@@ -412,7 +414,7 @@ database_tool!(destructive, json_arrpop, "redis_json_arrpop",
         #[serde(default = "default_root_path")]
         pub path: String,
         /// Index to pop (-1 for last element, default)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_i64::deserialize")]
         pub index: Option<i64>,
     } => |conn, input| {
         let mut cmd = redis::cmd("JSON.ARRPOP");
@@ -439,8 +441,10 @@ database_tool!(destructive, json_arrtrim, "redis_json_arrtrim",
         #[serde(default = "default_root_path")]
         pub path: String,
         /// Start index (inclusive)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub start: i64,
         /// Stop index (inclusive)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub stop: i64,
     } => |conn, input| {
         let result: redis::Value = redis::cmd("JSON.ARRTRIM")
