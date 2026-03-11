@@ -1,5 +1,6 @@
 //! Direct Redis database tools
 
+mod bulk;
 mod diagnostics;
 mod json;
 mod keys;
@@ -8,6 +9,8 @@ mod search;
 mod server;
 mod structures;
 
+#[allow(unused_imports)]
+pub use bulk::*;
 #[allow(unused_imports)]
 pub use diagnostics::*;
 #[allow(unused_imports)]
@@ -57,6 +60,10 @@ pub const SUB_MODULES: &[SubModule] = &[
         tool_names: search::TOOL_NAMES,
     },
     SubModule {
+        name: "bulk",
+        tool_names: bulk::TOOL_NAMES,
+    },
+    SubModule {
         name: "raw",
         tool_names: raw::TOOL_NAMES,
     },
@@ -87,6 +94,7 @@ pub fn sub_router(name: &str, state: Arc<AppState>) -> Option<McpRouter> {
         "diagnostics" => Some(diagnostics::router(state)),
         "json" => Some(json::router(state)),
         "search" => Some(search::router(state)),
+        "bulk" => Some(bulk::router(state)),
         "raw" => Some(raw::router(state)),
         _ => None,
     }
@@ -169,5 +177,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(diagnostics::router(state.clone()))
         .merge(json::router(state.clone()))
         .merge(search::router(state.clone()))
+        .merge(bulk::router(state.clone()))
         .merge(raw::router(state))
 }
