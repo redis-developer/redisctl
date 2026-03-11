@@ -944,15 +944,9 @@ async fn run_http_server(
 
     if args.oauth {
         // OAuth-enabled HTTP transport
-        let _issuer = args
-            .oauth_issuer
-            .as_ref()
-            .ok_or_else(|| anyhow::anyhow!("--oauth-issuer required when OAuth is enabled"))?;
-
-        info!(issuer = %_issuer, "OAuth authentication enabled");
-
-        // TODO: Configure OAuth with ProtectedResourceMetadata
-        // transport = transport.oauth(metadata);
+        bail!(
+            "OAuth support is not yet implemented. Remove --oauth to start the server without authentication."
+        );
     }
 
     transport.serve(&addr).await?;
