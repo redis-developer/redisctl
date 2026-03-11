@@ -1695,8 +1695,7 @@ mod tests {
 
     #[test]
     fn parse_skill_quoted_yaml_values() {
-        let content =
-            "---\nname: \"quoted-name\"\ndescription: 'quoted desc'\n---\nBody";
+        let content = "---\nname: \"quoted-name\"\ndescription: 'quoted desc'\n---\nBody";
         let skill = parse_skill(content).unwrap();
         assert_eq!(skill.name, "quoted-name");
         assert_eq!(skill.description, "quoted desc");
