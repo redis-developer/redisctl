@@ -7,12 +7,14 @@ use std::collections::HashMap;
 
 use tower_mcp::{CallToolResult, ResultExt};
 
+use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
 
 /// A score-member pair for sorted set operations
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct ScoreMember {
     /// Score value
+    #[serde(deserialize_with = "serde_helpers::string_or_f64::deserialize")]
     pub score: f64,
     /// Member value
     pub member: String,
@@ -115,10 +117,10 @@ database_tool!(read_only, lrange, "redis_lrange",
         /// List key
         pub key: String,
         /// Start index (0-based)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub start: i64,
         /// Stop index (-1 for all)
-        #[serde(default = "default_stop")]
+        #[serde(default = "default_stop", deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub stop: i64,
     } => |conn, input| {
         let result: Vec<String> = redis::cmd("LRANGE")
@@ -186,10 +188,10 @@ database_tool!(read_only, zrange, "redis_zrange",
         /// Sorted set key
         pub key: String,
         /// Start index (0-based)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub start: i64,
         /// Stop index (-1 for all)
-        #[serde(default = "default_stop")]
+        #[serde(default = "default_stop", deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub stop: i64,
         /// Include scores in output
         #[serde(default)]
@@ -302,7 +304,7 @@ database_tool!(read_only, xrange, "redis_xrange",
         #[serde(default = "default_xrange_end")]
         pub end: String,
         /// Maximum number of entries to return
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_usize::deserialize")]
         pub count: Option<usize>,
     } => |conn, input| {
         let mut cmd = redis::cmd("XRANGE");
@@ -828,10 +830,10 @@ database_tool!(read_only, zrangebyscore, "redis_zrangebyscore",
         #[serde(default)]
         pub withscores: bool,
         /// Offset for pagination (requires count)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_i64::deserialize")]
         pub offset: Option<i64>,
         /// Maximum number of results (requires offset)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_i64::deserialize")]
         pub count: Option<i64>,
     } => |conn, input| {
         let mut cmd = redis::cmd("ZRANGEBYSCORE");
@@ -924,6 +926,7 @@ database_tool!(read_only, lindex, "redis_lindex",
         /// List key
         pub key: String,
         /// Index (0-based, negative counts from end)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub index: i64,
     } => |conn, input| {
         let value: Option<String> = redis::cmd("LINDEX")
@@ -1063,7 +1066,7 @@ database_tool!(write, lpop, "redis_lpop",
         /// List key
         pub key: String,
         /// Number of elements to pop (default: 1)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub count: Option<u64>,
     } => |conn, input| {
         let mut cmd = redis::cmd("LPOP");
@@ -1091,7 +1094,7 @@ database_tool!(write, rpop, "redis_rpop",
         /// List key
         pub key: String,
         /// Number of elements to pop (default: 1)
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub count: Option<u64>,
     } => |conn, input| {
         let mut cmd = redis::cmd("RPOP");
@@ -1271,7 +1274,7 @@ database_tool!(write, xadd, "redis_xadd",
         #[serde(default)]
         pub nomkstream: bool,
         /// Cap stream to a maximum length
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub maxlen: Option<u64>,
         /// Cap stream entries older than this ID
         #[serde(default)]
@@ -1363,6 +1366,7 @@ database_tool!(write, hincrby, "redis_hincrby",
         /// Field to increment
         pub field: String,
         /// Increment value (can be negative)
+        #[serde(deserialize_with = "serde_helpers::string_or_i64::deserialize")]
         pub increment: i64,
     } => |conn, input| {
         let value: i64 = redis::cmd("HINCRBY")

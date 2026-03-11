@@ -3,6 +3,7 @@
 use tower_mcp::{CallToolResult, Error as McpError, ResultExt};
 
 use super::format_value;
+use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
 
 /// Format alternating key-value pairs from a Redis value slice into `"key: value"` strings.
@@ -178,10 +179,10 @@ database_tool!(read_only, ft_search, "redis_ft_search",
         /// Search query (e.g. "@title:hello", "*" for all)
         pub query: String,
         /// Result offset for pagination
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub limit_offset: Option<u64>,
         /// Number of results to return
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub limit_num: Option<u64>,
         /// Sort by field name
         #[serde(default)]
@@ -298,10 +299,10 @@ database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
         #[serde(default)]
         pub load_fields: Option<Vec<String>>,
         /// Result offset for pagination
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub limit_offset: Option<u64>,
         /// Number of results to return
-        #[serde(default)]
+        #[serde(default, deserialize_with = "serde_helpers::string_or_opt_u64::deserialize")]
         pub limit_num: Option<u64>,
         /// Additional raw arguments for complex pipelines (e.g. ["GROUPBY", "1", "@city", "REDUCE", "COUNT", "0", "AS", "count"])
         #[serde(default)]

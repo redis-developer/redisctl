@@ -25,6 +25,7 @@ mod policy;
 mod presets;
 mod prompts;
 mod resources;
+mod serde_helpers;
 mod state;
 mod tools;
 
