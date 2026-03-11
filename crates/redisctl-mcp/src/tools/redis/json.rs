@@ -213,6 +213,12 @@ database_tool!(write, json_set, "redis_json_set",
         #[serde(default)]
         pub xx: bool,
     } => |conn, input| {
+        if input.nx && input.xx {
+            return Err(tower_mcp::Error::tool(
+                "Cannot set both nx and xx: NX (only set if not exists) and XX (only set if exists) are mutually exclusive",
+            ));
+        }
+
         let mut cmd = redis::cmd("JSON.SET");
         cmd.arg(&input.key).arg(&input.path).arg(&input.value);
         if input.nx {
