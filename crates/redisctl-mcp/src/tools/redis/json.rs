@@ -69,6 +69,9 @@ database_tool!(read_only, json_mget, "redis_json_mget",
         #[serde(default = "default_root_path")]
         pub path: String,
     } => |conn, input| {
+        if input.keys.is_empty() {
+            return Err(tower_mcp::Error::tool("keys must not be empty"));
+        }
         let mut cmd = redis::cmd("JSON.MGET");
         for key in &input.keys {
             cmd.arg(key);
@@ -271,6 +274,9 @@ database_tool!(write, json_arrappend, "redis_json_arrappend",
         /// JSON values to append (e.g. ["\"item\"", "42", "{\"a\":1}"])
         pub values: Vec<String>,
     } => |conn, input| {
+        if input.values.is_empty() {
+            return Err(tower_mcp::Error::tool("values must not be empty"));
+        }
         let mut cmd = redis::cmd("JSON.ARRAPPEND");
         cmd.arg(&input.key).arg(&input.path);
         for v in &input.values {
@@ -301,6 +307,9 @@ database_tool!(write, json_arrinsert, "redis_json_arrinsert",
         /// JSON values to insert
         pub values: Vec<String>,
     } => |conn, input| {
+        if input.values.is_empty() {
+            return Err(tower_mcp::Error::tool("values must not be empty"));
+        }
         let mut cmd = redis::cmd("JSON.ARRINSERT");
         cmd.arg(&input.key).arg(&input.path).arg(input.index);
         for v in &input.values {
