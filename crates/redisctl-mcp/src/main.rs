@@ -638,14 +638,30 @@ struct Skill {
     body: String,
 }
 
+/// Strip surrounding quotes (single or double) from a YAML value.
+fn strip_yaml_quotes(s: &str) -> &str {
+    let s = s.trim();
+    if (s.starts_with('"') && s.ends_with('"')) || (s.starts_with('\'') && s.ends_with('\'')) {
+        &s[1..s.len() - 1]
+    } else {
+        s
+    }
+}
+
 /// Parse a SKILL.md file with YAML frontmatter.
 fn parse_skill(content: &str) -> Option<Skill> {
     let content = content.trim();
     if !content.starts_with("---") {
+        tracing::debug!("skill parse failed: missing opening frontmatter delimiter");
         return None;
     }
     let after_first = &content[3..];
-    let end = after_first.find("---")?;
+    // Match `---` only at the start of a line to avoid matching inside YAML values
+    let end = after_first.find("\n---").map(|i| i + 1)?;
+    if end == 0 {
+        tracing::debug!("skill parse failed: empty frontmatter");
+        return None;
+    }
     let frontmatter = &after_first[..end];
     let body = after_first[end + 3..].trim().to_string();
 
@@ -654,10 +670,21 @@ fn parse_skill(content: &str) -> Option<Skill> {
     for line in frontmatter.lines() {
         let line = line.trim();
         if let Some(val) = line.strip_prefix("name:") {
-            name = Some(val.trim().to_string());
+            name = Some(strip_yaml_quotes(val).to_string());
         } else if let Some(val) = line.strip_prefix("description:") {
-            description = Some(val.trim().to_string());
+            description = Some(strip_yaml_quotes(val).to_string());
         }
+    }
+
+    if name.is_none() || description.is_none() {
+        tracing::debug!(
+            "skill parse failed: missing {} field(s)",
+            match (name.is_none(), description.is_none()) {
+                (true, true) => "name and description",
+                (true, false) => "name",
+                _ => "description",
+            }
+        );
     }
 
     Some(Skill {
@@ -1640,5 +1667,55 @@ mod tests {
         // Only the raw sub-module tool should be present
         assert!(mapping.contains_key("cloud_raw_api"));
         assert!(!mapping.contains_key("list_subscriptions"));
+    }
+
+    #[test]
+    fn parse_skill_valid() {
+        let content = "---\nname: my-skill\ndescription: A test skill\n---\nBody content here.";
+        let skill = parse_skill(content).unwrap();
+        assert_eq!(skill.name, "my-skill");
+        assert_eq!(skill.description, "A test skill");
+        assert_eq!(skill.body, "Body content here.");
+    }
+
+    #[test]
+    fn parse_skill_missing_frontmatter() {
+        assert!(parse_skill("No frontmatter here").is_none());
+    }
+
+    #[test]
+    fn parse_skill_missing_name() {
+        let content = "---\ndescription: A test skill\n---\nBody";
+        assert!(parse_skill(content).is_none());
+    }
+
+    #[test]
+    fn parse_skill_missing_description() {
+        let content = "---\nname: my-skill\n---\nBody";
+        assert!(parse_skill(content).is_none());
+    }
+
+    #[test]
+    fn parse_skill_extra_dashes_in_body() {
+        let content = "---\nname: my-skill\ndescription: desc\n---\nBody with --- dashes inside.";
+        let skill = parse_skill(content).unwrap();
+        assert_eq!(skill.name, "my-skill");
+        assert_eq!(skill.body, "Body with --- dashes inside.");
+    }
+
+    #[test]
+    fn parse_skill_quoted_yaml_values() {
+        let content = "---\nname: \"quoted-name\"\ndescription: 'quoted desc'\n---\nBody";
+        let skill = parse_skill(content).unwrap();
+        assert_eq!(skill.name, "quoted-name");
+        assert_eq!(skill.description, "quoted desc");
+    }
+
+    #[test]
+    fn parse_skill_trailing_whitespace_on_delimiter() {
+        let content = "---  \nname: my-skill\ndescription: desc\n---  \nBody";
+        let skill = parse_skill(content).unwrap();
+        assert_eq!(skill.name, "my-skill");
+        assert_eq!(skill.body, "Body");
     }
 }
