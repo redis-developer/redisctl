@@ -118,7 +118,6 @@ struct EnabledToolsets {
     selections: HashMap<Toolset, SubModuleSelection>,
 }
 
-#[allow(dead_code)]
 impl EnabledToolsets {
     /// Create an `EnabledToolsets` with all sub-modules for each given toolset.
     fn all_of(toolsets: impl IntoIterator<Item = Toolset>) -> Self {
@@ -131,11 +130,13 @@ impl EnabledToolsets {
     }
 
     /// Check whether a toolset is enabled (with any selection).
+    #[allow(dead_code)]
     fn contains(&self, toolset: &Toolset) -> bool {
         self.selections.contains_key(toolset)
     }
 
     /// Get the sub-module selection for a toolset.
+    #[allow(dead_code)]
     fn selection(&self, toolset: &Toolset) -> Option<&SubModuleSelection> {
         self.selections.get(toolset)
     }
@@ -297,14 +298,15 @@ fn parse_tool_specs(specs: &[String]) -> Result<EnabledToolsets> {
 }
 
 /// Check whether a sub-module name is valid for a given toolset.
-fn is_valid_sub_module(toolset: &Toolset, _name: &str) -> bool {
+#[allow(unused_variables)]
+fn is_valid_sub_module(toolset: &Toolset, name: &str) -> bool {
     match toolset {
         #[cfg(feature = "cloud")]
-        Toolset::Cloud => tools::cloud::sub_tool_names(_name).is_some(),
+        Toolset::Cloud => tools::cloud::sub_tool_names(name).is_some(),
         #[cfg(feature = "enterprise")]
-        Toolset::Enterprise => tools::enterprise::sub_tool_names(_name).is_some(),
+        Toolset::Enterprise => tools::enterprise::sub_tool_names(name).is_some(),
         #[cfg(feature = "database")]
-        Toolset::Database => tools::redis::sub_tool_names(_name).is_some(),
+        Toolset::Database => tools::redis::sub_tool_names(name).is_some(),
         Toolset::App => false,
     }
 }
@@ -532,12 +534,11 @@ async fn main() -> Result<()> {
 
     // Build tool-to-toolset mapping for policy evaluation
     let tool_toolset = build_tool_toolset_mapping(&enabled);
-    let tool_toolset_arc = Arc::new(tool_toolset.clone());
 
     // Extract tools visibility config before consuming policy_config
     let tools_config = policy_config.tools.clone();
 
-    // Build resolved policy
+    // Build resolved policy (consumes a clone of the mapping)
     let policy = Arc::new(Policy::new(
         policy_config,
         tool_toolset.clone(),
@@ -563,6 +564,9 @@ async fn main() -> Result<()> {
         &tool_toolset,
         skills_dir.as_deref(),
     )?;
+
+    // Wrap mapping in Arc for shared use (after last borrow)
+    let tool_toolset_arc = Arc::new(tool_toolset);
 
     match args.transport {
         Transport::Stdio => {
