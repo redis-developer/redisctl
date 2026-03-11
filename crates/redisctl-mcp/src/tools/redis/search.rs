@@ -1,6 +1,6 @@
 //! RediSearch module tools (FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.INFO, etc.)
 
-use tower_mcp::{CallToolResult, ResultExt};
+use tower_mcp::{CallToolResult, Error as McpError, ResultExt};
 
 use super::format_value;
 use crate::tools::macros::{database_tool, mcp_module};
@@ -473,6 +473,10 @@ database_tool!(write, ft_create, "redis_ft_create",
         /// Schema field definitions
         pub schema: Vec<FieldDefinition>,
     } => |conn, input| {
+        if input.schema.is_empty() {
+            return Err(McpError::tool("schema must contain at least one field definition"));
+        }
+
         let mut cmd = redis::cmd("FT.CREATE");
         cmd.arg(&input.index);
 
@@ -546,6 +550,10 @@ database_tool!(write, ft_synupdate, "redis_ft_synupdate",
         /// Terms in the synonym group
         pub terms: Vec<String>,
     } => |conn, input| {
+        if input.terms.is_empty() {
+            return Err(McpError::tool("terms must contain at least one synonym term"));
+        }
+
         let mut cmd = redis::cmd("FT.SYNUPDATE");
         cmd.arg(&input.index).arg(&input.group_id);
         for term in &input.terms {
@@ -572,6 +580,10 @@ database_tool!(write, ft_dictadd, "redis_ft_dictadd",
         /// Terms to add
         pub terms: Vec<String>,
     } => |conn, input| {
+        if input.terms.is_empty() {
+            return Err(McpError::tool("terms must contain at least one term to add"));
+        }
+
         let mut cmd = redis::cmd("FT.DICTADD");
         cmd.arg(&input.dict);
         for term in &input.terms {
@@ -688,6 +700,10 @@ database_tool!(destructive, ft_dictdel, "redis_ft_dictdel",
         /// Terms to remove
         pub terms: Vec<String>,
     } => |conn, input| {
+        if input.terms.is_empty() {
+            return Err(McpError::tool("terms must contain at least one term to remove"));
+        }
+
         let mut cmd = redis::cmd("FT.DICTDEL");
         cmd.arg(&input.dict);
         for term in &input.terms {
