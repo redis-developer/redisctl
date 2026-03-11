@@ -953,9 +953,4 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .resource(crate::resources::config_path_resource())
         .resource(crate::resources::profiles_resource())
         .resource(crate::resources::help_resource())
-        // Prompts
-        .prompt(crate::prompts::troubleshoot_database_prompt())
-        .prompt(crate::prompts::analyze_performance_prompt())
-        .prompt(crate::prompts::capacity_planning_prompt())
-        .prompt(crate::prompts::migration_planning_prompt())
 }

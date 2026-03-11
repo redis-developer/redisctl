@@ -800,6 +800,12 @@ fn build_router(
         router = merge_toolset_router(router, toolset, selection, state.clone());
     }
 
+    // Register built-in prompts
+    prompt_registry.register(crate::prompts::troubleshoot_database_prompt());
+    prompt_registry.register(crate::prompts::analyze_performance_prompt());
+    prompt_registry.register(crate::prompts::capacity_planning_prompt());
+    prompt_registry.register(crate::prompts::migration_planning_prompt());
+
     // Load skills as dynamic prompts
     if let Some(dir) = skills_dir {
         let count = load_skills(dir, &prompt_registry);
