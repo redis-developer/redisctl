@@ -600,9 +600,9 @@ fn init_tracing(log_level: &str, audit_enabled: bool) {
             EnvFilter::try_from_default_env().unwrap_or_else(|_| log_level.to_string().into());
 
         let app_layer = fmt::layer().with_writer(std::io::stderr).with_filter(
-            filter::Targets::new().with_targets(vec![
-                ("audit", filter::LevelFilter::OFF), // exclude audit from app logs
-            ]),
+            filter::Targets::new()
+                .with_default(tracing::Level::TRACE)
+                .with_target("audit", filter::LevelFilter::OFF),
         );
 
         let audit_layer = fmt::layer()
