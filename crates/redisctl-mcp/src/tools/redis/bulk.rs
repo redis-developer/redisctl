@@ -335,9 +335,6 @@ mod tests {
 
     #[test]
     fn test_substitute_multiple() {
-        assert_eq!(
-            substitute_pattern("{i}-{i}-{i}", 3),
-            "3-3-3"
-        );
+        assert_eq!(substitute_pattern("{i}-{i}-{i}", 3), "3-3-3");
     }
 }
