@@ -10,7 +10,7 @@ use crate::tools::macros::{database_tool, mcp_module};
 pub struct FieldDefinition {
     /// Field name (or JSONPath for JSON indexes)
     pub name: String,
-    /// Field type: TEXT, NUMERIC, TAG, GEO, VECTOR
+    /// Field type: TEXT, NUMERIC, TAG, GEO, VECTOR, GEOSHAPE
     pub field_type: String,
     /// Make field sortable (enables SORTBY in queries)
     #[serde(default)]
@@ -32,7 +32,30 @@ pub struct FieldDefinition {
     pub alias: Option<String>,
 }
 
+const VALID_FIELD_TYPES: &[&str] = &["TEXT", "NUMERIC", "TAG", "GEO", "VECTOR", "GEOSHAPE"];
+
 impl FieldDefinition {
+    fn validate(&self) -> Result<(), McpError> {
+        let ft = self.field_type.to_uppercase();
+        if !VALID_FIELD_TYPES.contains(&ft.as_str()) {
+            return Err(McpError::tool(format!(
+                "Invalid field_type '{}' for field '{}'. Valid types: {}",
+                self.field_type,
+                self.name,
+                VALID_FIELD_TYPES.join(", "),
+            )));
+        }
+        if let Some(ref sep) = self.separator
+            && sep.chars().count() != 1
+        {
+            return Err(McpError::tool(format!(
+                "Invalid separator '{}' for field '{}'. Must be a single character",
+                sep, self.name,
+            )));
+        }
+        Ok(())
+    }
+
     fn to_args(&self) -> Vec<String> {
         let mut args = vec![self.name.clone()];
         if let Some(ref alias) = self.alias {
@@ -164,6 +187,16 @@ database_tool!(read_only, ft_search, "redis_ft_search",
         #[serde(default)]
         pub withscores: bool,
     } => |conn, input| {
+        if let Some(ref order) = input.sortby_order {
+            let upper = order.to_uppercase();
+            if upper != "ASC" && upper != "DESC" {
+                return Err(McpError::tool(format!(
+                    "Invalid sortby_order '{}'. Valid values: ASC, DESC",
+                    order,
+                )));
+            }
+        }
+
         let mut cmd = redis::cmd("FT.SEARCH");
         cmd.arg(&input.index).arg(&input.query);
 
@@ -350,9 +383,17 @@ database_tool!(read_only, ft_profile, "redis_ft_profile",
         /// Query to profile
         pub query: String,
     } => |conn, input| {
+        let command_upper = input.command.to_uppercase();
+        if command_upper != "SEARCH" && command_upper != "AGGREGATE" {
+            return Err(McpError::tool(format!(
+                "Invalid command '{}'. Valid values: SEARCH, AGGREGATE",
+                input.command,
+            )));
+        }
+
         let result: Vec<redis::Value> = redis::cmd("FT.PROFILE")
             .arg(&input.index)
-            .arg(input.command.to_uppercase())
+            .arg(&command_upper)
             .arg("QUERY")
             .arg(&input.query)
             .query_async(&mut conn)
@@ -362,7 +403,7 @@ database_tool!(read_only, ft_profile, "redis_ft_profile",
         // FT.PROFILE returns [results, profile_data]
         let mut output = format!(
             "Profile for {} '{}' on '{}':\n\n",
-            input.command.to_uppercase(), input.query, input.index
+            command_upper, input.query, input.index
         );
         for (i, val) in result.iter().enumerate() {
             output.push_str(&format!("[{}]: {}\n", i, format_value(val)));
@@ -476,6 +517,18 @@ database_tool!(write, ft_create, "redis_ft_create",
         if input.schema.is_empty() {
             return Err(McpError::tool("schema must contain at least one field definition"));
         }
+        if let Some(ref on) = input.on {
+            let upper = on.to_uppercase();
+            if upper != "HASH" && upper != "JSON" {
+                return Err(McpError::tool(format!(
+                    "Invalid 'on' value '{}'. Valid values: HASH, JSON",
+                    on,
+                )));
+            }
+        }
+        for field in &input.schema {
+            field.validate()?;
+        }
 
         let mut cmd = redis::cmd("FT.CREATE");
         cmd.arg(&input.index);
@@ -522,6 +575,8 @@ database_tool!(write, ft_alter, "redis_ft_alter",
         /// Field definition to add
         pub field: FieldDefinition,
     } => |conn, input| {
+        input.field.validate()?;
+
         let mut cmd = redis::cmd("FT.ALTER");
         cmd.arg(&input.index).arg("SCHEMA").arg("ADD");
         for arg in input.field.to_args() {
