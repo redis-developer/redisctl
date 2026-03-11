@@ -5,6 +5,20 @@ use tower_mcp::{CallToolResult, ResultExt};
 use super::format_value;
 use crate::tools::macros::{database_tool, mcp_module};
 
+/// Format alternating key-value pairs from a Redis value slice into `"key: value"` strings.
+fn format_kv_pairs(values: &[redis::Value]) -> Vec<String> {
+    values
+        .chunks(2)
+        .filter_map(|chunk| {
+            if chunk.len() == 2 {
+                Some(format!("{}: {}", format_value(&chunk[0]), format_value(&chunk[1])))
+            } else {
+                None
+            }
+        })
+        .collect()
+}
+
 /// Field definition for FT.CREATE and FT.ALTER schema definitions.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct FieldDefinition {
@@ -120,12 +134,9 @@ database_tool!(read_only, ft_info, "redis_ft_info",
 
         // FT.INFO returns alternating key-value pairs
         let mut output = format!("Index: {}\n\n", input.index);
-        let mut i = 0;
-        while i + 1 < result.len() {
-            let key = format_value(&result[i]);
-            let val = format_value(&result[i + 1]);
-            output.push_str(&format!("{}: {}\n", key, val));
-            i += 2;
+        for pair in format_kv_pairs(&result) {
+            output.push_str(&pair);
+            output.push('\n');
         }
 
         Ok(CallToolResult::text(output))
@@ -226,12 +237,8 @@ database_tool!(read_only, ft_search, "redis_ft_search",
             // If not nocontent, next element is the field array
             if !input.nocontent && i < result.len() {
                 if let redis::Value::Array(ref fields) = result[i] {
-                    let mut j = 0;
-                    while j + 1 < fields.len() {
-                        let field = format_value(&fields[j]);
-                        let value = format_value(&fields[j + 1]);
-                        output.push_str(&format!("  {}: {}\n", field, value));
-                        j += 2;
+                    for pair in format_kv_pairs(fields) {
+                        output.push_str(&format!("  {}\n", pair));
                     }
                 }
                 i += 1;
@@ -298,16 +305,7 @@ database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
         for (idx, row) in result.iter().skip(1).enumerate() {
             output.push_str(&format!("{}. ", idx + 1));
             if let redis::Value::Array(fields) = row {
-                let mut j = 0;
-                while j + 1 < fields.len() {
-                    let field = format_value(&fields[j]);
-                    let value = format_value(&fields[j + 1]);
-                    if j > 0 {
-                        output.push_str(", ");
-                    }
-                    output.push_str(&format!("{}: {}", field, value));
-                    j += 2;
-                }
+                output.push_str(&format_kv_pairs(fields).join(", "));
             } else {
                 output.push_str(&format_value(row));
             }
@@ -418,12 +416,9 @@ database_tool!(read_only, ft_syndump, "redis_ft_syndump",
             )))
         } else {
             let mut output = format!("Synonym groups for '{}':\n\n", input.index);
-            let mut i = 0;
-            while i + 1 < result.len() {
-                let term = format_value(&result[i]);
-                let groups = format_value(&result[i + 1]);
-                output.push_str(&format!("{}: {}\n", term, groups));
-                i += 2;
+            for pair in format_kv_pairs(&result) {
+                output.push_str(&pair);
+                output.push('\n');
             }
             Ok(CallToolResult::text(output))
         }
