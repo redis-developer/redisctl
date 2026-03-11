@@ -11,7 +11,11 @@ fn format_kv_pairs(values: &[redis::Value]) -> Vec<String> {
         .chunks(2)
         .filter_map(|chunk| {
             if chunk.len() == 2 {
-                Some(format!("{}: {}", format_value(&chunk[0]), format_value(&chunk[1])))
+                Some(format!(
+                    "{}: {}",
+                    format_value(&chunk[0]),
+                    format_value(&chunk[1])
+                ))
             } else {
                 None
             }
