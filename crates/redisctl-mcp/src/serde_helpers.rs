@@ -288,14 +288,14 @@ mod tests {
 
     #[test]
     fn f64_from_number() {
-        let t: TestF64 = serde_json::from_value(json!({"val": 3.14})).unwrap();
-        assert!((t.val - 3.14).abs() < f64::EPSILON);
+        let t: TestF64 = serde_json::from_value(json!({"val": 2.72})).unwrap();
+        assert!((t.val - 2.72).abs() < f64::EPSILON);
     }
 
     #[test]
     fn f64_from_string() {
-        let t: TestF64 = serde_json::from_value(json!({"val": "3.14"})).unwrap();
-        assert!((t.val - 3.14).abs() < f64::EPSILON);
+        let t: TestF64 = serde_json::from_value(json!({"val": "2.72"})).unwrap();
+        assert!((t.val - 2.72).abs() < f64::EPSILON);
     }
 
     #[test]
