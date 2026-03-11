@@ -43,7 +43,8 @@ Common issues and fixes:
 
 **Missing SORTBY index:**
 - If sorting is slow, check if the SORTBY field has `SORTABLE` enabled
-- Suggest `redis_ft_alter` to add SORTABLE if needed
+- `redis_ft_alter` can only add NEW fields with SORTABLE — it cannot modify existing fields
+- To make an existing field SORTABLE, the index must be dropped (`redis_ft_dropindex`) and recreated (`redis_ft_create`) with the field marked SORTABLE
 
 **Inefficient filter ordering:**
 - RediSearch evaluates filters left-to-right in the query
