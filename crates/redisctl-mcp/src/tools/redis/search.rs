@@ -662,8 +662,8 @@ database_tool!(destructive, ft_dropindex, "redis_ft_dropindex",
     }
 );
 
-database_tool!(destructive, ft_aliasdel, "redis_ft_aliasdel",
-    "DANGEROUS: Delete a search index alias.",
+database_tool!(write, ft_aliasdel, "redis_ft_aliasdel",
+    "Delete a search index alias.",
     {
         /// Alias name to delete
         pub alias: String,
@@ -680,8 +680,8 @@ database_tool!(destructive, ft_aliasdel, "redis_ft_aliasdel",
     }
 );
 
-database_tool!(destructive, ft_dictdel, "redis_ft_dictdel",
-    "DANGEROUS: Remove terms from a dictionary.",
+database_tool!(write, ft_dictdel, "redis_ft_dictdel",
+    "Remove terms from a dictionary.",
     {
         /// Dictionary name
         pub dict: String,
