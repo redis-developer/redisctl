@@ -456,22 +456,27 @@ include = ["redis_ft_search", "redis_ft_create"]
 
   <section>
     <h2>SKILL.md Format</h2>
+    <p class="small" style="margin-bottom: 0.5em;">
+      Follows the open <a href="https://agentskills.io/specification">Agent Skills</a> spec
+    </p>
     <pre><code class="language-markdown" data-trim>
 ---
 name: index-advisor
-description: Recommend a search index schema
+description: >
+  Analyze a Redis dataset and recommend
+  an optimal RediSearch index schema.
 ---
 
 ## Steps
 
 1. Sample keys with `redis_keys`
 2. Inspect docs with `redis_json_get`
-3. Analyze field types and cardinality
+3. Analyze field types, cardinality
 4. Recommend TEXT vs TAG vs NUMERIC
 5. Generate `redis_ft_create` call
 6. Explain trade-offs
     </code></pre>
-    <p class="small">Load custom skills with <code>--skills-dir</code> or <code>REDISCTL_MCP_SKILLS_DIR</code></p>
+    <p class="small">Load with <code>--skills-dir</code> or <code>REDISCTL_MCP_SKILLS_DIR</code></p>
   </section>
 
   <section>
@@ -513,7 +518,9 @@ description: Recommend a search index schema
   "data_type": "json",
   "key_pattern": "product:{i:04}",
   "count": 10000,
-  "value_pattern": "{\"id\":{i},\"name\":\"Product {i}\",\"price\":{i}.99}"
+  "value_pattern": "{\"id\":{i},
+    \"name\":\"Product {i}\",
+    \"price\":{i}.99}"
 }
     </code></pre>
     <p class="small">Supports: string, hash, sorted_set, set, list, json</p>
@@ -526,12 +533,18 @@ description: Recommend a search index schema
     <pre><code class="language-json" data-trim>
 {
   "commands": [
-    {"args": ["JSON.SET", "product:001", "$",
-      "{\"name\":\"Wireless Headphones\",\"price\":249.99,
-        \"category\":\"audio\",\"brand\":\"SoundMax\"}"]},
-    {"args": ["JSON.SET", "product:002", "$",
-      "{\"name\":\"Mechanical Keyboard\",\"price\":149.99,
-        \"category\":\"peripherals\",\"brand\":\"KeyForge\"}"]}
+    {"args": [
+      "JSON.SET", "product:001", "$",
+      "{\"name\":\"Headphones\",
+       \"price\":249.99,
+       \"category\":\"audio\"}"
+    ]},
+    {"args": [
+      "JSON.SET", "product:002", "$",
+      "{\"name\":\"Keyboard\",
+       \"price\":149.99,
+       \"category\":\"peripherals\"}"
+    ]}
   ]
 }
     </code></pre>
@@ -540,20 +553,20 @@ description: Recommend a search index schema
 
   <section>
     <h2>The Full Flow</h2>
-    <pre class="medium"><code class="language-text" data-noescape>
-  1. Seed            redis_seed (10k products)
-       │
-  2. Index           redis_ft_create (define schema)
-       │
-  3. Search          redis_ft_search ("noise cancelling" @price:[0 200])
-       │
-  4. Profile         redis_ft_profile (which iterator is slowest?)
-       │
-  5. Tune            redis_ft_create (variant index)
-       │
-  6. Compare         redis_ft_info + redis_ft_profile (side by side)
-       │
-  7. Ship            redis_ft_aliasupdate (zero-downtime swap)
+    <pre class="small"><code class="language-text" data-noescape>
+ 1. Seed      redis_seed
+      │
+ 2. Index     redis_ft_create
+      │
+ 3. Search    redis_ft_search
+      │
+ 4. Profile   redis_ft_profile
+      │
+ 5. Tune      redis_ft_create (variant)
+      │
+ 6. Compare   ft_info + ft_profile
+      │
+ 7. Ship      redis_ft_aliasupdate
     </code></pre>
   </section>
 </section>
