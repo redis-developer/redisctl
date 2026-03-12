@@ -1,0 +1,615 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>redisctl-mcp: Deep Dive</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/theme/black.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/monokai.css">
+  <style>
+    :root {
+      --r-heading-color: #ff4438;
+      --r-link-color: #ff4438;
+      --r-link-color-hover: #ff6b63;
+    }
+    .reveal h1, .reveal h2, .reveal h3 { text-transform: none; }
+    .reveal .small { font-size: 0.6em; }
+    .reveal .medium { font-size: 0.75em; }
+    .reveal table { font-size: 0.65em; margin: 0 auto; }
+    .reveal table th { background: #ff4438; color: white; padding: 8px 16px; }
+    .reveal table td { padding: 6px 16px; }
+    .reveal .highlight-red { color: #ff4438; }
+    .reveal .highlight-green { color: #4ec9b0; }
+    .reveal .highlight-blue { color: #569cd6; }
+    .reveal .highlight-yellow { color: #dcdcaa; }
+    .reveal code { color: #4ec9b0; }
+    .reveal .tool-count { font-size: 2.5em; font-weight: bold; color: #ff4438; }
+    .reveal .two-col { display: flex; gap: 2em; }
+    .reveal .two-col > div { flex: 1; text-align: left; }
+    .reveal .tier-box {
+      display: inline-block; padding: 8px 20px; margin: 8px;
+      border-radius: 8px; font-weight: bold;
+    }
+    .tier-readonly { background: #2d5f2d; color: #4ec9b0; }
+    .tier-readwrite { background: #5f5f2d; color: #dcdcaa; }
+    .tier-full { background: #5f2d2d; color: #ff6b63; }
+    .reveal .arrow-hint {
+      position: fixed; bottom: 60px; right: 40px;
+      font-size: 0.5em; opacity: 0.4;
+    }
+  </style>
+</head>
+<body>
+<div class="reveal">
+<div class="slides">
+
+<!-- ============================================================ -->
+<!-- SECTION 1: Title & Intro                                      -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h1>redisctl-mcp</h1>
+    <h3>A Deep Dive into the Redis MCP Server</h3>
+    <p class="medium" style="margin-top: 2em;">
+      <span class="highlight-red">371 tools</span> &middot;
+      <span class="highlight-green">3 safety tiers</span> &middot;
+      <span class="highlight-blue">4 toolsets</span>
+    </p>
+    <p class="small" style="margin-top: 2em; opacity: 0.5;">
+      Use arrow keys: &rarr; for flow, &darr; for depth
+    </p>
+  </section>
+
+  <section>
+    <h2>What is MCP?</h2>
+    <p>Model Context Protocol &mdash; an open standard for connecting AI agents to tools</p>
+    <div class="medium" style="margin-top: 1.5em;">
+      <p><span class="highlight-red">Tools</span> &mdash; functions the agent can call</p>
+      <p><span class="highlight-green">Resources</span> &mdash; data the agent can read</p>
+      <p><span class="highlight-blue">Prompts</span> &mdash; workflow templates the agent can follow</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Architecture</h2>
+    <pre class="medium"><code class="language-text" data-noescape>
+  ┌─────────────┐     MCP (stdio/HTTP)     ┌──────────────┐
+  │  AI Agent   │ ◄──────────────────────► │ redisctl-mcp │
+  │             │    tools / resources /    │              │
+  │ Claude Code │    prompts               │   Policy     │
+  │ Cursor      │                          │   Profiles   │
+  │ Custom      │                          │   Skills     │
+  └─────────────┘                          └──────┬───────┘
+                                                  │
+                          ┌───────────────────────┼───────────────────────┐
+                          │                       │                       │
+                    ┌─────▼─────┐          ┌──────▼──────┐        ┌──────▼──────┐
+                    │   Redis   │          │ Redis Cloud │        │  Redis      │
+                    │  OSS /    │          │     API     │        │ Enterprise  │
+                    │  Stack    │          │             │        │  REST API   │
+                    └───────────┘          └─────────────┘        └─────────────┘
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>Supported Clients</h2>
+    <div class="medium">
+      <p><strong>Claude Code</strong> &mdash; <code>.mcp.json</code> in project root</p>
+      <p><strong>Cursor</strong> &mdash; MCP server settings</p>
+      <p><strong>Any MCP client</strong> &mdash; stdio or HTTP/SSE transport</p>
+    </div>
+    <pre><code class="language-json" data-trim>
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": [
+        "--database-url", "redis://localhost:6379",
+        "--tools", "database",
+        "--read-only=false"
+      ]
+    }
+  }
+}
+    </code></pre>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 2: Setup & Connectivity                               -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Setup &amp; Connectivity</h2>
+    <p class="medium">Multiple transports, connection methods, and install paths</p>
+  </section>
+
+  <section>
+    <h2>Transport Modes</h2>
+    <div class="two-col medium">
+      <div>
+        <h3 class="highlight-green">stdio (default)</h3>
+        <ul>
+          <li>Local agent integrations</li>
+          <li>Claude Code, Cursor</li>
+          <li>No auth needed</li>
+          <li>One server per agent session</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="highlight-blue">HTTP / SSE</h3>
+        <ul>
+          <li>Shared deployments</li>
+          <li>Multi-agent access</li>
+          <li>OAuth support (JWT)</li>
+          <li><code>--host</code>, <code>--port</code>, rate limiting</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>Connection Options</h2>
+    <div class="medium" style="text-align: left; max-width: 800px; margin: 0 auto;">
+      <p><span class="highlight-red">Direct URL</span></p>
+      <pre><code>--database-url redis://localhost:6379</code></pre>
+
+      <p><span class="highlight-green">Environment Variable</span></p>
+      <pre><code>REDIS_URL=redis://localhost:6379</code></pre>
+
+      <p><span class="highlight-blue">Profile-Based</span></p>
+      <pre><code>--profile prod-cloud --profile staging-enterprise</code></pre>
+      <p class="small">Profiles support env var substitution, multiple clusters, per-deployment-type defaults</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>Installation</h2>
+    <div class="medium" style="text-align: left; max-width: 700px; margin: 0 auto;">
+      <p><strong>Docker</strong></p>
+      <pre><code>docker run -i --rm --network host \
+  ghcr.io/redis-developer/redisctl \
+  redisctl-mcp --tools database</code></pre>
+
+      <p><strong>Cargo</strong></p>
+      <pre><code>cargo install redisctl-mcp</code></pre>
+
+      <p><strong>From source</strong></p>
+      <pre><code>cargo run -p redisctl-mcp -- --tools database</code></pre>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 3: Tool Namespaces                                    -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Tool Namespaces</h2>
+    <p class="tool-count">~371 tools</p>
+    <p class="medium">across 4 toolsets and 21 sub-modules</p>
+  </section>
+
+  <section>
+    <h2 class="highlight-red">Database Tools</h2>
+    <p class="medium">~125 tools across 8 sub-modules</p>
+    <table>
+      <thead><tr><th>Sub-Module</th><th>Tools</th><th>Examples</th></tr></thead>
+      <tbody>
+        <tr><td>server</td><td>14</td><td>ping, info, dbsize, slowlog, config, ACL</td></tr>
+        <tr><td>keys</td><td>31</td><td>get, set, scan, expire, copy, dump/restore</td></tr>
+        <tr><td>structures</td><td>40</td><td>hashes, lists, sets, sorted sets, streams</td></tr>
+        <tr><td>json</td><td>16</td><td>full RedisJSON: get, set, arrappend, objkeys</td></tr>
+        <tr><td>search</td><td>18</td><td>FT.CREATE, FT.SEARCH, FT.AGGREGATE, FT.PROFILE</td></tr>
+        <tr><td>diagnostics</td><td>4</td><td>health_check, hotkeys, connection_summary</td></tr>
+        <tr><td>bulk</td><td>2</td><td>bulk_load, seed</td></tr>
+        <tr><td>raw</td><td>1</td><td>redis_command (blocked by default)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 class="highlight-green">Cloud Tools</h2>
+    <p class="medium">~147 tools across 5 sub-modules</p>
+    <table>
+      <thead><tr><th>Sub-Module</th><th>Tools</th><th>Coverage</th></tr></thead>
+      <tbody>
+        <tr><td>subscriptions</td><td>36</td><td>Full subscription &amp; database lifecycle</td></tr>
+        <tr><td>account</td><td>33</td><td>Users, roles, ACL rules, logs, tasks</td></tr>
+        <tr><td>networking</td><td>51</td><td>VPC peering, TGW, PSC, PrivateLink</td></tr>
+        <tr><td>fixed</td><td>27</td><td>Essentials tier subscriptions &amp; databases</td></tr>
+        <tr><td>raw</td><td>1</td><td>cloud_raw_api (blocked by default)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2 class="highlight-blue">Enterprise Tools</h2>
+    <p class="medium">~91 tools across 7 sub-modules</p>
+    <table>
+      <thead><tr><th>Sub-Module</th><th>Tools</th><th>Coverage</th></tr></thead>
+      <tbody>
+        <tr><td>cluster</td><td>24</td><td>Config, policy, maintenance, certs, licensing</td></tr>
+        <tr><td>databases</td><td>20</td><td>BDBs, CRDBs, endpoints, backup/restore</td></tr>
+        <tr><td>rbac</td><td>20</td><td>Users, roles, ACLs, LDAP</td></tr>
+        <tr><td>observability</td><td>16</td><td>Alerts, logs, stats, shards, debug</td></tr>
+        <tr><td>proxy</td><td>4</td><td>Proxy management &amp; stats</td></tr>
+        <tr><td>services</td><td>7</td><td>Cluster service control</td></tr>
+        <tr><td>raw</td><td>1</td><td>enterprise_raw_api (blocked by default)</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Selective Tool Loading</h2>
+    <p class="medium">Load only what you need &mdash; smaller surface = better agent performance</p>
+    <div class="medium" style="text-align: left; max-width: 800px; margin: 0 auto;">
+      <p><span class="highlight-red">Full toolset</span></p>
+      <pre><code>--tools database</code></pre>
+
+      <p><span class="highlight-green">Specific sub-modules</span></p>
+      <pre><code>--tools database:search,database:json</code></pre>
+
+      <p><span class="highlight-blue">Multi-toolset</span></p>
+      <pre><code>--tools cloud:subscriptions,enterprise:cluster,database</code></pre>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 4: Security & Policy Engine                           -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Security &amp; Policy Engine</h2>
+    <p class="medium">Every tool annotated. Every action gated. Granular control.</p>
+    <div style="margin-top: 1.5em;">
+      <span class="tier-box tier-readonly">ReadOnly</span>
+      <span class="tier-box tier-readwrite">ReadWrite</span>
+      <span class="tier-box tier-full">Full</span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Safety Tiers</h2>
+    <table>
+      <thead><tr><th>Tier</th><th>Allows</th><th>Use Case</th></tr></thead>
+      <tbody>
+        <tr>
+          <td><span class="tier-box tier-readonly" style="font-size:0.8em">ReadOnly</span></td>
+          <td>Only <code>read_only_hint=true</code> tools</td>
+          <td>Exploration, auditing, demos</td>
+        </tr>
+        <tr>
+          <td><span class="tier-box tier-readwrite" style="font-size:0.8em">ReadWrite</span></td>
+          <td>Reads + non-destructive writes</td>
+          <td>Development, staging</td>
+        </tr>
+        <tr>
+          <td><span class="tier-box tier-full" style="font-size:0.8em">Full</span></td>
+          <td>All operations including destructive</td>
+          <td>Admin tasks, CI/CD</td>
+        </tr>
+      </tbody>
+    </table>
+    <p class="small" style="margin-top: 1em;"><strong>Default is ReadOnly</strong> &mdash; safe out of the box</p>
+  </section>
+
+  <section>
+    <h2>MCP Annotations</h2>
+    <p class="medium">Every tool carries machine-readable safety hints</p>
+    <pre><code class="language-rust" data-trim>
+// Read-only: no side effects
+database_tool!(read_only, ping, "redis_ping", ...);
+//   -> read_only_hint = true, destructive_hint = false
+
+// Write: creates or modifies data
+database_tool!(write, set, "redis_set", ...);
+//   -> read_only_hint = false, destructive_hint = false
+
+// Destructive: irreversible
+database_tool!(destructive, del, "redis_del", ...);
+//   -> read_only_hint = false, destructive_hint = true
+    </code></pre>
+    <p class="small">Annotations are enforced at the macro level &mdash; not optional</p>
+  </section>
+
+  <section>
+    <h2>Policy Files</h2>
+    <pre><code class="language-toml" data-trim>
+# ~/.config/redisctl/mcp-policy.toml
+tier = "read-only"
+deny_categories = ["destructive"]
+
+[cloud]
+tier = "read-write"
+allow = ["create_database"]
+deny = ["delete_subscription"]
+
+[enterprise]
+tier = "read-only"
+
+[database]
+allow = ["redis_set", "redis_expire"]
+
+[tools]
+preset = "essentials"
+include = ["redis_ft_search", "redis_ft_create"]
+    </code></pre>
+  </section>
+
+  <section>
+    <h2>Evaluation Order</h2>
+    <div class="medium" style="text-align: left; max-width: 700px; margin: 0 auto;">
+      <ol>
+        <li>Global deny list &rarr; <span class="highlight-red">DENY</span></li>
+        <li>Per-toolset deny list &rarr; <span class="highlight-red">DENY</span></li>
+        <li>Category deny (e.g. "destructive") &rarr; <span class="highlight-red">DENY</span></li>
+        <li>Global allow list &rarr; <span class="highlight-green">ALLOW</span></li>
+        <li>Per-toolset allow list &rarr; <span class="highlight-green">ALLOW</span></li>
+        <li>Per-toolset tier &rarr; <span class="highlight-blue">evaluate</span></li>
+        <li>Global tier &rarr; <span class="highlight-blue">evaluate</span></li>
+      </ol>
+    </div>
+    <p class="small" style="margin-top: 1em;">Deny wins over allow. Specific wins over general.</p>
+  </section>
+
+  <section>
+    <h2>Raw Tool Protection</h2>
+    <p class="medium">Escape-hatch tools are <strong>blocked by default</strong></p>
+    <div class="medium" style="margin-top: 1em;">
+      <p><code class="highlight-red">redis_command</code> &mdash; arbitrary Redis commands</p>
+      <p><code class="highlight-red">cloud_raw_api</code> &mdash; arbitrary Cloud API calls</p>
+      <p><code class="highlight-red">enterprise_raw_api</code> &mdash; arbitrary Enterprise API calls</p>
+    </div>
+    <p class="small" style="margin-top: 1.5em;">
+      Require explicit opt-in via policy file allow list
+    </p>
+  </section>
+
+  <section>
+    <h2>Tool Visibility Presets</h2>
+    <div class="two-col medium">
+      <div>
+        <h3 class="highlight-green">essentials</h3>
+        <p>Curated subset per toolset</p>
+        <ul>
+          <li>Cloud: 20 tools</li>
+          <li>Enterprise: 17 tools</li>
+          <li>Database: 15+ tools</li>
+        </ul>
+      </div>
+      <div>
+        <h3 class="highlight-blue">all (default)</h3>
+        <p>Full tool surface</p>
+        <ul>
+          <li>Fine-tune with <code>include</code>/<code>exclude</code></li>
+          <li><code>list_available_tools</code> for discovery</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 5: Skills & Agentic Workflows                         -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Skills &amp; Agentic Workflows</h2>
+    <p class="medium">
+      <span class="highlight-red">Tools</span> = deterministic building blocks<br>
+      <span class="highlight-green">Skills</span> = workflow templates with domain knowledge
+    </p>
+  </section>
+
+  <section>
+    <h2>The Layering</h2>
+    <pre class="medium"><code class="language-text" data-noescape>
+  ┌─────────────────────────────────────────────────────┐
+  │                    Skills                           │
+  │  "Analyze my data and recommend an index schema"    │
+  │  "Compare these two index configurations"           │
+  │  "Profile this query and suggest optimizations"     │
+  ├─────────────────────────────────────────────────────┤
+  │                    Tools                            │
+  │  redis_ft_create  redis_ft_search  redis_ft_profile │
+  │  redis_seed       redis_ft_info    redis_ft_explain │
+  │  redis_json_set   redis_keys       redis_dbsize     │
+  └─────────────────────────────────────────────────────┘
+    </code></pre>
+    <p class="small">Tools guarantee correctness. Skills provide judgment.</p>
+  </section>
+
+  <section>
+    <h2>Existing Skills</h2>
+    <div class="medium" style="text-align: left; max-width: 800px; margin: 0 auto;">
+      <p><span class="highlight-red">Index Advisor</span></p>
+      <p class="small">Sample keys &rarr; infer field types &amp; cardinality &rarr; recommend FT.CREATE schema</p>
+
+      <p><span class="highlight-green">Query Tuning</span></p>
+      <p class="small">Run FT.EXPLAIN &amp; FT.PROFILE &rarr; identify bottlenecks &rarr; suggest optimizations</p>
+
+      <p><span class="highlight-blue">Index A/B Testing</span></p>
+      <p class="small">Create variants &rarr; run same queries &rarr; compare profile results &rarr; recommend winner</p>
+    </div>
+  </section>
+
+  <section>
+    <h2>SKILL.md Format</h2>
+    <pre><code class="language-markdown" data-trim>
+---
+name: index-advisor
+description: Analyze dataset and recommend search index schema
+---
+
+## Steps
+
+1. Use `redis_keys` to sample keys matching the prefix
+2. Use `redis_json_get` to inspect document structure
+3. Analyze field types, cardinality, value distributions
+4. Recommend field types (TEXT vs TAG vs NUMERIC)
+5. Generate ready-to-use `redis_ft_create` call
+6. Explain trade-offs (sortable, weight, stemming)
+    </code></pre>
+    <p class="small">Load custom skills with <code>--skills-dir</code> or <code>REDISCTL_MCP_SKILLS_DIR</code></p>
+  </section>
+
+  <section>
+    <h2>The Collaborative Loop</h2>
+    <div class="medium">
+      <p>The agent brings <span class="highlight-red">Redis knowledge</span></p>
+      <p>The user brings <span class="highlight-green">domain knowledge</span></p>
+      <p>Together they <span class="highlight-blue">converge through measurement</span></p>
+    </div>
+    <pre class="medium" style="margin-top: 1em;"><code class="language-text" data-noescape>
+  "We filter by brand constantly"     "Let me make brand a TAG field"
+            User ──────────────────► Agent
+                                       │
+  "Interesting, query time dropped"  ◄─┘  runs FT.PROFILE
+            User ◄──────────────────
+                                       │
+  "Now try without sortable on      ──►┘  creates variant index
+   description"                           compares FT.INFO memory
+    </code></pre>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 6: Data Prototyping Workflow                          -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Data Prototyping</h2>
+    <p class="medium">From zero to searchable dataset in seconds</p>
+  </section>
+
+  <section>
+    <h2>redis_seed</h2>
+    <p class="medium">Declarative data generation with pattern substitution</p>
+    <pre><code class="language-json" data-trim>
+{
+  "data_type": "json",
+  "key_pattern": "product:{i:04}",
+  "count": 10000,
+  "value_pattern": "{\"id\":{i},\"name\":\"Product {i}\",\"price\":{i}.99}"
+}
+    </code></pre>
+    <p class="small">Supports: string, hash, sorted_set, set, list, json</p>
+    <p class="small">Pipelined &mdash; 50,000+ commands/sec</p>
+  </section>
+
+  <section>
+    <h2>redis_bulk_load</h2>
+    <p class="medium">When you need precise control over what gets loaded</p>
+    <pre><code class="language-json" data-trim>
+{
+  "commands": [
+    {"args": ["JSON.SET", "product:001", "$",
+      "{\"name\":\"Wireless Headphones\",\"price\":249.99,
+        \"category\":\"audio\",\"brand\":\"SoundMax\"}"]},
+    {"args": ["JSON.SET", "product:002", "$",
+      "{\"name\":\"Mechanical Keyboard\",\"price\":149.99,
+        \"category\":\"peripherals\",\"brand\":\"KeyForge\"}"]}
+  ]
+}
+    </code></pre>
+    <p class="small">Realistic data &rarr; meaningful search results &rarr; better demos</p>
+  </section>
+
+  <section>
+    <h2>The Full Flow</h2>
+    <pre class="medium"><code class="language-text" data-noescape>
+  1. Seed            redis_seed (10k products)
+       │
+  2. Index           redis_ft_create (define schema)
+       │
+  3. Search          redis_ft_search ("noise cancelling" @price:[0 200])
+       │
+  4. Profile         redis_ft_profile (which iterator is slowest?)
+       │
+  5. Tune            redis_ft_create (variant index)
+       │
+  6. Compare         redis_ft_info + redis_ft_profile (side by side)
+       │
+  7. Ship            redis_ft_aliasupdate (zero-downtime swap)
+    </code></pre>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 7: Profile System                                     -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>Profile System</h2>
+    <p class="medium">Manage credentials for Cloud, Enterprise, and direct Redis connections</p>
+  </section>
+
+  <section>
+    <h2>Multi-Cluster Configuration</h2>
+    <pre><code class="language-toml" data-trim>
+# ~/.config/redisctl/config.toml
+default_cloud_profile = "prod"
+default_enterprise_profile = "staging"
+
+[profiles.prod]
+type = "cloud"
+api_key = "${REDIS_CLOUD_API_KEY}"
+api_secret = "${REDIS_CLOUD_API_SECRET}"
+
+[profiles.staging]
+type = "enterprise"
+url = "https://cluster.internal:9443"
+username = "admin"
+password = "${RE_PASSWORD}"
+
+[profiles.local]
+type = "database"
+url = "redis://localhost:6379"
+    </code></pre>
+    <p class="small">Environment variable substitution &mdash; no secrets in config files</p>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 8: What's Next                                        -->
+<!-- ============================================================ -->
+<section>
+  <section>
+    <h2>What's Next</h2>
+    <div class="medium" style="text-align: left; max-width: 700px; margin: 0 auto;">
+      <p><span class="highlight-red">OAuth for HTTP mode</span> &mdash; shared deployments with auth</p>
+      <p><span class="highlight-green">More skills</span> &mdash; data modeling, performance testing, tutorials</p>
+      <p><span class="highlight-blue">redis/agent-skills integration</span> &mdash; unified skill ecosystem</p>
+      <p><span class="highlight-yellow">Audit logging</span> &mdash; track what agents do in production</p>
+    </div>
+  </section>
+</section>
+
+<!-- ============================================================ -->
+<!-- SECTION 9: Questions                                           -->
+<!-- ============================================================ -->
+<section>
+  <h1>Questions?</h1>
+  <p class="medium" style="margin-top: 2em;">
+    <code>github.com/redis-developer/redisctl</code>
+  </p>
+</section>
+
+</div><!-- /slides -->
+</div><!-- /reveal -->
+
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/dist/reveal.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/reveal.js@5.1.0/plugin/highlight/highlight.js"></script>
+<script>
+  Reveal.initialize({
+    hash: true,
+    slideNumber: true,
+    transition: 'slide',
+    plugins: [ RevealHighlight ]
+  });
+</script>
+</body>
+</html>
