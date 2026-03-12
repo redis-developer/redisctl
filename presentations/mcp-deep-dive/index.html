@@ -73,22 +73,21 @@
 
   <section>
     <h2>Architecture</h2>
-    <pre class="medium"><code class="language-text" data-noescape>
-  ┌─────────────┐     MCP (stdio/HTTP)     ┌──────────────┐
-  │  AI Agent   │ ◄──────────────────────► │ redisctl-mcp │
-  │             │    tools / resources /    │              │
-  │ Claude Code │    prompts               │   Policy     │
-  │ Cursor      │                          │   Profiles   │
-  │ Custom      │                          │   Skills     │
-  └─────────────┘                          └──────┬───────┘
-                                                  │
-                          ┌───────────────────────┼───────────────────────┐
-                          │                       │                       │
-                    ┌─────▼─────┐          ┌──────▼──────┐        ┌──────▼──────┐
-                    │   Redis   │          │ Redis Cloud │        │  Redis      │
-                    │  OSS /    │          │     API     │        │ Enterprise  │
-                    │  Stack    │          │             │        │  REST API   │
-                    └───────────┘          └─────────────┘        └─────────────┘
+    <pre class="small"><code class="language-text" data-noescape>
+ ┌───────────┐  MCP (stdio/HTTP)  ┌────────────┐
+ │ AI Agent  │◄──────────────────►│redisctl-mcp│
+ │           │ tools / resources  │            │
+ │Claude Code│ prompts            │  Policy    │
+ │Cursor     │                    │  Profiles  │
+ │Custom     │                    │  Skills    │
+ └───────────┘                    └─────┬──────┘
+                                        │
+                    ┌───────────────────┼──────────────────┐
+                    │                   │                   │
+              ┌─────▼────┐       ┌──────▼─────┐     ┌──────▼─────┐
+              │  Redis   │       │Redis Cloud │     │  Redis     │
+              │ OSS/Stack│       │    API     │     │ Enterprise │
+              └──────────┘       └────────────┘     └────────────┘
     </code></pre>
   </section>
 
@@ -426,17 +425,17 @@ include = ["redis_ft_search", "redis_ft_create"]
   <section>
     <h2>The Layering</h2>
     <pre class="medium"><code class="language-text" data-noescape>
-  ┌─────────────────────────────────────────────────────┐
-  │                    Skills                           │
-  │  "Analyze my data and recommend an index schema"    │
-  │  "Compare these two index configurations"           │
-  │  "Profile this query and suggest optimizations"     │
-  ├─────────────────────────────────────────────────────┤
-  │                    Tools                            │
-  │  redis_ft_create  redis_ft_search  redis_ft_profile │
-  │  redis_seed       redis_ft_info    redis_ft_explain │
-  │  redis_json_set   redis_keys       redis_dbsize     │
-  └─────────────────────────────────────────────────────┘
+ ┌───────────────────────────────────┐
+ │             Skills                │
+ │  "Recommend an index schema"      │
+ │  "Compare two index configs"      │
+ │  "Profile and optimize a query"   │
+ ├───────────────────────────────────┤
+ │             Tools                 │
+ │  ft_create   ft_search  ft_profile│
+ │  seed        ft_info    ft_explain│
+ │  json_set    keys       dbsize    │
+ └───────────────────────────────────┘
     </code></pre>
     <p class="small">Tools guarantee correctness. Skills provide judgment.</p>
   </section>
@@ -460,17 +459,17 @@ include = ["redis_ft_search", "redis_ft_create"]
     <pre><code class="language-markdown" data-trim>
 ---
 name: index-advisor
-description: Analyze dataset and recommend search index schema
+description: Recommend a search index schema
 ---
 
 ## Steps
 
-1. Use `redis_keys` to sample keys matching the prefix
-2. Use `redis_json_get` to inspect document structure
-3. Analyze field types, cardinality, value distributions
-4. Recommend field types (TEXT vs TAG vs NUMERIC)
-5. Generate ready-to-use `redis_ft_create` call
-6. Explain trade-offs (sortable, weight, stemming)
+1. Sample keys with `redis_keys`
+2. Inspect docs with `redis_json_get`
+3. Analyze field types and cardinality
+4. Recommend TEXT vs TAG vs NUMERIC
+5. Generate `redis_ft_create` call
+6. Explain trade-offs
     </code></pre>
     <p class="small">Load custom skills with <code>--skills-dir</code> or <code>REDISCTL_MCP_SKILLS_DIR</code></p>
   </section>
@@ -482,15 +481,17 @@ description: Analyze dataset and recommend search index schema
       <p>The user brings <span class="highlight-green">domain knowledge</span></p>
       <p>Together they <span class="highlight-blue">converge through measurement</span></p>
     </div>
-    <pre class="medium" style="margin-top: 1em;"><code class="language-text" data-noescape>
-  "We filter by brand constantly"     "Let me make brand a TAG field"
-            User ──────────────────► Agent
-                                       │
-  "Interesting, query time dropped"  ◄─┘  runs FT.PROFILE
-            User ◄──────────────────
-                                       │
-  "Now try without sortable on      ──►┘  creates variant index
-   description"                           compares FT.INFO memory
+    <pre class="small" style="margin-top: 1em;"><code class="language-text" data-noescape>
+ User: "We filter by brand a lot"
+    Agent: brand → TAG field ✓
+           runs FT.CREATE, FT.PROFILE
+
+ User: "Query time dropped, nice"
+    Agent: here's the profile diff
+
+ User: "Try without sortable on description"
+    Agent: creates variant, compares
+           FT.INFO memory: 0.055→0.027 MB
     </code></pre>
   </section>
 </section>
