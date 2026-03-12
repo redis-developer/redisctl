@@ -172,7 +172,21 @@ database_tool!(read_only, ft_info, "redis_ft_info",
 );
 
 database_tool!(read_only, ft_search, "redis_ft_search",
-    "Execute a full-text search query against an index. Requires the RediSearch module.\n\nQuery syntax examples:\n- Full-text: `wireless headphones`\n- Field-specific text: `@name:wireless`\n- TAG exact match: `@category:{electronics}`\n- Multiple tags: `@category:{electronics|sports}`\n- Numeric range: `@price:[50 200]`\n- Numeric comparison: `@rating:[(4 +inf]` (greater than 4)\n- Negation: `-@category:{kitchen}`\n- Wildcard: `wire*`\n- All documents: `*`\n- Combined: `@category:{electronics} @price:[0 100]`\n\nFor JSON indexes, use field aliases (set via AS in FT.CREATE) in queries, not the raw JSONPath.",
+    "Execute a full-text search query against an index. Requires the RediSearch module.\n\n\
+     Query syntax examples:\n\
+     - Full-text: `wireless headphones`\n\
+     - Field-specific text: `@name:wireless`\n\
+     - TAG exact match: `@category:{electronics}`\n\
+     - Multiple tags: `@category:{electronics|sports}`\n\
+     - Numeric range: `@price:[50 200]`\n\
+     - Numeric comparison: `@rating:[(4 +inf]` (greater than 4)\n\
+     - Negation: `-@category:{kitchen}`\n\
+     - Wildcard: `wire*`\n\
+     - All documents: `*`\n\
+     - Combined: `@category:{electronics} @price:[0 100]`\n\n\
+     For JSON indexes, use field aliases (set via AS in FT.CREATE) in queries, not the raw JSONPath.\n\n\
+     Field-specific queries (e.g. `@name:value`) only work on fields that are included in the index schema. \
+     Querying a field that is not indexed returns zero results without an error.",
     {
         /// Index name
         pub index: String,
@@ -377,7 +391,14 @@ database_tool!(read_only, ft_explain, "redis_ft_explain",
 );
 
 database_tool!(read_only, ft_profile, "redis_ft_profile",
-    "Profile a search or aggregate query to analyze performance. Shows timing and index intersection details. Requires the RediSearch module.",
+    "Profile a search or aggregate query to analyze performance. Shows timing and index intersection details. Requires the RediSearch module.\n\n\
+     The output includes:\n\
+     - **Iterators profile**: Shows which index iterators were used (TEXT, TAG, NUMERIC, INTERSECT, UNION), \
+     how many documents each scanned (Counter), and the index size (Size). \
+     Intersect iterators combine multiple conditions; the smallest child drives performance.\n\
+     - **Result processors**: Shows time spent in scoring, sorting, and loading document content.\n\
+     - **Total profile time**: Wall-clock microseconds for the entire query.\n\n\
+     Use this to identify which query clause is the bottleneck and whether adding/removing index fields would help.",
     {
         /// Index name
         pub index: String,
@@ -501,7 +522,21 @@ database_tool!(read_only, ft_dictdump, "redis_ft_dictdump",
 // ---------------------------------------------------------------------------
 
 database_tool!(write, ft_create, "redis_ft_create",
-    "Create a search index with the specified schema. Requires the RediSearch module.\n\nFor JSON indexes, set `on` to `JSON` and use JSONPath expressions as field names (e.g. `$.name`). Always set `alias` on JSON fields to provide clean query names (e.g. alias `name` for `$.name`), since raw JSONPath cannot be used in search queries.\n\nField types: TEXT (full-text searchable), NUMERIC (range queries), TAG (exact match/filtering), GEO (geo queries), VECTOR (similarity search).\n\nExample schema for JSON:\n```\n{\"name\": \"$.name\", \"alias\": \"name\", \"field_type\": \"TEXT\", \"sortable\": true}\n{\"name\": \"$.price\", \"alias\": \"price\", \"field_type\": \"NUMERIC\", \"sortable\": true}\n{\"name\": \"$.category\", \"alias\": \"category\", \"field_type\": \"TAG\"}\n```",
+    "Create a search index with the specified schema. Requires the RediSearch module.\n\n\
+     For JSON indexes, set `on` to `JSON` and use JSONPath expressions as field names (e.g. `$.name`). \
+     Always set `alias` on JSON fields to provide clean query names (e.g. alias `name` for `$.name`), \
+     since raw JSONPath cannot be used in search queries.\n\n\
+     For HASH indexes (default), use plain field names (e.g. `name`, `price`) — no JSONPath or alias needed.\n\n\
+     Field types: TEXT (full-text searchable, stemmed by default), NUMERIC (range queries), \
+     TAG (exact match/filtering, case-insensitive), GEO (geo queries), VECTOR (similarity search).\n\n\
+     Example schema for JSON:\n\
+     ```\n\
+     {\"name\": \"$.name\", \"alias\": \"name\", \"field_type\": \"TEXT\", \"sortable\": true}\n\
+     {\"name\": \"$.price\", \"alias\": \"price\", \"field_type\": \"NUMERIC\", \"sortable\": true}\n\
+     {\"name\": \"$.category\", \"alias\": \"category\", \"field_type\": \"TAG\"}\n\
+     ```\n\n\
+     Note: Changing a schema requires dropping and recreating the index — indexes do not auto-update. \
+     Use FT.ALIASUPDATE for zero-downtime index swaps.",
     {
         /// Index name
         pub index: String,

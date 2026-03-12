@@ -58,7 +58,13 @@ mcp_module! {
 database_tool!(write, bulk_load, "redis_bulk_load",
     "Pipelined command execution. Accept a batch of Redis commands and execute them \
      using Redis pipelining for high throughput. Returns count of commands executed, \
-     elapsed time, and throughput.",
+     elapsed time, and throughput.\n\n\
+     Important notes:\n\
+     - Commands are fire-and-forget: individual command errors are not reported. \
+     The batch succeeds if the pipeline as a whole completes.\n\
+     - Pipelines are NOT atomic — other clients may interleave commands between batches.\n\
+     - Tune batch_size for your use case: smaller batches (100-500) reduce memory per round-trip, \
+     larger batches (1000-5000) maximize throughput.",
     {
         /// List of commands to execute. Each command is an args array (e.g. [\"SET\", \"k\", \"v\"]).
         pub commands: Vec<Command>,
@@ -112,12 +118,18 @@ database_tool!(write, seed, "redis_seed",
     "Declarative data generation for test/prototype data. Generates keys matching a pattern \
      using Redis pipelining for high throughput.\n\n\
      Supported data_type values: \"string\", \"hash\", \"sorted_set\", \"set\", \"list\", \"json\".\n\n\
-     Pattern substitution: use {i} for the index, {i:0N} for zero-padded (e.g. {i:06} for 6 digits).\n\n\
+     Pattern substitution: use {i} for the index (0-based), {i:0N} for zero-padded where N is \
+     the total width (e.g. {i:06} produces 000000, 000001, ...).\n\n\
      Examples:\n\
      - String: key_pattern=\"user:{i}\", value_pattern=\"value-{i}\", count=1000\n\
      - Hash: key_pattern=\"user:{i}\", field_values=[{name:\"name\",value:\"user-{i}\"},{name:\"score\",value:\"{i}\"}], count=1000\n\
      - Sorted set: key_pattern=\"leaderboard\", member_pattern=\"player-{i:06}\", count=10000, score_min=0, score_max=10000\n\
-     - JSON: key_pattern=\"doc:{i}\", value_pattern='{\"id\":{i},\"name\":\"item-{i}\"}', count=1000",
+     - JSON: key_pattern=\"doc:{i}\", value_pattern='{\"id\":{i},\"name\":\"item-{i}\"}', count=1000\n\n\
+     Notes:\n\
+     - For JSON type, value_pattern must be a valid JSON string with {i} placeholders.\n\
+     - For sorted_set, scores are linearly interpolated between score_min and score_max.\n\
+     - TTL is supported for string, hash, and json types only (ignored for set, list, sorted_set).\n\
+     - For sorted_set with a single key, each {i} produces a new member; duplicate member patterns overwrite.",
     {
         /// Data type to generate: "string", "hash", "sorted_set", "set", "list", "json"
         pub data_type: String,
