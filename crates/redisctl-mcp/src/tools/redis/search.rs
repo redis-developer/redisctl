@@ -82,6 +82,9 @@ impl FieldDefinition {
             args.push(alias.clone());
         }
         args.push(self.field_type.to_uppercase());
+        if self.nostem {
+            args.push("NOSTEM".to_string());
+        }
         if let Some(weight) = self.weight {
             args.push("WEIGHT".to_string());
             args.push(weight.to_string());
@@ -95,9 +98,6 @@ impl FieldDefinition {
         }
         if self.noindex {
             args.push("NOINDEX".to_string());
-        }
-        if self.nostem {
-            args.push("NOSTEM".to_string());
         }
         args
     }
