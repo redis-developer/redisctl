@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.9.1...redisctl-mcp-v0.10.0) - 2026-03-17
+
+### Added
+
+- *(mcp)* add session-scoped command aliases ([#891](https://github.com/redis-developer/redisctl/pull/891))
+- *(mcp)* add if_exists option to redis_ft_create ([#889](https://github.com/redis-developer/redisctl/pull/889))
+- *(mcp)* improve bulk_load for JSON seeding + collect_results flag ([#888](https://github.com/redis-developer/redisctl/pull/888))
+- *(mcp)* upgrade tower-mcp to 0.8.2 with dynamic prompt skills ([#845](https://github.com/redis-developer/redisctl/pull/845))
+- *(mcp)* add RediSearch skill prompts for index optimization workflows ([#843](https://github.com/redis-developer/redisctl/pull/843))
+
+### Fixed
+
+- *(mcp)* place NOSTEM before WEIGHT in FT.CREATE field args ([#879](https://github.com/redis-developer/redisctl/pull/879))
+- *(mcp)* serde coercion for numeric params + bulk load/seed tools ([#875](https://github.com/redis-developer/redisctl/pull/875))
+- *(mcp)* bail when --oauth is used (not yet implemented) ([#860](https://github.com/redis-developer/redisctl/pull/860))
+- *(mcp)* validate enum-like string params in RediSearch tools ([#864](https://github.com/redis-developer/redisctl/pull/864))
+- *(mcp)* harden YAML frontmatter parser and add tests ([#868](https://github.com/redis-developer/redisctl/pull/868))
+- *(mcp)* validate nx/xx mutual exclusivity in json_set ([#863](https://github.com/redis-developer/redisctl/pull/863))
+- *(mcp)* validate non-empty collections in RediSearch tools ([#865](https://github.com/redis-developer/redisctl/pull/865))
+- *(mcp)* validate non-empty collections in RedisJSON tools ([#862](https://github.com/redis-developer/redisctl/pull/862))
+- *(mcp)* reclassify ft_aliasdel and ft_dictdel as write tier ([#870](https://github.com/redis-developer/redisctl/pull/870))
+- *(mcp)* set permissive default on app tracing filter when audit enabled ([#859](https://github.com/redis-developer/redisctl/pull/859))
+
+### Other
+
+- *(mcp)* improve tool descriptions for search and bulk/seed tools ([#880](https://github.com/redis-developer/redisctl/pull/880))
+- *(mcp)* extract K/V pair formatting helper in search tools ([#871](https://github.com/redis-developer/redisctl/pull/871))
+- *(mcp)* clarify FT.ALTER limitations in query-tuning skill ([#861](https://github.com/redis-developer/redisctl/pull/861))
+- *(mcp)* remove unnecessary HashMap clones in main ([#866](https://github.com/redis-developer/redisctl/pull/866))
+- *(mcp)* clean up misleading _name param and blanket allow(dead_code) ([#867](https://github.com/redis-developer/redisctl/pull/867))
+- *(mcp)* unify static and dynamic prompt registration ([#869](https://github.com/redis-developer/redisctl/pull/869))
+
 ## [0.9.1](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.9.0...redisctl-mcp-v0.9.1) - 2026-03-07
 
 ### Added
