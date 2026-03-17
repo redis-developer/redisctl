@@ -1,5 +1,6 @@
 //! Direct Redis database tools
 
+mod aliases;
 mod bulk;
 mod diagnostics;
 mod json;
@@ -9,6 +10,8 @@ mod search;
 mod server;
 mod structures;
 
+#[allow(unused_imports)]
+pub use aliases::*;
 #[allow(unused_imports)]
 pub use bulk::*;
 #[allow(unused_imports)]
@@ -67,6 +70,10 @@ pub const SUB_MODULES: &[SubModule] = &[
         name: "raw",
         tool_names: raw::TOOL_NAMES,
     },
+    SubModule {
+        name: "aliases",
+        tool_names: aliases::TOOL_NAMES,
+    },
 ];
 
 /// Get all Database tool names as owned strings.
@@ -96,6 +103,7 @@ pub fn sub_router(name: &str, state: Arc<AppState>) -> Option<McpRouter> {
         "search" => Some(search::router(state)),
         "bulk" => Some(bulk::router(state)),
         "raw" => Some(raw::router(state)),
+        "aliases" => Some(aliases::router(state)),
         _ => None,
     }
 }
@@ -178,5 +186,6 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(json::router(state.clone()))
         .merge(search::router(state.clone()))
         .merge(bulk::router(state.clone()))
-        .merge(raw::router(state))
+        .merge(raw::router(state.clone()))
+        .merge(aliases::router(state))
 }

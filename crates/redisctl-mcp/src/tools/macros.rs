@@ -96,6 +96,49 @@ macro_rules! database_tool {
         }
     };
 
+    // --- Stateful variant: exposes state as a user-provided identifier ---
+
+    (@impl_stateful $safety_method:ident, $guard:ident, $fn_name:ident, $tool_name:literal, $description:expr,
+     { $($(#[$field_meta:meta])* pub $field_name:ident : $field_type:ty),* $(,)? }
+     => |$state:ident, $conn:ident, $input:ident| $body:block
+    ) => {
+        pastey::paste! {
+            #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
+            pub struct [<$fn_name:camel Input>] {
+                /// Optional Redis URL (overrides profile, uses configured URL if not provided)
+                #[serde(default)]
+                pub url: Option<String>,
+                /// Optional profile name to resolve connection from (uses default profile if not set)
+                #[serde(default)]
+                pub profile: Option<String>,
+                $(
+                    $(#[$field_meta])*
+                    pub $field_name: $field_type,
+                )*
+            }
+
+            pub fn $fn_name(state: std::sync::Arc<crate::state::AppState>) -> tower_mcp::Tool {
+                tower_mcp::ToolBuilder::new($tool_name)
+                    .description($description)
+                    .$safety_method()
+                    .extractor_handler(
+                        state,
+                        |tower_mcp::extract::State($state): tower_mcp::extract::State<std::sync::Arc<crate::state::AppState>>,
+                         tower_mcp::extract::Json(mut $input): tower_mcp::extract::Json<[<$fn_name:camel Input>]>| async move {
+                            database_tool!(@guard $guard $state);
+                            #[allow(unused_mut)]
+                            let mut $conn = super::get_connection(
+                                $input.url.take(), $input.profile.as_deref(), &$state
+                            ).await?;
+                            let $state = &$state;
+                            $body
+                        },
+                    )
+                    .build()
+            }
+        }
+    };
+
     // --- Public entry points ---
 
     (read_only, $($rest:tt)*) => {
@@ -106,6 +149,17 @@ macro_rules! database_tool {
     };
     (destructive, $($rest:tt)*) => {
         database_tool!(@impl destructive, destructive_guard, $($rest)*);
+    };
+
+    // Stateful variants — handler receives |state, conn, input| instead of |conn, input|
+    (read_only_stateful, $($rest:tt)*) => {
+        database_tool!(@impl_stateful read_only_safe, no_guard, $($rest)*);
+    };
+    (write_stateful, $($rest:tt)*) => {
+        database_tool!(@impl_stateful non_destructive, write_guard, $($rest)*);
+    };
+    (destructive_stateful, $($rest:tt)*) => {
+        database_tool!(@impl_stateful destructive, destructive_guard, $($rest)*);
     };
 }
 pub(crate) use database_tool;
