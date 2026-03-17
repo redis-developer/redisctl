@@ -1,0 +1,144 @@
+# AGENTS.md
+
+Context and instructions for AI coding agents working on the redisctl project.
+
+## Project Overview
+
+redisctl is a Rust workspace with three crates that share a lockstep version (currently 0.9.1):
+
+| Crate | Path | Purpose |
+|-------|------|---------|
+| **redisctl-core** | `crates/redisctl-core/` | Shared library: config/profile management, Cloud and Enterprise API clients, error handling |
+| **redisctl** | `crates/redisctl/` | CLI binary: commands, workflows, connection management |
+| **redisctl-mcp** | `crates/redisctl-mcp/` | MCP server for AI agents: ~371 tools, policy engine, skills system |
+
+## Build and Test
+
+```bash
+# Format (required before push)
+cargo fmt --all
+
+# Lint (all warnings are errors in CI)
+cargo clippy --all-targets --all-features -- -D warnings
+
+# Unit tests
+cargo test --workspace
+
+# Integration tests (requires Docker for Redis)
+cargo test --workspace --test '*' --all-features
+
+# Reuse Docker containers across test runs
+REUSE_CONTAINERS=1 cargo test --workspace --test '*' --all-features
+```
+
+**Always run fmt + clippy before pushing.** CI will reject unformatted code or clippy warnings.
+
+## CI Checks
+
+PRs must pass:
+1. `cargo fmt --all -- --check`
+2. `cargo clippy --all-targets --all-features -- -D warnings`
+3. Unit tests per crate (parallel)
+4. Integration tests
+5. Platform builds (Linux required; macOS and Windows are optional)
+
+## Crate Architecture
+
+### Feature Flags
+
+**redisctl** (CLI):
+- `default = ["full", "secure-storage"]`
+- `full = ["cloud", "enterprise", "upload"]`
+- `secure-storage` enables keyring-based credential storage
+
+**redisctl-mcp** (MCP server):
+- `default = ["http", "cloud", "enterprise", "database"]`
+- Each toolset (`cloud`, `enterprise`, `database`) can be compiled independently
+
+### Key Patterns
+
+**database_tool! macro** (`crates/redisctl-mcp/src/tools/macros.rs`):
+Generates MCP tool structs with safety annotations. Three safety tiers:
+- `database_tool!(read_only, ...)` -- no side effects
+- `database_tool!(write, ...)` -- creates or modifies data
+- `database_tool!(destructive, ...)` -- irreversible operations
+
+Field attributes like `#[serde(...)]` pass through the macro. Numeric parameters that might arrive as strings from MCP clients use custom deserializers from `serde_helpers.rs`.
+
+**mcp_module! macro**: Generates `TOOL_NAMES` constant and `router()` function for each tool sub-module.
+
+**Policy system** (`crates/redisctl-mcp/src/policy.rs`): TOML-based policy engine with three safety tiers (ReadOnly, ReadWrite, Full), per-toolset overrides, and allow/deny lists.
+
+**Profile system** (`crates/redisctl-core/`): TOML config at `~/.config/redisctl/config.toml` with profiles for Cloud, Enterprise, and direct Redis connections. Supports env var substitution.
+
+### Module Organization
+
+MCP tools are organized into toolsets with sub-modules:
+```
+tools/
+  redis/          # ~125 tools: server, keys, structures, json, search, diagnostics, bulk
+  cloud/          # ~147 tools: subscriptions, account, networking, fixed
+  enterprise/     # ~91 tools: cluster, databases, rbac, observability, proxy, services
+  profile.rs      # 8 tools: profile management
+```
+
+CLI commands mirror this structure:
+```
+cli/
+  cloud.rs        # Cloud subcommands
+  enterprise.rs   # Enterprise subcommands
+  mod.rs          # Top-level command tree
+```
+
+## Conventions
+
+### Commits
+
+Follow [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` new feature (minor version bump)
+- `fix:` bug fix (patch bump)
+- `docs:` documentation only
+- `refactor:` no behavior change
+- `test:` test additions or fixes
+- `chore:` maintenance
+
+Scope by crate when relevant: `feat(mcp):`, `fix(core):`, `docs(cli):`.
+
+### Code Style
+
+- Rust edition 2024, MSRV 1.90+
+- No `unwrap()` in production code -- use proper error handling
+- Prefer `anyhow` for CLI errors, `tower_mcp::Error` for MCP tool errors
+- Tool descriptions are the primary documentation for MCP tools -- keep them accurate and concise
+
+### PRs
+
+- Use feature branches (`feat/`, `fix/`, `docs/`)
+- Open Draft PRs early
+- Squash and merge to main
+- Versions are bumped automatically by release-plz based on commit types
+
+## Dependencies
+
+API client crates are external git dependencies on the `main` branch:
+- `redis-cloud` from `github.com/redis-developer/redis-cloud-rs`
+- `redis-enterprise` from `github.com/redis-developer/redis-enterprise-rs`
+
+These are published separately and versioned independently.
+
+## MCP Skills
+
+Skills are workflow templates in `crates/redisctl-mcp/skills/` following the [agentskills.io spec](https://agentskills.io/specification):
+
+```
+skills/
+  index-advisor/SKILL.md      # Recommend search index schemas
+  query-tuning/SKILL.md       # Optimize queries with FT.EXPLAIN/FT.PROFILE
+  index-ab-test/SKILL.md      # Compare multiple index configurations
+```
+
+Each SKILL.md has YAML frontmatter (`name`, `description`) and a markdown body with step-by-step instructions that reference MCP tools.
+
+## License
+
+MIT OR Apache-2.0
