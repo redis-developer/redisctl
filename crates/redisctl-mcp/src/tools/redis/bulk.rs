@@ -59,18 +59,32 @@ database_tool!(write, bulk_load, "redis_bulk_load",
     "Pipelined command execution. Accept a batch of Redis commands and execute them \
      using Redis pipelining for high throughput. Returns count of commands executed, \
      elapsed time, and throughput.\n\n\
+     Each command is a raw args array — the first element is the Redis command name, \
+     the rest are its arguments. This works for any Redis command including module commands.\n\n\
+     JSON document seeding example (use this instead of calling redis_json_set N times):\n\
+     commands: [\n\
+       [\"JSON.SET\", \"user:1\", \"$\", \"{\\\"name\\\":\\\"Alice\\\",\\\"age\\\":30}\"],\n\
+       [\"JSON.SET\", \"user:2\", \"$\", \"{\\\"name\\\":\\\"Bob\\\",\\\"age\\\":25}\"]\n\
+     ]\n\
+     Append \"NX\" or \"XX\" to a JSON.SET args array to set only-if-absent or only-if-present.\n\n\
      Important notes:\n\
-     - Commands are fire-and-forget: individual command errors are not reported. \
-     The batch succeeds if the pipeline as a whole completes.\n\
+     - Default mode is fire-and-forget: per-command results are not returned. \
+     Set collect_results=true to get per-command output (useful for small batches \
+     where you need to verify NX/XX conditions were met).\n\
      - Pipelines are NOT atomic — other clients may interleave commands between batches.\n\
      - Tune batch_size for your use case: smaller batches (100-500) reduce memory per round-trip, \
      larger batches (1000-5000) maximize throughput.",
     {
-        /// List of commands to execute. Each command is an args array (e.g. [\"SET\", \"k\", \"v\"]).
+        /// List of commands to execute. Each command is an args array
+        /// (e.g. [\"SET\", \"k\", \"v\"] or [\"JSON.SET\", \"doc:1\", \"$\", \"{}\", \"NX\"]).
         pub commands: Vec<Command>,
         /// Pipeline batch size (default: 1000). Commands are sent in batches of this size.
         #[serde(default = "default_batch_size", deserialize_with = "serde_helpers::string_or_usize::deserialize")]
         pub batch_size: usize,
+        /// Collect and return per-command results instead of fire-and-forget (default: false).
+        /// Useful for small batches where you need to inspect individual results (e.g. NX/XX outcomes).
+        #[serde(default)]
+        pub collect_results: bool,
     } => |conn, input| {
         if input.commands.is_empty() {
             return Ok(CallToolResult::text("No commands to execute"));
@@ -78,39 +92,85 @@ database_tool!(write, bulk_load, "redis_bulk_load",
 
         let batch_size = input.batch_size.max(1);
         let start = Instant::now();
-        let mut total_ok = 0usize;
+        let total = input.commands.len();
 
-        for (batch_idx, chunk) in input.commands.chunks(batch_size).enumerate() {
-            let mut pipe = redis::pipe();
-            for cmd_input in chunk {
-                if cmd_input.args.is_empty() {
-                    continue;
+        if input.collect_results {
+            let mut all_results: Vec<redis::Value> = Vec::with_capacity(total);
+
+            for (batch_idx, chunk) in input.commands.chunks(batch_size).enumerate() {
+                let mut pipe = redis::pipe();
+                for cmd_input in chunk {
+                    if cmd_input.args.is_empty() {
+                        continue;
+                    }
+                    let mut cmd = redis::cmd(&cmd_input.args[0]);
+                    for arg in &cmd_input.args[1..] {
+                        cmd.arg(arg);
+                    }
+                    pipe.add_command(cmd);
                 }
-                let mut cmd = redis::cmd(&cmd_input.args[0]);
-                for arg in &cmd_input.args[1..] {
-                    cmd.arg(arg);
-                }
-                pipe.add_command(cmd).ignore();
+                let batch_results: Vec<redis::Value> = pipe
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context(format!("Pipeline batch {} failed", batch_idx))?;
+                all_results.extend(batch_results);
             }
-            pipe.query_async::<()>(&mut conn)
-                .await
-                .tool_context(format!("Pipeline batch {} failed", batch_idx))?;
-            total_ok += chunk.len();
-        }
 
-        let elapsed = start.elapsed();
-        let rate = if elapsed.as_secs_f64() > 0.0 {
-            total_ok as f64 / elapsed.as_secs_f64()
+            let elapsed = start.elapsed();
+            let mut lines = Vec::with_capacity(all_results.len() + 2);
+            for (i, (cmd_input, result)) in input.commands.iter().zip(all_results.iter()).enumerate() {
+                let label = cmd_input.args.first().map(|s| s.as_str()).unwrap_or("?");
+                let key = cmd_input.args.get(1).map(|s| s.as_str()).unwrap_or("");
+                let result_str = match result {
+                    redis::Value::Nil => "nil".to_string(),
+                    redis::Value::SimpleString(s) => s.clone(),
+                    redis::Value::Int(n) => n.to_string(),
+                    other => format!("{:?}", other),
+                };
+                lines.push(format!("[{:>4}] {:<12} {}  →  {}", i, label, key, result_str));
+            }
+            lines.push(String::new());
+            lines.push(format!(
+                "Summary: {} commands in {:.2}s ({:.0} cmd/s)",
+                all_results.len(),
+                elapsed.as_secs_f64(),
+                all_results.len() as f64 / elapsed.as_secs_f64().max(f64::EPSILON),
+            ));
+            Ok(CallToolResult::text(lines.join("\n")))
         } else {
-            total_ok as f64
-        };
+            let mut total_ok = 0usize;
+            for (batch_idx, chunk) in input.commands.chunks(batch_size).enumerate() {
+                let mut pipe = redis::pipe();
+                for cmd_input in chunk {
+                    if cmd_input.args.is_empty() {
+                        continue;
+                    }
+                    let mut cmd = redis::cmd(&cmd_input.args[0]);
+                    for arg in &cmd_input.args[1..] {
+                        cmd.arg(arg);
+                    }
+                    pipe.add_command(cmd).ignore();
+                }
+                pipe.query_async::<()>(&mut conn)
+                    .await
+                    .tool_context(format!("Pipeline batch {} failed", batch_idx))?;
+                total_ok += chunk.len();
+            }
 
-        Ok(CallToolResult::text(format!(
-            "Bulk load complete: {} commands executed in {:.2}s ({:.0} cmd/s)",
-            total_ok,
-            elapsed.as_secs_f64(),
-            rate
-        )))
+            let elapsed = start.elapsed();
+            let rate = if elapsed.as_secs_f64() > 0.0 {
+                total_ok as f64 / elapsed.as_secs_f64()
+            } else {
+                total_ok as f64
+            };
+
+            Ok(CallToolResult::text(format!(
+                "Bulk load complete: {} commands executed in {:.2}s ({:.0} cmd/s)",
+                total_ok,
+                elapsed.as_secs_f64(),
+                rate
+            )))
+        }
     }
 );
 

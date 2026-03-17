@@ -15,7 +15,6 @@ mcp_module! {
     json_objlen => "redis_json_objlen",
     json_strlen => "redis_json_strlen",
     json_set => "redis_json_set",
-    json_mset => "redis_json_mset",
     json_numincrby => "redis_json_numincrby",
     json_arrappend => "redis_json_arrappend",
     json_arrinsert => "redis_json_arrinsert",
@@ -243,94 +242,6 @@ database_tool!(write, json_set, "redis_json_set",
                 "Not set (NX/XX condition not met)".to_string()
             )),
         }
-    }
-);
-
-/// A single document entry for json_mset.
-#[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
-pub struct JsonDocument {
-    /// Key to set
-    pub key: String,
-    /// JSONPath expression (default: "$")
-    #[serde(default = "default_root_path")]
-    pub path: String,
-    /// JSON value to set (as a JSON string, e.g. "{\"name\":\"Alice\",\"age\":30}")
-    pub value: String,
-}
-
-database_tool!(write, json_mset, "redis_json_mset",
-    "Set multiple JSON documents in a single pipelined call. Each entry specifies a key, \
-     optional path (default \"$\"), and a JSON value string. Requires the RedisJSON module.\n\n\
-     Use this instead of calling redis_json_set repeatedly — a 100-document seed that would \
-     require 100 tool calls becomes one.\n\n\
-     Flags (applied to all documents):\n\
-     - nx: skip documents where the key/path already exists (JSON.SET NX)\n\
-     - xx: only update documents where the key/path already exists (JSON.SET XX)\n\
-     nx and xx are mutually exclusive.\n\n\
-     Returns a per-document result (OK or skipped) and a summary count. \
-     Not atomic — other clients may interleave between documents.",
-    {
-        /// Documents to set. Each requires key and value; path defaults to \"$\".
-        pub documents: Vec<JsonDocument>,
-        /// Only set documents where the key/path does not already exist
-        #[serde(default)]
-        pub nx: bool,
-        /// Only set documents where the key/path already exists
-        #[serde(default)]
-        pub xx: bool,
-    } => |conn, input| {
-        if input.documents.is_empty() {
-            return Ok(CallToolResult::text("No documents to set"));
-        }
-        if input.nx && input.xx {
-            return Err(tower_mcp::Error::tool(
-                "Cannot set both nx and xx: NX and XX are mutually exclusive",
-            ));
-        }
-
-        let mut pipe = redis::pipe();
-        for doc in &input.documents {
-            let mut cmd = redis::cmd("JSON.SET");
-            cmd.arg(&doc.key).arg(&doc.path).arg(&doc.value);
-            if input.nx {
-                cmd.arg("NX");
-            }
-            if input.xx {
-                cmd.arg("XX");
-            }
-            pipe.add_command(cmd);
-        }
-
-        let results: Vec<Option<String>> = pipe
-            .query_async(&mut conn)
-            .await
-            .tool_context("JSON.MSET pipeline failed")?;
-
-        let mut ok_count = 0usize;
-        let mut skipped_count = 0usize;
-        let mut lines = Vec::with_capacity(results.len());
-        for (doc, result) in input.documents.iter().zip(results.iter()) {
-            match result {
-                Some(_) => {
-                    ok_count += 1;
-                    lines.push(format!("OK       {}", doc.key));
-                }
-                None => {
-                    skipped_count += 1;
-                    lines.push(format!("skipped  {}", doc.key));
-                }
-            }
-        }
-
-        lines.push(String::new());
-        lines.push(format!(
-            "Summary: {} set, {} skipped (total {})",
-            ok_count,
-            skipped_count,
-            input.documents.len()
-        ));
-
-        Ok(CallToolResult::text(lines.join("\n")))
     }
 );
 
