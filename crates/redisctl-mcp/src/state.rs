@@ -1,6 +1,5 @@
 //! Application state and credential resolution
 
-#[cfg(any(feature = "cloud", feature = "enterprise", feature = "database"))]
 use std::collections::HashMap;
 use std::sync::Arc;
 
@@ -55,6 +54,9 @@ pub struct AppState {
     /// Cached API clients (keyed by profile name, "_default" for default)
     #[allow(dead_code)]
     clients: RwLock<CachedClients>,
+    /// Session-scoped command aliases (name → list of command arg arrays)
+    #[cfg(feature = "database")]
+    aliases: RwLock<HashMap<String, Vec<Vec<String>>>>,
 }
 
 impl AppState {
@@ -90,6 +92,8 @@ impl AppState {
                 #[cfg(feature = "database")]
                 database: HashMap::new(),
             }),
+            #[cfg(feature = "database")]
+            aliases: RwLock::new(HashMap::new()),
         })
     }
 
@@ -406,6 +410,36 @@ impl AppState {
     pub fn is_destructive_allowed(&self) -> bool {
         matches!(self.policy.global_tier(), SafetyTier::Full)
     }
+
+    /// Store a named command alias (session-scoped, in-memory only).
+    #[cfg(feature = "database")]
+    pub async fn set_alias(&self, name: String, commands: Vec<Vec<String>>) {
+        let mut aliases = self.aliases.write().await;
+        aliases.insert(name, commands);
+    }
+
+    /// Retrieve a named command alias.
+    #[cfg(feature = "database")]
+    pub async fn get_alias(&self, name: &str) -> Option<Vec<Vec<String>>> {
+        let aliases = self.aliases.read().await;
+        aliases.get(name).cloned()
+    }
+
+    /// List all aliases with their command counts.
+    #[cfg(feature = "database")]
+    pub async fn list_aliases(&self) -> Vec<(String, usize)> {
+        let aliases = self.aliases.read().await;
+        let mut entries: Vec<_> = aliases.iter().map(|(k, v)| (k.clone(), v.len())).collect();
+        entries.sort_by(|a, b| a.0.cmp(&b.0));
+        entries
+    }
+
+    /// Delete a named alias. Returns true if it existed.
+    #[cfg(feature = "database")]
+    pub async fn delete_alias(&self, name: &str) -> bool {
+        let mut aliases = self.aliases.write().await;
+        aliases.remove(name).is_some()
+    }
 }
 
 impl Clone for AppState {
@@ -425,6 +459,8 @@ impl Clone for AppState {
                 #[cfg(feature = "database")]
                 database: HashMap::new(),
             }),
+            #[cfg(feature = "database")]
+            aliases: RwLock::new(HashMap::new()),
         }
     }
 }
@@ -459,6 +495,8 @@ impl AppState {
                 #[cfg(feature = "database")]
                 database: HashMap::new(),
             }),
+            #[cfg(feature = "database")]
+            aliases: RwLock::new(HashMap::new()),
         }
     }
 
@@ -480,6 +518,8 @@ impl AppState {
                 #[cfg(feature = "database")]
                 database: HashMap::new(),
             }),
+            #[cfg(feature = "database")]
+            aliases: RwLock::new(HashMap::new()),
         }
     }
 
@@ -502,6 +542,8 @@ impl AppState {
                 #[cfg(feature = "database")]
                 database: HashMap::new(),
             }),
+            #[cfg(feature = "database")]
+            aliases: RwLock::new(HashMap::new()),
         }
     }
 }
