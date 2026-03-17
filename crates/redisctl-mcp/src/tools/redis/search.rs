@@ -536,7 +536,12 @@ database_tool!(write, ft_create, "redis_ft_create",
      {\"name\": \"$.category\", \"alias\": \"category\", \"field_type\": \"TAG\"}\n\
      ```\n\n\
      Note: Changing a schema requires dropping and recreating the index — indexes do not auto-update. \
-     Use FT.ALIASUPDATE for zero-downtime index swaps.",
+     Use FT.ALIASUPDATE for zero-downtime index swaps.\n\n\
+     if_exists controls behavior when the index already exists:\n\
+     - \"error\" (default): return an error\n\
+     - \"skip\": succeed without recreating — use this for idempotent startup/bootstrap code\n\
+     - \"drop\": drop and recreate with the new schema — use this when iterating on index design. \
+     Only the index definition is dropped; documents are not deleted.",
     {
         /// Index name
         pub index: String,
@@ -548,6 +553,13 @@ database_tool!(write, ft_create, "redis_ft_create",
         pub prefixes: Option<Vec<String>>,
         /// Schema field definitions
         pub schema: Vec<FieldDefinition>,
+        /// What to do if the index already exists:
+        /// - "error" (default): return an error
+        /// - "skip": return success without recreating (idempotent startup pattern)
+        /// - "drop": drop the existing index then create (schema migration / iterative prototyping).
+        ///   Only the index definition is dropped — documents are not deleted.
+        #[serde(default)]
+        pub if_exists: Option<String>,
     } => |conn, input| {
         if input.schema.is_empty() {
             return Err(McpError::tool("schema must contain at least one field definition"));
@@ -563,6 +575,38 @@ database_tool!(write, ft_create, "redis_ft_create",
         }
         for field in &input.schema {
             field.validate()?;
+        }
+
+        let if_exists = input.if_exists.as_deref().unwrap_or("error").to_lowercase();
+        match if_exists.as_str() {
+            "error" | "skip" | "drop" => {}
+            other => return Err(McpError::tool(format!(
+                "Invalid if_exists value '{}'. Valid values: error, skip, drop", other
+            ))),
+        }
+
+        if if_exists == "skip" || if_exists == "drop" {
+            let exists: bool = redis::cmd("FT.INFO")
+                .arg(&input.index)
+                .query_async::<redis::Value>(&mut conn)
+                .await
+                .map(|_| true)
+                .unwrap_or(false);
+
+            if exists {
+                if if_exists == "skip" {
+                    return Ok(CallToolResult::text(format!(
+                        "Index '{}' already exists — skipped (if_exists=skip)",
+                        input.index
+                    )));
+                }
+                // drop
+                let _: () = redis::cmd("FT.DROPINDEX")
+                    .arg(&input.index)
+                    .query_async(&mut conn)
+                    .await
+                    .tool_context("FT.DROPINDEX failed during if_exists=drop")?;
+            }
         }
 
         let mut cmd = redis::cmd("FT.CREATE");
@@ -595,9 +639,10 @@ database_tool!(write, ft_create, "redis_ft_create",
             .collect::<Vec<_>>()
             .join(", ");
 
+        let note = if if_exists == "drop" { " (replaced existing index)" } else { "" };
         Ok(CallToolResult::text(format!(
-            "Created index '{}' with {} field(s): {}",
-            input.index, input.schema.len(), field_summary
+            "Created index '{}' with {} field(s): {}{}",
+            input.index, input.schema.len(), field_summary, note
         )))
     }
 );
