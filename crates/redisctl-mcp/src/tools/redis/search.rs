@@ -186,7 +186,9 @@ database_tool!(read_only, ft_search, "redis_ft_search",
      - Combined: `@category:{electronics} @price:[0 100]`\n\n\
      For JSON indexes, use field aliases (set via AS in FT.CREATE) in queries, not the raw JSONPath.\n\n\
      Field-specific queries (e.g. `@name:value`) only work on fields that are included in the index schema. \
-     Querying a field that is not indexed returns zero results without an error.",
+     Querying a field that is not indexed returns zero results without an error.\n\n\
+     Architectural note: search indexes decouple query patterns from key structure. If you're \
+     doing SCAN + client-side filter, a search index may be simpler and significantly faster.",
     {
         /// Index name
         pub index: String,
@@ -303,7 +305,10 @@ database_tool!(read_only, ft_search, "redis_ft_search",
 );
 
 database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
-    "Execute an aggregation query against a search index. Use raw_args for complex pipelines. Requires the RediSearch module.\n\nCommon raw_args patterns:\n- Group by field: `[\"GROUPBY\", \"1\", \"@category\", \"REDUCE\", \"COUNT\", \"0\", \"AS\", \"count\"]`\n- Average: `[\"GROUPBY\", \"1\", \"@category\", \"REDUCE\", \"AVG\", \"1\", \"@price\", \"AS\", \"avg_price\"]`\n- Sort results: `[\"SORTBY\", \"2\", \"@count\", \"DESC\"]`\n- Computed field: `[\"APPLY\", \"@price * 1.1\", \"AS\", \"price_with_tax\"]`\n\nChain multiple pipeline steps in a single raw_args array.",
+    "Execute an aggregation query against a search index. Use raw_args for complex pipelines. Requires the RediSearch module.\n\n\
+     Architectural note: FT.AGGREGATE can replace client-side fan-out queries across many keys \
+     with a single server-side aggregation. If you're doing SCAN + filter + reduce, an \
+     aggregation pipeline is likely simpler and faster.\n\nCommon raw_args patterns:\n- Group by field: `[\"GROUPBY\", \"1\", \"@category\", \"REDUCE\", \"COUNT\", \"0\", \"AS\", \"count\"]`\n- Average: `[\"GROUPBY\", \"1\", \"@category\", \"REDUCE\", \"AVG\", \"1\", \"@price\", \"AS\", \"avg_price\"]`\n- Sort results: `[\"SORTBY\", \"2\", \"@count\", \"DESC\"]`\n- Computed field: `[\"APPLY\", \"@price * 1.1\", \"AS\", \"price_with_tax\"]`\n\nChain multiple pipeline steps in a single raw_args array.",
     {
         /// Index name
         pub index: String,
