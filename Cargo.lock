@@ -1570,7 +1570,7 @@ dependencies = [
  "libc",
  "percent-encoding",
  "pin-project-lite",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "system-configuration",
  "tokio",
  "tower-service",
@@ -2676,7 +2676,7 @@ dependencies = [
  "quinn-udp",
  "rustc-hash",
  "rustls",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "thiserror 2.0.17",
  "tokio",
  "tracing",
@@ -2714,7 +2714,7 @@ dependencies = [
  "cfg_aliases",
  "libc",
  "once_cell",
- "socket2 0.6.0",
+ "socket2 0.5.10",
  "tracing",
  "windows-sys 0.60.2",
 ]
@@ -2870,8 +2870,8 @@ dependencies = [
 
 [[package]]
 name = "redis-enterprise"
-version = "0.8.5"
-source = "git+https://github.com/redis-developer/redis-enterprise-rs?branch=main#23009fb66e596a93c871e3fc5ca6cbff95a0a51c"
+version = "0.8.7"
+source = "git+https://github.com/redis-developer/redis-enterprise-rs?branch=main#c4c93428482759d0c3c4ae6ba47880c0e1178482"
 dependencies = [
  "anyhow",
  "async-stream",
