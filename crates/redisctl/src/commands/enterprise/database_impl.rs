@@ -1177,6 +1177,9 @@ pub async fn update_database_shards(
 }
 
 /// Get database modules
+///
+/// Fetches the database object and extracts `module_list`, since the
+/// `/v1/bdbs/{id}/modules` endpoint is not supported on all clusters.
 pub async fn get_database_modules(
     conn_mgr: &ConnectionManager,
     profile_name: Option<&str>,
@@ -1185,12 +1188,17 @@ pub async fn get_database_modules(
     query: Option<&str>,
 ) -> CliResult<()> {
     let client = conn_mgr.create_enterprise_client(profile_name).await?;
-    let response = client
-        .get_raw(&format!("/v1/bdbs/{}/modules", id))
+    let response: serde_json::Value = client
+        .get_raw(&format!("/v1/bdbs/{}", id))
         .await
         .map_err(RedisCtlError::from)?;
 
-    let data = handle_output(response, output_format, query)?;
+    let modules = response
+        .get("module_list")
+        .cloned()
+        .unwrap_or(serde_json::Value::Array(vec![]));
+
+    let data = handle_output(modules, output_format, query)?;
     print_formatted_output(data, output_format)?;
     Ok(())
 }
