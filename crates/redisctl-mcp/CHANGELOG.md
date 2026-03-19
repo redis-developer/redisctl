@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.1](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.10.0...redisctl-mcp-v0.10.1) - 2026-03-19
+
+### Other
+
+- docs + feat(mcp): .mcp.json setup, tool hints, and 5 new skills ([#902](https://github.com/redis-developer/redisctl/pull/902))
+
 ## [0.10.0](https://github.com/redis-developer/redisctl/compare/redisctl-mcp-v0.9.1...redisctl-mcp-v0.10.0) - 2026-03-17
 
 ### Added
