@@ -178,6 +178,67 @@ redisctl-mcp --profile local-redis
 
 **Note**: If both `--database-url` and a database profile are available, the `--database-url` takes precedence.
 
+## Quick `.mcp.json` Setup
+
+Most AI assistants use a `.mcp.json` file for MCP server configuration. Drop one of these into your project root to get started immediately:
+
+**Database only** (local Redis, read-write):
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": ["--database-url", "redis://localhost:6379", "--read-only=false"]
+    }
+  }
+}
+```
+
+**Cloud management** (read-only, profile-based):
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": ["--profile", "my-cloud-profile", "--tools", "cloud"]
+    }
+  }
+}
+```
+
+**Full stack** (Cloud/Enterprise management + database + search):
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "redisctl-mcp",
+      "args": [
+        "--profile", "my-profile",
+        "--database-url", "redis://localhost:6379",
+        "--read-only=false",
+        "--tools", "database,cloud"
+      ]
+    }
+  }
+}
+```
+
+**Development** (build from source):
+```json
+{
+  "mcpServers": {
+    "redisctl": {
+      "command": "cargo",
+      "args": [
+        "run", "-p", "redisctl-mcp", "--",
+        "--database-url", "redis://localhost:6379",
+        "--read-only=false"
+      ]
+    }
+  }
+}
+```
+
 ## IDE Configuration
 
 Choose your AI assistant below:

@@ -949,7 +949,9 @@ database_tool!(read_only, lindex, "redis_lindex",
 // --- Write tools ---
 
 database_tool!(write, hset, "redis_hset",
-    "Set one or more field-value pairs in a hash. Creates the hash if needed.",
+    "Set one or more field-value pairs in a hash. Creates the hash if needed.\n\n\
+     Architectural note: a single hash with per-field TTL (via HEXPIRE) can replace \
+     sorted-set-based membership tracking, eliminating the need for cleanup scanners.",
     {
         /// Hash key
         pub key: String,
@@ -1174,7 +1176,10 @@ database_tool!(write, srem, "redis_srem",
 
 database_tool!(write, zadd, "redis_zadd",
     "Add members with scores to a sorted set. Creates the set if needed. \
-     Supports NX, XX, GT, LT, and CH flags.",
+     Supports NX, XX, GT, LT, and CH flags.\n\n\
+     Architectural note: score-based ordering enables leaderboard, time-series, and priority \
+     queue patterns. For Active-Active (CRDB), sorted sets have high CRDT cost — consider \
+     hashes or strings (cheap LWW) if cross-region replication is a factor.",
     {
         /// Sorted set key
         pub key: String,

@@ -198,7 +198,10 @@ database_tool!(read_only, json_strlen, "redis_json_strlen",
 // ---------------------------------------------------------------------------
 
 database_tool!(write, json_set, "redis_json_set",
-    "Set a JSON value at a path. Creates the key if it does not exist. Value must be valid JSON. Requires the RedisJSON module.",
+    "Set a JSON value at a path. Creates the key if it does not exist. Value must be valid JSON. Requires the RedisJSON module.\n\n\
+     Architectural note: the NX flag enables conditional-write patterns — idempotent creation, \
+     conflict-free seeding, and distinguishing new records from updates (e.g. new user joins \
+     vs heartbeat refreshes).",
     {
         /// Key to set
         pub key: String,
