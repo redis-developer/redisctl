@@ -15,6 +15,13 @@ use tokio::sync::RwLock;
 
 use crate::policy::{Policy, SafetyTier};
 
+#[cfg(feature = "cloud")]
+fn cloud_api_secret_from_env() -> Result<String> {
+    std::env::var("REDIS_CLOUD_SECRET_KEY")
+        .or_else(|_| std::env::var("REDIS_CLOUD_API_SECRET"))
+        .context("REDIS_CLOUD_SECRET_KEY or REDIS_CLOUD_API_SECRET not set")
+}
+
 /// How credentials are resolved
 #[derive(Debug, Clone)]
 #[allow(dead_code)]
@@ -224,8 +231,7 @@ impl AppState {
                 // In OAuth mode, credentials come from environment variables
                 let api_key =
                     std::env::var("REDIS_CLOUD_API_KEY").context("REDIS_CLOUD_API_KEY not set")?;
-                let api_secret = std::env::var("REDIS_CLOUD_API_SECRET")
-                    .context("REDIS_CLOUD_API_SECRET not set")?;
+                let api_secret = cloud_api_secret_from_env()?;
 
                 CloudClient::builder()
                     .api_key(api_key)
@@ -596,6 +602,45 @@ impl AppState {
             }),
             #[cfg(feature = "database")]
             aliases: RwLock::new(HashMap::new()),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[cfg(feature = "cloud")]
+    use super::cloud_api_secret_from_env;
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn cloud_secret_env_prefers_canonical_name() {
+        unsafe {
+            std::env::set_var("REDIS_CLOUD_SECRET_KEY", "canonical-secret");
+            std::env::set_var("REDIS_CLOUD_API_SECRET", "alias-secret");
+        }
+
+        let result = cloud_api_secret_from_env().unwrap();
+        assert_eq!(result, "canonical-secret");
+
+        unsafe {
+            std::env::remove_var("REDIS_CLOUD_SECRET_KEY");
+            std::env::remove_var("REDIS_CLOUD_API_SECRET");
+        }
+    }
+
+    #[cfg(feature = "cloud")]
+    #[test]
+    fn cloud_secret_env_falls_back_to_alias() {
+        unsafe {
+            std::env::remove_var("REDIS_CLOUD_SECRET_KEY");
+            std::env::set_var("REDIS_CLOUD_API_SECRET", "alias-secret");
+        }
+
+        let result = cloud_api_secret_from_env().unwrap();
+        assert_eq!(result, "alias-secret");
+
+        unsafe {
+            std::env::remove_var("REDIS_CLOUD_API_SECRET");
         }
     }
 }

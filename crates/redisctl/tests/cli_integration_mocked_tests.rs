@@ -1064,3 +1064,34 @@ async fn test_env_vars_work_without_config_file() {
         .success()
         .stdout(predicate::str::contains("env credentials used"));
 }
+
+#[tokio::test]
+async fn test_cloud_api_secret_alias_works_without_config_file() {
+    let mock_server = MockServer::start().await;
+
+    Mock::given(method("GET"))
+        .and(path("/test"))
+        .and(header("x-api-key", "env-api-key"))
+        .and(header("x-api-secret-key", "env-api-secret"))
+        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
+            "message": "env alias credentials used"
+        })))
+        .expect(1)
+        .mount(&mock_server)
+        .await;
+
+    let mut cmd = Command::cargo_bin("redisctl").unwrap();
+
+    cmd.env("REDIS_CLOUD_API_KEY", "env-api-key");
+    cmd.env("REDIS_CLOUD_API_SECRET", "env-api-secret");
+    cmd.env_remove("REDIS_CLOUD_SECRET_KEY");
+    cmd.env("REDIS_CLOUD_API_URL", mock_server.uri());
+
+    cmd.arg("api")
+        .arg("cloud")
+        .arg("get")
+        .arg("/test")
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("env alias credentials used"));
+}

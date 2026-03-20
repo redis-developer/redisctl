@@ -24,7 +24,7 @@
 //! For Redis Cloud:
 //! ```bash
 //! export REDIS_CLOUD_API_KEY="your-api-key"
-//! export REDIS_CLOUD_API_SECRET="your-api-secret"
+//! export REDIS_CLOUD_SECRET_KEY="your-api-secret"
 //! ```
 //!
 //! For Redis Enterprise:
