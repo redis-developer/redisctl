@@ -120,8 +120,14 @@ mod tests {
             std::collections::HashMap::new(),
             "test".to_string(),
         ));
-        let state =
-            AppState::new(CredentialSource::Profiles(vec![]), read_only_policy, None, false, None).unwrap();
+        let state = AppState::new(
+            CredentialSource::Profiles(vec![]),
+            read_only_policy,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
 
         assert!(!state.is_write_allowed());
     }
@@ -137,7 +143,14 @@ mod tests {
             std::collections::HashMap::new(),
             "test".to_string(),
         ));
-        let state = AppState::new(CredentialSource::Profiles(vec![]), write_policy, None, false, None).unwrap();
+        let state = AppState::new(
+            CredentialSource::Profiles(vec![]),
+            write_policy,
+            None,
+            false,
+            None,
+        )
+        .unwrap();
 
         assert!(state.is_write_allowed());
     }
