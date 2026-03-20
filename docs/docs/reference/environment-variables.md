@@ -8,6 +8,8 @@ Complete reference of environment variables supported by redisctl.
 |----------|-------------|---------|
 | `REDIS_CLOUD_API_KEY` | API account key | `A3qcymrvqpn9rr...` |
 | `REDIS_CLOUD_SECRET_KEY` | API secret key | `S3s8ecrrnaguqk...` |
+
+`REDIS_CLOUD_API_SECRET` is still accepted as a compatibility alias, but `REDIS_CLOUD_SECRET_KEY` is the canonical name used by the CLI and docs.
 | `REDIS_CLOUD_API_URL` | API endpoint (optional) | `https://api.redislabs.com/v1` |
 
 ## Redis Enterprise

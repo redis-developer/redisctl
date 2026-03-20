@@ -109,15 +109,21 @@ impl CredentialStore {
     /// Retrieve a credential value
     ///
     /// Resolution order:
-    /// 1. Check environment variable (if env_var provided)
+    /// 1. Check environment variables in order (if env vars provided)
     /// 2. If value starts with "keyring:", retrieve from keyring
     /// 3. Otherwise, return the value as-is (plaintext)
     pub fn get_credential(&self, value: &str, env_var: Option<&str>) -> Result<String> {
-        // First check environment variable if provided
-        if let Some(var) = env_var
-            && let Ok(env_value) = env::var(var)
-        {
-            return Ok(env_value);
+        self.get_credential_with_env_vars(value, env_var.into_iter().collect())
+    }
+
+    /// Retrieve a credential value with support for multiple environment variable aliases.
+    ///
+    /// Environment variables are checked in order, and the first set value wins.
+    pub fn get_credential_with_env_vars(&self, value: &str, env_vars: Vec<&str>) -> Result<String> {
+        for var in env_vars {
+            if let Ok(env_value) = env::var(var) {
+                return Ok(env_value);
+            }
         }
 
         // Check if this is a keyring reference
@@ -225,6 +231,48 @@ mod tests {
 
         unsafe {
             env::remove_var("TEST_CREDENTIAL");
+        }
+    }
+
+    #[test]
+    fn test_env_var_alias_override_uses_first_available() {
+        unsafe {
+            env::set_var("TEST_CREDENTIAL_ALIAS_2", "alias-value");
+        }
+
+        let store = CredentialStore::new();
+        let result = store
+            .get_credential_with_env_vars(
+                "config-value",
+                vec!["TEST_CREDENTIAL_ALIAS_1", "TEST_CREDENTIAL_ALIAS_2"],
+            )
+            .unwrap();
+        assert_eq!(result, "alias-value");
+
+        unsafe {
+            env::remove_var("TEST_CREDENTIAL_ALIAS_2");
+        }
+    }
+
+    #[test]
+    fn test_env_var_alias_override_prefers_first_set() {
+        unsafe {
+            env::set_var("TEST_CREDENTIAL_ALIAS_1", "preferred-value");
+            env::set_var("TEST_CREDENTIAL_ALIAS_2", "fallback-value");
+        }
+
+        let store = CredentialStore::new();
+        let result = store
+            .get_credential_with_env_vars(
+                "config-value",
+                vec!["TEST_CREDENTIAL_ALIAS_1", "TEST_CREDENTIAL_ALIAS_2"],
+            )
+            .unwrap();
+        assert_eq!(result, "preferred-value");
+
+        unsafe {
+            env::remove_var("TEST_CREDENTIAL_ALIAS_1");
+            env::remove_var("TEST_CREDENTIAL_ALIAS_2");
         }
     }
 

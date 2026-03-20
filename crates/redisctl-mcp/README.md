@@ -128,7 +128,7 @@ default_enterprise_profile = "enterprise-dev"
 [profiles.cloud-prod]
 type = "cloud"
 api_key = "${REDIS_CLOUD_API_KEY}"
-api_secret = "${REDIS_CLOUD_API_SECRET}"
+api_secret = "${REDIS_CLOUD_SECRET_KEY}"
 
 [profiles.enterprise-dev]
 type = "enterprise"
@@ -145,7 +145,7 @@ For OAuth/HTTP mode or when not using profiles:
 ```bash
 # Redis Cloud
 export REDIS_CLOUD_API_KEY=your-key
-export REDIS_CLOUD_API_SECRET=your-secret
+export REDIS_CLOUD_SECRET_KEY=your-secret
 
 # Redis Enterprise
 export REDIS_ENTERPRISE_URL=https://cluster:9443

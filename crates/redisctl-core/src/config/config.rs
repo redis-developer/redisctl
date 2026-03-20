@@ -181,7 +181,10 @@ impl Profile {
                         ConfigError::CredentialError(format!("Failed to resolve API key: {}", e))
                     })?;
                 let resolved_secret = store
-                    .get_credential(api_secret, Some("REDIS_CLOUD_API_SECRET"))
+                    .get_credential_with_env_vars(
+                        api_secret,
+                        vec!["REDIS_CLOUD_SECRET_KEY", "REDIS_CLOUD_API_SECRET"],
+                    )
                     .map_err(|e| {
                         ConfigError::CredentialError(format!("Failed to resolve API secret: {}", e))
                     })?;

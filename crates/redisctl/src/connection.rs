@@ -146,7 +146,9 @@ impl ConnectionManager {
             None
         };
         let env_api_secret = if use_env_vars {
-            std::env::var("REDIS_CLOUD_SECRET_KEY").ok()
+            std::env::var("REDIS_CLOUD_SECRET_KEY")
+                .ok()
+                .or_else(|| std::env::var("REDIS_CLOUD_API_SECRET").ok())
         } else {
             None
         };
@@ -160,7 +162,9 @@ impl ConnectionManager {
             debug!("Found REDIS_CLOUD_API_KEY environment variable");
         }
         if env_api_secret.is_some() {
-            debug!("Found REDIS_CLOUD_SECRET_KEY environment variable");
+            debug!(
+                "Found Redis Cloud secret environment variable (REDIS_CLOUD_SECRET_KEY or REDIS_CLOUD_API_SECRET)"
+            );
         }
         if env_api_url.is_some() {
             debug!("Found REDIS_CLOUD_API_URL environment variable");

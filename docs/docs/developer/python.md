@@ -89,7 +89,7 @@ CloudClient(
 | Variable | Description |
 |----------|-------------|
 | `REDIS_CLOUD_API_KEY` | API key |
-| `REDIS_CLOUD_API_SECRET` | API secret |
+| `REDIS_CLOUD_SECRET_KEY` | API secret |
 | `REDIS_CLOUD_BASE_URL` | Base URL (optional) |
 
 ## EnterpriseClient API
