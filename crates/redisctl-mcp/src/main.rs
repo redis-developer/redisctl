@@ -464,7 +464,19 @@ fn resolve_policy(args: &Args) -> Result<(PolicyConfig, String)> {
     let has_env_policy = std::env::var("REDISCTL_MCP_POLICY").is_ok() && args.policy.is_none();
     let has_default_policy = PolicyConfig::default_path_exists();
 
-    if has_explicit_policy || has_env_policy || has_default_policy {
+    resolve_policy_with_source_flags(
+        args,
+        has_explicit_policy || has_env_policy,
+        has_default_policy,
+    )
+}
+
+fn resolve_policy_with_source_flags(
+    args: &Args,
+    has_explicit_or_env_policy: bool,
+    has_default_policy: bool,
+) -> Result<(PolicyConfig, String)> {
+    if has_explicit_or_env_policy || has_default_policy {
         let (config, source) = PolicyConfig::load(args.policy.as_deref())?;
         if !args.read_only {
             tracing::warn!(
@@ -487,13 +499,10 @@ fn resolve_policy(args: &Args) -> Result<(PolicyConfig, String)> {
         "cli: --read-only=false".to_string()
     };
 
-    Ok((
-        PolicyConfig {
-            tier,
-            ..Default::default()
-        },
-        source,
-    ))
+    let mut config = PolicyConfig::synthesized_default();
+    config.tier = tier;
+
+    Ok((config, source))
 }
 
 #[tokio::main]
@@ -1133,6 +1142,19 @@ mod tests {
         assert!(toolsets.contains(&Toolset::Enterprise));
         #[cfg(feature = "database")]
         assert!(toolsets.contains(&Toolset::Database));
+    }
+
+    #[test]
+    fn synthesized_cli_policy_keeps_raw_tool_denies_at_full_tier() {
+        let args = Args::parse_from(["redisctl-mcp", "--read-only=false"]);
+
+        let (config, source) = resolve_policy_with_source_flags(&args, false, false).unwrap();
+
+        assert_eq!(config.tier, SafetyTier::Full);
+        assert_eq!(source, "cli: --read-only=false");
+        assert!(config.deny.contains(&"cloud_raw_api".to_string()));
+        assert!(config.deny.contains(&"enterprise_raw_api".to_string()));
+        assert!(config.deny.contains(&"redis_command".to_string()));
     }
 
     // ========================================================================
