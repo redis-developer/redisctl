@@ -36,7 +36,7 @@ pub struct CachedClients {
     #[cfg(feature = "enterprise")]
     pub enterprise: HashMap<String, EnterpriseClient>,
     #[cfg(feature = "database")]
-    pub database: HashMap<String, redis::aio::MultiplexedConnection>,
+    pub database: HashMap<String, crate::tools::redis::RedisConnection>,
 }
 
 /// Shared application state
@@ -47,6 +47,10 @@ pub struct AppState {
     pub policy: Arc<Policy>,
     /// Optional Redis database URL for direct connections
     pub database_url: Option<String>,
+    /// Enable Redis Cluster mode (handles MOVED/ASK redirections)
+    pub cluster: bool,
+    /// Client name for CLIENT SETNAME (identifies connections in CLIENT LIST)
+    pub client_name: Option<String>,
     /// redisctl config (for profile-based auth)
     config: Option<Config>,
     /// Configured profiles (for multi-cluster support)
@@ -65,6 +69,8 @@ impl AppState {
         credential_source: CredentialSource,
         policy: Arc<Policy>,
         database_url: Option<String>,
+        cluster: bool,
+        client_name: Option<String>,
     ) -> Result<Self> {
         // Extract profiles list
         let profiles = match &credential_source {
@@ -82,6 +88,8 @@ impl AppState {
             credential_source,
             policy,
             database_url,
+            cluster,
+            client_name,
             config,
             profiles,
             clients: RwLock::new(CachedClients {
@@ -352,11 +360,16 @@ impl AppState {
     ///
     /// Connections are cached by URL. If a cached connection fails a PING
     /// health check, it is evicted and a fresh connection is created.
+    ///
+    /// Returns a `RedisConnection` (standalone or cluster) based on the
+    /// `cluster` flag in AppState.
     #[cfg(feature = "database")]
     pub async fn redis_connection_for_url(
         &self,
         url: &str,
-    ) -> Result<redis::aio::MultiplexedConnection> {
+    ) -> Result<crate::tools::redis::RedisConnection> {
+        use crate::tools::redis::RedisConnection;
+
         // Check cache first
         {
             let clients = self.clients.read().await;
@@ -375,11 +388,42 @@ impl AppState {
         }
 
         // Create new connection (or reconnect after eviction)
-        let client = redis::Client::open(url).context("Failed to create Redis client")?;
-        let conn = client
-            .get_multiplexed_async_connection()
-            .await
-            .context("Failed to connect to Redis")?;
+        let conn = if self.cluster {
+            let client = redis::cluster::ClusterClient::new(vec![url])
+                .context("Failed to create Redis cluster client")?;
+            let mut cluster_conn = client
+                .get_async_connection()
+                .await
+                .context("Failed to connect to Redis cluster")?;
+
+            // Set client name if configured
+            if let Some(ref name) = self.client_name {
+                let _ = redis::cmd("CLIENT")
+                    .arg("SETNAME")
+                    .arg(name)
+                    .query_async::<String>(&mut cluster_conn)
+                    .await;
+            }
+
+            RedisConnection::Cluster(cluster_conn)
+        } else {
+            let client = redis::Client::open(url).context("Failed to create Redis client")?;
+            let mut standalone_conn = client
+                .get_multiplexed_async_connection()
+                .await
+                .context("Failed to connect to Redis")?;
+
+            // Set client name if configured
+            if let Some(ref name) = self.client_name {
+                let _ = redis::cmd("CLIENT")
+                    .arg("SETNAME")
+                    .arg(name)
+                    .query_async::<String>(&mut standalone_conn)
+                    .await;
+            }
+
+            RedisConnection::Standalone(standalone_conn)
+        };
 
         // Cache it
         {
@@ -449,6 +493,8 @@ impl Clone for AppState {
             credential_source: self.credential_source.clone(),
             policy: self.policy.clone(),
             database_url: self.database_url.clone(),
+            cluster: self.cluster,
+            client_name: self.client_name.clone(),
             config: self.config.clone(),
             profiles: self.profiles.clone(),
             clients: RwLock::new(CachedClients {
@@ -486,6 +532,8 @@ impl AppState {
             credential_source: CredentialSource::Profiles(vec![]),
             policy: Self::test_policy(),
             database_url: None,
+            cluster: false,
+            client_name: None,
             config: None,
             profiles: vec![],
             clients: RwLock::new(CachedClients {
@@ -509,6 +557,8 @@ impl AppState {
             credential_source: CredentialSource::Profiles(vec![]),
             policy: Self::test_policy(),
             database_url: None,
+            cluster: false,
+            client_name: None,
             config: None,
             profiles: vec![],
             clients: RwLock::new(CachedClients {
@@ -534,6 +584,8 @@ impl AppState {
             credential_source: CredentialSource::Profiles(vec![]),
             policy: Self::test_policy(),
             database_url: None,
+            cluster: false,
+            client_name: None,
             config: None,
             profiles: vec![],
             clients: RwLock::new(CachedClients {

@@ -96,7 +96,7 @@ serial_test = "3.1"
 pretty_assertions = "1.4"
 
 # Redis client
-redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "connection-manager"] }
+redis = { version = "0.27", features = ["tokio-comp", "tokio-rustls-comp", "connection-manager", "cluster-async"] }
 
 # External crates (git for dev, version required for crates.io publish)
 redis-cloud = { version = "0.9.5", git = "https://github.com/redis-developer/redis-cloud-rs", branch = "main" }
