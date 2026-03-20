@@ -89,11 +89,13 @@ The `cloud`/`enterprise` prefix is optional -- the CLI infers the platform from 
 }
 ```
 
-**Read-only by default.** Write and destructive operations require explicit opt-in via a policy file (`redisctl-mcp.toml`):
+**Read-only by default.** Write and destructive operations require explicit opt-in via a policy file (`mcp-policy.toml`):
 
 ```toml
-tier = "standard"  # read-only (default) | standard (read-write) | full (destructive)
+tier = "read-write"  # read-only (default) | read-write | full
 ```
+
+See the [MCP configuration docs](https://redis-field-engineering.github.io/redisctl-docs/mcp/configuration/) for the full policy schema and precedence rules.
 
 ### Zero-Install with Docker
 
