@@ -152,19 +152,19 @@ Configure a database profile in your redisctl config file (`~/.config/redisctl/c
 
 ```toml
 # Default database profile to use when none specified
-default_database_profile = "local-redis"
+default_database = "local-redis"
 
 [profiles.local-redis]
 deployment_type = "database"
-
-[profiles.local-redis.credentials.database]
 host = "localhost"
 port = 6379
 password = "mypassword"  # optional
 tls = false
 username = "default"     # optional, defaults to "default"
-db = 0                   # optional, defaults to 0
+database = 0             # optional, defaults to 0
 ```
+
+This uses the same flat profile schema shown in the [configuration file reference](../reference/config-file.md).
 
 Then start the MCP server with that profile:
 
