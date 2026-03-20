@@ -2,6 +2,7 @@
 
 mod aliases;
 mod bulk;
+mod connection;
 mod diagnostics;
 mod json;
 mod keys;
@@ -9,6 +10,8 @@ mod raw;
 mod search;
 mod server;
 mod structures;
+
+pub(crate) use connection::RedisConnection;
 
 #[allow(unused_imports)]
 pub use aliases::*;
@@ -145,7 +148,7 @@ pub(crate) fn resolve_redis_url(
     })
 }
 
-/// Resolve a Redis URL and return a cached multiplexed connection.
+/// Resolve a Redis URL and return a cached connection (standalone or cluster).
 ///
 /// This is the main entry point for tool handlers. It resolves the URL from
 /// the input parameters, then returns a pooled connection (creating one if needed).
@@ -153,7 +156,7 @@ pub(crate) async fn get_connection(
     url: Option<String>,
     profile: Option<&str>,
     state: &AppState,
-) -> Result<redis::aio::MultiplexedConnection, ToolError> {
+) -> Result<RedisConnection, ToolError> {
     let url = resolve_redis_url(url, profile, state)?;
     state
         .redis_connection_for_url(&url)

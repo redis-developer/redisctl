@@ -41,6 +41,8 @@
 //!     CredentialSource::Profiles(vec!["default".to_string()]),
 //!     policy,
 //!     None, // no database URL
+//!     false, // cluster mode
+//!     Some("redisctl-mcp".to_string()), // client name
 //! )?);
 //!
 //! // Use merge to compose sub-routers
@@ -119,7 +121,7 @@ mod tests {
             "test".to_string(),
         ));
         let state =
-            AppState::new(CredentialSource::Profiles(vec![]), read_only_policy, None).unwrap();
+            AppState::new(CredentialSource::Profiles(vec![]), read_only_policy, None, false, None).unwrap();
 
         assert!(!state.is_write_allowed());
     }
@@ -135,7 +137,7 @@ mod tests {
             std::collections::HashMap::new(),
             "test".to_string(),
         ));
-        let state = AppState::new(CredentialSource::Profiles(vec![]), write_policy, None).unwrap();
+        let state = AppState::new(CredentialSource::Profiles(vec![]), write_policy, None, false, None).unwrap();
 
         assert!(state.is_write_allowed());
     }
@@ -146,6 +148,8 @@ mod tests {
             CredentialSource::Profiles(vec![]),
             AppState::test_policy(),
             Some("redis://localhost:6379".to_string()),
+            false,
+            None,
         )
         .unwrap();
 
@@ -164,6 +168,8 @@ mod tests {
             ]),
             AppState::test_policy(),
             None,
+            false,
+            None,
         )
         .unwrap();
 
@@ -180,6 +186,8 @@ mod tests {
             AppState::new(
                 CredentialSource::Profiles(vec![]),
                 AppState::test_policy(),
+                None,
+                false,
                 None,
             )
             .unwrap(),
@@ -230,6 +238,8 @@ mod tests {
             AppState::new(
                 CredentialSource::Profiles(vec![]),
                 AppState::test_policy(),
+                None,
+                false,
                 None,
             )
             .unwrap(),
@@ -293,6 +303,8 @@ mod tests {
                 CredentialSource::Profiles(vec![]),
                 AppState::test_policy(),
                 Some("redis://localhost:6379".to_string()),
+                false,
+                None,
             )
             .unwrap(),
         );
@@ -315,6 +327,8 @@ mod tests {
             AppState::new(
                 CredentialSource::Profiles(vec![]),
                 AppState::test_policy(),
+                None,
+                false,
                 None,
             )
             .unwrap(),

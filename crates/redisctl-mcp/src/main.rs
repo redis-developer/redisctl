@@ -180,6 +180,14 @@ struct Args {
     #[arg(long, env = "REDIS_URL")]
     database_url: Option<String>,
 
+    /// Enable Redis Cluster mode (handles MOVED/ASK redirections)
+    #[arg(long, env = "REDIS_CLUSTER")]
+    cluster: bool,
+
+    /// Client name for CLIENT SETNAME (identifies MCP connections in CLIENT LIST)
+    #[arg(long, env = "REDIS_CLIENT_NAME", default_value = "redisctl-mcp")]
+    client_name: Option<String>,
+
     /// Toolsets to enable (default: all compiled-in).
     /// Use bare names for all sub-modules: cloud,enterprise,database,app.
     /// Use colon syntax for specific sub-modules: cloud:subscriptions,cloud:networking.
@@ -551,6 +559,8 @@ async fn main() -> Result<()> {
         credential_source,
         policy.clone(),
         args.database_url.clone(),
+        args.cluster,
+        args.client_name.clone(),
     )?);
 
     // Resolve skills directory
@@ -1022,6 +1032,8 @@ mod tests {
             AppState::new(
                 state::CredentialSource::Profiles(vec![]),
                 AppState::test_policy(),
+                None,
+                false,
                 None,
             )
             .unwrap(),

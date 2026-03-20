@@ -88,6 +88,8 @@ fn make_state(port: u16) -> Arc<AppState> {
             redisctl_mcp::state::CredentialSource::Profiles(vec![]),
             policy,
             Some(redis_url(port)),
+            false,
+            None,
         )
         .unwrap(),
     )
@@ -107,6 +109,8 @@ fn make_rw_state(port: u16) -> Arc<AppState> {
             redisctl_mcp::state::CredentialSource::Profiles(vec![]),
             policy,
             Some(redis_url(port)),
+            false,
+            None,
         )
         .unwrap(),
     )
@@ -126,6 +130,8 @@ fn make_full_state(port: u16) -> Arc<AppState> {
             redisctl_mcp::state::CredentialSource::Profiles(vec![]),
             policy,
             Some(redis_url(port)),
+            false,
+            None,
         )
         .unwrap(),
     )
@@ -1461,6 +1467,8 @@ async fn test_flushdb_tool() {
             redisctl_mcp::state::CredentialSource::Profiles(vec![]),
             policy,
             Some(url_db1.clone()),
+            false,
+            None,
         )
         .unwrap(),
     );
