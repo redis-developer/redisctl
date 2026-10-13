@@ -132,7 +132,8 @@ credential/target environment values, isolates config, and calls only protocol
 discovery, policy inspection, and an unavailable profile-creation tool with no
 credentials. On macOS, sandbox-exec blocks both operator config locations and
 all network access; it must not fall back to unsandboxed execution. Linux uses
-a disposable XDG config root; Windows uses disposable APPDATA/LOCALAPPDATA.
+a disposable XDG config root. Windows and other unverified platforms are rejected
+before starting the server; environment rewriting is not native isolation proof.
 Only macOS has local execution evidence so far. Neither harness connects to Redis
 or exercises user credential storage. Inspect-Codex reads only package metadata
 through app-server; it does not start a conversation or MCP connection.
@@ -175,7 +176,8 @@ production integration contract.
 The hermetic suite also exercises malformed skill sources, drift/missing generated
 files without repair, and a missing executable. Synthetic platform-branch tests
 check that credential/target environment values are stripped, unverified platforms
-are rejected, and macOS never retries without its sandbox. These mocked branches
+are rejected before process creation, and macOS never retries without its sandbox.
+These mocked branches
 are harness regressions, not native Windows/Linux install or isolation evidence.
 
 ## Evidence and limitations

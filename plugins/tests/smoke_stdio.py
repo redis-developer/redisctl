@@ -41,7 +41,13 @@ class RpcProcess:
         self.send(method, params, identifier)
         deadline = time.monotonic() + 20
         while True:
-            line = self.lines.get(timeout=max(0.01, deadline - time.monotonic()))
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                raise TimeoutError(f"Protocol request timed out: {method}")
+            try:
+                line = self.lines.get(timeout=remaining)
+            except queue.Empty:
+                raise TimeoutError(f"Protocol request timed out: {method}") from None
             if line is None:
                 raise RuntimeError("Protocol process ended before responding")
             message = json.loads(line)  # stdout must contain only JSON-RPC
@@ -51,8 +57,6 @@ class RpcProcess:
                         return {"error": message["error"]}
                     raise RuntimeError(f"Protocol request failed: {method}")
                 return message["result"]
-            if time.monotonic() >= deadline:
-                raise TimeoutError(f"Protocol request timed out: {method}")
 
     def close(self):
         self.process.stdin.close()
@@ -75,7 +79,7 @@ def isolated_command(binary, args, directory):
         denied = " ".join(f"(subpath {json.dumps(str(path))})" for path in paths)
         profile = f"(version 1) (allow default) (deny network*) (deny file-read* {denied})"
         command = ["/usr/bin/sandbox-exec", "-p", profile, *command]
-    elif not (sys.platform.startswith("linux") or sys.platform == "win32"):
+    elif not sys.platform.startswith("linux"):
         raise RuntimeError("No verified config isolation for this platform")
     return command, env
 

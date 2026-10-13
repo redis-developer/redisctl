@@ -22,7 +22,7 @@ class SmokeIsolationTests(unittest.TestCase):
             "REDIS_CLOUD_API_KEY": "synthetic-secret", "REDISCTL_CONFIG_FILE": "/operator/config",
             "AWS_SECRET_ACCESS_KEY": "synthetic-secret", "ANTHROPIC_API_KEY": "synthetic-secret",
         }
-        for platform in ("linux", "win32", "darwin"):
+        for platform in ("linux", "darwin"):
             with self.subTest(platform=platform), patch.dict(smoke.os.environ, inherited, clear=True), \
                     patch.object(smoke.sys, "platform", platform), \
                     patch.object(smoke.Path, "home", return_value=PurePosixPath("/synthetic/operator")):
@@ -52,6 +52,14 @@ class SmokeIsolationTests(unittest.TestCase):
         with patch.object(smoke.sys, "platform", "synthetic-unsupported"):
             with self.assertRaisesRegex(RuntimeError, "No verified config isolation"):
                 smoke.isolated_command(Path("/synthetic/server"), [], Path("/fixture"))
+
+    def test_windows_fails_before_process_creation(self):
+        with patch.object(smoke.sys, "platform", "win32"), \
+                patch.object(smoke.subprocess, "Popen") as start:
+            with self.assertRaisesRegex(RuntimeError, "No verified config isolation"):
+                command, env = smoke.isolated_command(Path("/synthetic/server"), [], Path("/fixture"))
+                smoke.RpcProcess(command, "/fixture", env)
+            start.assert_not_called()
 
     def test_missing_binary_fails_before_protocol_start(self):
         with tempfile.TemporaryDirectory(prefix="missing plugin binary ") as directory:
