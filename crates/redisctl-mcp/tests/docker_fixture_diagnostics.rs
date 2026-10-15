@@ -35,8 +35,12 @@ fn assert_safe(error: &anyhow::Error) {
         ] {
             assert!(!rendered.contains(secret), "unsafe error rendering");
         }
-        assert!(rendered.len() < 300, "diagnostic should remain bounded");
     }
+    // Anyhow's Debug may append a caller-controlled backtrace in CI. Bound the
+    // fixture message and its own Debug, not framework backtrace scaffolding.
+    assert!(error.to_string().len() < 300);
+    let typed = error.downcast_ref::<FixtureError>().unwrap();
+    assert!(format!("{typed:?}").len() < 300);
     assert_eq!(error.chain().count(), 1, "raw upstream errors stay private");
 }
 
