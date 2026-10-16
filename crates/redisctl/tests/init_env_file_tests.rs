@@ -148,3 +148,40 @@ fn replacing_redis_url_changes_only_its_own_line() {
         "A=1\r\n\r\nexport REDIS_URL=\"redis://127.0.0.1:9\"\r\n\r\nB=2\r\n"
     );
 }
+
+/// Dotenv loaders take a key's last line and init would edit its first, so a key set
+/// twice is refused before anything is written.
+#[test]
+fn a_key_set_twice_in_env_is_refused_before_anything_is_written() {
+    let twice = "REDIS_URL=redis://first:1\nexport REDIS_URL=\"redis://last:2\"\n";
+    let key_twice = "LANGCACHE_API_KEY=a\nLANGCACHE_API_KEY=b\n";
+    for (env, key, extra) in [
+        (twice, "REDIS_URL", &["--url", "redis://127.0.0.1:9"][..]),
+        (
+            twice,
+            "REDIS_URL",
+            &["--dry-run", "--url", "redis://127.0.0.1:9"],
+        ),
+        (twice, "REDIS_URL", &["--complete"]),
+        (
+            key_twice,
+            "LANGCACHE_API_KEY",
+            &["--langcache", "https://x.io", "--cache", "c"],
+        ),
+    ] {
+        let sandbox = Sandbox::new();
+        sandbox.write_env(env);
+        sandbox
+            .init(extra)
+            .assert()
+            .code(6)
+            .stderr(predicate::str::contains(format!(
+                ".env sets {key} on more than one line"
+            )));
+        assert_eq!(sandbox.read_env(), env, "{extra:?}");
+        assert!(
+            !sandbox.project.path().join(".gitignore").exists(),
+            "{extra:?}"
+        );
+    }
+}

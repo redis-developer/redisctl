@@ -2,13 +2,14 @@
 //! plan time; the package-manager commands run at apply time. An install failure is
 //! reported as skipped, never as a run failure - the onboarding still stands.
 
+use std::io::Write;
 use std::path::Path;
 
 use crate::workflows::init::engine::change::{Change, Status};
 use crate::workflows::init::engine::env::{FileAction, read_for_planning};
 use crate::workflows::init::engine::project::{Project, Runtime};
 use crate::workflows::init::engine::util::{
-    ending_with_newline, exists, has_bin, read_if, sh, sh_in,
+    ending_with_newline, exists, first_error_line, has_bin, read_if, sh, sh_in,
 };
 use crate::workflows::init::engine::{Event, InitError};
 
@@ -105,32 +106,78 @@ impl InstallAction {
                 on_event(Event::ProgressStart(
                     "installing redis-cli (official installer, packages.redis.io)".to_string(),
                 ));
-                let r = sh("sh", &["-c", &format!("curl -fsSL {CLI_INSTALLER} | sh")]);
-                if r.status != 0 {
-                    on_event(Event::ProgressDone(" failed".to_string()));
-                    return Ok(Change::new(
-                        "redis-cli",
-                        Status::Skipped,
-                        "installer failed - the project skill carries docker fallbacks",
-                    ));
-                }
-                on_event(Event::ProgressDone(" done".to_string()));
-                Ok(if has_bin("redis-cli") {
-                    Change::new(
-                        "redis-cli",
-                        Status::Created,
-                        "installed via the official packages.redis.io script",
-                    )
-                } else {
-                    Change::new(
-                        "redis-cli",
-                        Status::Created,
-                        "installed to ~/.local/bin - add it to PATH to use it",
-                    )
-                })
+                let change = install_cli();
+                on_event(Event::ProgressDone(
+                    if change.status == Status::Created {
+                        " done"
+                    } else {
+                        " failed"
+                    }
+                    .to_string(),
+                ));
+                Ok(change)
             }
         }
     }
+}
+
+/// Download, run, then look: the line says installed only when a redis-cli is there.
+fn install_cli() -> Change {
+    let skipped = |why: String| {
+        Change::new(
+            "redis-cli",
+            Status::Skipped,
+            format!("{why} - the project skill carries docker fallbacks"),
+        )
+    };
+    let download = sh("curl", &["-fsSL", CLI_INSTALLER]);
+    if download.status != 0 {
+        return skipped(format!(
+            "could not download {CLI_INSTALLER}: {}",
+            first_error_line(&download.stderr, &download.stdout, download.status)
+        ));
+    }
+    if download.stdout.trim().is_empty() {
+        return skipped(format!("{CLI_INSTALLER} served an empty script"));
+    }
+    let script =
+        std::env::temp_dir().join(format!("redisctl-redis-cli-{}.sh", uuid::Uuid::new_v4()));
+    let saved = std::fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&script)
+        .and_then(|mut file| file.write_all(download.stdout.as_bytes()));
+    if let Err(e) = saved {
+        return skipped(format!("could not save the installer: {e}"));
+    }
+    let run = sh("sh", &[&script.to_string_lossy()]);
+    let _ = std::fs::remove_file(&script);
+    if run.status != 0 {
+        return skipped(format!(
+            "the installer failed: {}",
+            first_error_line(&run.stderr, &run.stdout, run.status)
+        ));
+    }
+    if has_bin("redis-cli") {
+        Change::new(
+            "redis-cli",
+            Status::Created,
+            "installed via the official packages.redis.io script",
+        )
+    } else if local_bin_cli() {
+        Change::new(
+            "redis-cli",
+            Status::Created,
+            "installed to ~/.local/bin - add it to PATH to use it",
+        )
+    } else {
+        skipped("the installer left no redis-cli on PATH or in ~/.local/bin".to_string())
+    }
+}
+
+/// The official installer's no-sudo fallback, often not on PATH.
+fn local_bin_cli() -> bool {
+    std::env::home_dir().is_some_and(|home| home.join(".local/bin/redis-cli").exists())
 }
 
 pub(crate) fn plan_client_install(cwd: &Path, project: &Project) -> InstallAction {
@@ -439,10 +486,7 @@ fn decide_product(
 }
 
 pub(crate) fn plan_redis_cli(install: bool) -> InstallAction {
-    let local_bin = std::env::home_dir()
-        .map(|home| home.join(".local/bin/redis-cli").exists())
-        .unwrap_or(false);
-    decide_redis_cli(install, &has_bin, local_bin)
+    decide_redis_cli(install, &has_bin, local_bin_cli())
 }
 
 fn decide_redis_cli(install: bool, has: &dyn Fn(&str) -> bool, local_bin: bool) -> InstallAction {
@@ -479,6 +523,13 @@ fn decide_redis_cli(install: bool, has: &dyn Fn(&str) -> bool, local_bin: bool) 
             "redis-cli",
             Status::Skipped,
             "--no-install-cli; the project skill carries docker fallbacks",
+        ));
+    }
+    if !has("curl") {
+        return InstallAction::Report(Change::new(
+            "redis-cli",
+            Status::Skipped,
+            "curl not found - the project skill carries docker fallbacks",
         ));
     }
     InstallAction::InstallCli
@@ -690,7 +741,7 @@ mod tests {
 
     #[test]
     fn redis_cli_missing_plans_the_installer() {
-        let change = decide_redis_cli(true, &|_| false, false).preview();
+        let change = decide_redis_cli(true, &|bin| bin == "curl", false).preview();
         assert_eq!(change.status, Status::Planned);
         assert!(change.note.contains("packages.redis.io"), "{}", change.note);
     }

@@ -74,6 +74,7 @@ pub struct ProductRequest {
 
 /// A product the run works with: inputs resolved, key found or left as the
 /// placeholder a human fills in.
+#[derive(Clone)]
 pub struct WiredProduct {
     pub(crate) spec: &'static ProductSpec,
     pub(crate) url: String,
@@ -352,42 +353,61 @@ pub(crate) fn wire(
         if request.is_none() && !complete {
             continue;
         }
-        let url = prefer_stored(
-            read_env_key(cwd, ".env", spec.env_url),
-            request.map(|r| r.url.as_str()),
-        );
-        let id = prefer_stored(
-            spec.env_id.and_then(|key| read_env_key(cwd, ".env", key)),
-            request.and_then(|r| r.id.as_deref()),
-        );
-        let (url, id) = match (url, id) {
-            (None, None) => continue,
-            (Some(url), id) if spec.env_id.is_none() || id.is_some() => (url, id),
-            _ => {
-                let needed = [Some(spec.env_url), spec.env_id]
-                    .into_iter()
-                    .flatten()
-                    .collect::<Vec<_>>()
-                    .join(" and ");
-                return Err(InitError::ProductIncomplete {
-                    label: spec.label.to_string(),
-                    needed,
-                });
-            }
-        };
         // The flag belongs to the one explicitly requested product only - a
         // rediscovered product must never authenticate with another product's key.
-        let flag_key = request.and(api_key);
-        let key = resolve_key(spec, flag_key, cwd, getenv);
-        wired.push(WiredProduct {
-            spec,
-            url: url.trim_end_matches('/').to_string(),
-            id,
-            ready: is_configured(&key),
-            key,
-        });
+        wired.extend(wire_one(cwd, spec, request, request.and(api_key), getenv)?);
     }
     Ok(wired)
+}
+
+/// The products `.env` already records in full, wired as `--complete` wires them; a
+/// half-recorded one is left out.
+pub(crate) fn recorded(cwd: &Path, getenv: &dyn Fn(&str) -> Option<String>) -> Vec<WiredProduct> {
+    SPECS
+        .iter()
+        .filter_map(|spec| wire_one(cwd, spec, None, None, getenv).ok().flatten())
+        .collect()
+}
+
+/// One product from its request and what `.env` stores; `None` when neither names it.
+fn wire_one(
+    cwd: &Path,
+    spec: &'static ProductSpec,
+    request: Option<&ProductRequest>,
+    flag_key: Option<&str>,
+    getenv: &dyn Fn(&str) -> Option<String>,
+) -> Result<Option<WiredProduct>, InitError> {
+    let url = prefer_stored(
+        read_env_key(cwd, ".env", spec.env_url),
+        request.map(|r| r.url.as_str()),
+    );
+    let id = prefer_stored(
+        spec.env_id.and_then(|key| read_env_key(cwd, ".env", key)),
+        request.and_then(|r| r.id.as_deref()),
+    );
+    let (url, id) = match (url, id) {
+        (None, None) => return Ok(None),
+        (Some(url), id) if spec.env_id.is_none() || id.is_some() => (url, id),
+        _ => {
+            let needed = [Some(spec.env_url), spec.env_id]
+                .into_iter()
+                .flatten()
+                .collect::<Vec<_>>()
+                .join(" and ");
+            return Err(InitError::ProductIncomplete {
+                label: spec.label.to_string(),
+                needed,
+            });
+        }
+    };
+    let key = resolve_key(spec, flag_key, cwd, getenv);
+    Ok(Some(WiredProduct {
+        spec,
+        url: url.trim_end_matches('/').to_string(),
+        id,
+        ready: is_configured(&key),
+        key,
+    }))
 }
 
 #[cfg(test)]

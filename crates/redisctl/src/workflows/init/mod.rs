@@ -294,6 +294,12 @@ async fn run_inner(
     telemetry.step("database");
     let mut cloud_changes = Vec::new();
     if wants_cloud {
+        // The local refusals (a tracked or ambiguous .env) need no database: plan
+        // against the placeholder first, so Redis Cloud is never asked for one in vain.
+        let url = options.url_input.replace(cloud::PLANNED_URL.to_string());
+        let preflight = engine::plan(&options);
+        options.url_input = url;
+        preflight?;
         // Signing in needs a person at a terminal; anyone else gets the command.
         let client = match conn_mgr.create_cloud_client(profile).await {
             Err(

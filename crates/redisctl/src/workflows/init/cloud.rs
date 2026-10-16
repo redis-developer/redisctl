@@ -19,7 +19,8 @@ use super::wizard::RedisTheme;
 use crate::error::{RedisCtlError, exit_code};
 
 /// Nothing real yet: the placeholder a dry run plans .env around, masked like a URL.
-const PLANNED_URL: &str = "redis://default:<generated>@<endpoint-assigned-by-redis-cloud>";
+pub(crate) const PLANNED_URL: &str =
+    "redis://default:<generated>@<endpoint-assigned-by-redis-cloud>";
 
 pub(crate) struct CloudOutcome {
     pub url: String,
@@ -101,6 +102,8 @@ pub(crate) async fn resolve(
         })?;
     }
 
+    let free_full = inv.free_full.as_ref().filter(|_| inv.target.is_none());
+
     // No name, databases exist: report the question (dry), ask (tty), refuse (piped).
     if name.is_none() && !inv.candidates.is_empty() {
         if dry {
@@ -110,19 +113,22 @@ pub(crate) async fn resolve(
                 .map(|c| format!("\"{}\"", c.name))
                 .collect::<Vec<_>>()
                 .join(", ");
-            let create = match pin {
-                Some(pin) => format!("a new database \"{db_name}\" in subscription {pin}"),
-                None => format!("a new free database \"{db_name}\""),
+            let note = match (free_full, pin) {
+                (Some(_), _) => format!(
+                    "would offer {offered} (no new free database: the free plan is already used up)"
+                ),
+                (None, Some(pin)) => format!(
+                    "would offer {offered} or a new database \"{db_name}\" in subscription {pin}"
+                ),
+                (None, None) => {
+                    format!("would offer {offered} or a new free database \"{db_name}\"")
+                }
             };
             return Ok(planned(
                 &db_name,
                 inv.target,
                 profile,
-                Change::new(
-                    "cloud:choice",
-                    Status::Planned,
-                    format!("would offer {offered} or {create}"),
-                ),
+                Change::new("cloud:choice", Status::Planned, note),
             ));
         }
         // --defaults promised no prompts; there is no safe default among existing
@@ -134,6 +140,24 @@ pub(crate) async fn resolve(
             Pick::Existing(cand) => return connect(client, cand, profile).await,
             Pick::Create(name) => db_name = name,
         }
+    }
+
+    // The free tier being used up has ways out; say them instead of relaying the
+    // create call's rejection.
+    if let Some((id, names)) = free_full {
+        let held = names
+            .iter()
+            .map(|n| format!("\"{n}\""))
+            .collect::<Vec<_>>()
+            .join(", ");
+        let first = names.first().map(String::as_str).unwrap_or("<name>");
+        return Err(RedisCtlError::init(
+            "api_error",
+            exit_code::CONFLICT,
+            format!(
+                "the free Essentials subscription ({id}) is full - it holds {held}, and Redis Cloud allows one free subscription per account.\n  Share that database:  --cloud --name {first}\n  Use a paid one:       --cloud-subscription <id>   (redisctl api cloud get /fixed/subscriptions lists them)\n  Stay local instead:   drop --cloud to provision Docker"
+            ),
+        ));
     }
 
     // Nothing to pick from: a person at a terminal still gets to edit the name.
@@ -158,26 +182,6 @@ pub(crate) async fn resolve(
             inv.target,
             profile,
             Change::new(format!("cloud:{db_name}"), Status::Planned, note),
-        ));
-    }
-
-    // The free tier being used up has ways out; say them instead of relaying the
-    // create call's rejection.
-    if inv.target.is_none()
-        && let Some((id, names)) = &inv.free_full
-    {
-        let held = names
-            .iter()
-            .map(|n| format!("\"{n}\""))
-            .collect::<Vec<_>>()
-            .join(", ");
-        let first = names.first().map(String::as_str).unwrap_or("<name>");
-        return Err(RedisCtlError::init(
-            "api_error",
-            exit_code::CONFLICT,
-            format!(
-                "the free Essentials subscription ({id}) is full - it holds {held}, and Redis Cloud allows one free subscription per account.\n  Share that database:  --cloud --name {first}\n  Use a paid one:       --cloud-subscription <id>   (redisctl api cloud get /fixed/subscriptions lists them)\n  Stay local instead:   drop --cloud to provision Docker"
-            ),
         ));
     }
 

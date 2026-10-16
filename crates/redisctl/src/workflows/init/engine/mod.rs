@@ -64,6 +64,11 @@ pub enum InitError {
     #[error("cannot write '{rel}': {message}")]
     WriteFailed { rel: String, message: String },
 
+    #[error(
+        ".env sets {key} on more than one line, and dotenv loaders read the last one; keep one line and re-run"
+    )]
+    DuplicateEnvKey { key: String },
+
     #[error("cannot complete {label}: .env needs {needed}.")]
     ProductIncomplete { label: String, needed: String },
 
@@ -198,6 +203,9 @@ pub struct Plan {
     cloud: Option<CloudFacts>,
     database: Option<docker::DatabaseAction>,
     products: Vec<WiredProduct>,
+    /// This run's products and the ones `.env` already records: the skill describes
+    /// the whole project.
+    skill_products: Vec<WiredProduct>,
     iris: bool,
     file_actions: Vec<env::FileAction>,
     client: Option<install::InstallAction>,
@@ -275,7 +283,7 @@ impl Plan {
                 .database
                 .as_ref()
                 .and_then(|database| database.container()),
-            products: &self.products,
+            products: &self.skill_products,
             skills: &skills,
             client_installed: self.client.as_ref().is_some_and(|client| {
                 matches!(
@@ -318,6 +326,14 @@ pub struct Report {
 }
 
 pub fn plan(options: &Options) -> Result<Plan, InitError> {
+    env::refuse_duplicate_keys(
+        &options.cwd,
+        std::iter::once("REDIS_URL").chain(products::SPECS.iter().flat_map(|spec| {
+            [Some(spec.env_url), spec.env_id, Some(spec.env_key)]
+                .into_iter()
+                .flatten()
+        })),
+    )?;
     let products = products::wire(
         &options.cwd,
         &options.products,
@@ -444,12 +460,24 @@ pub fn plan(options: &Options) -> Result<Plan, InitError> {
                 .then(|| util::has_bin("npx")),
         },
     )?;
+    let recorded = products::recorded(&options.cwd, &|key| std::env::var(key).ok());
+    let skill_products = products::SPECS
+        .iter()
+        .filter_map(|spec| {
+            products
+                .iter()
+                .chain(&recorded)
+                .find(|product| product.spec.key == spec.key)
+                .cloned()
+        })
+        .collect();
     Ok(Plan {
         project,
         agents,
         name: options.name.clone(),
         cloud: options.cloud.clone(),
         database,
+        skill_products,
         products,
         iris: options.iris,
         file_actions,
@@ -515,7 +543,7 @@ pub async fn apply(plan: &Plan, on_event: &mut dyn FnMut(Event)) -> Result<Repor
             .database
             .as_ref()
             .and_then(|database| database.container()),
-        products: &plan.products,
+        products: &plan.skill_products,
         skills: &skills.installed,
         client_installed,
         cli_available: util::has_bin("redis-cli"),

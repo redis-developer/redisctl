@@ -4,26 +4,10 @@
 //! pass --url so the database step never probes the Docker daemon), and network
 //! contact limited to refused loopback connections.
 
-use assert_cmd::Command;
+mod init_common;
+
+use init_common::{hermetic_redisctl as redisctl, skills_fixture};
 use predicates::prelude::*;
-
-fn redisctl() -> Command {
-    let mut cmd = Command::cargo_bin("redisctl").unwrap();
-    // Explicitly off: a key in the developer's (or CI's) environment must not
-    // make test runs send telemetry.
-    cmd.env("REDISCTL_INIT_AMPLITUDE_KEY", "");
-    cmd
-}
-
-/// A fake redis/agent-skills checkout, so non-dry runs never reach npx or the
-/// network for the skills step.
-fn skills_fixture() -> tempfile::TempDir {
-    let repo = tempfile::tempdir().unwrap();
-    let skill = repo.path().join("skills/redis-basics");
-    std::fs::create_dir_all(&skill).unwrap();
-    std::fs::write(skill.join("SKILL.md"), "# basics\n").unwrap();
-    repo
-}
 
 #[test]
 fn init_is_listed_in_top_level_help() {
@@ -323,6 +307,7 @@ fn verbatim_unquoted_console_paste_is_accepted() {
         .env("REDISCTL_INIT_SKILLS_REPO", repo.path())
         .args([
             "init",
+            "--no-install-cli",
             "redis-cli",
             "-u",
             "redis://default:s3cret@127.0.0.1:9",
@@ -343,7 +328,7 @@ fn dead_url_writes_env_then_fails_validation_with_the_stale_hint() {
     redisctl()
         .current_dir(dir.path())
         .env("REDISCTL_INIT_SKILLS_REPO", repo.path())
-        .args(["init", "--url", "redis://127.0.0.1:9"])
+        .args(["init", "--no-install-cli", "--url", "redis://127.0.0.1:9"])
         .assert()
         .code(10)
         .stdout(predicate::str::contains("Validate"))
@@ -500,6 +485,122 @@ fn no_install_cli_is_respected() {
         .stdout(predicate::str::contains("redis-cli"));
 }
 
+/// The redis-cli line reports what the official installer actually left behind. PATH
+/// holds a fake `curl` that serves `installer.sh`, and only the tools those scripts use.
+#[test]
+#[cfg(unix)]
+fn the_redis_cli_line_reports_what_the_installer_left_behind() {
+    use std::os::unix::fs::PermissionsExt;
+    let url = "https://packages.redis.io/redis-cli/install.sh";
+    let serve = "#!/bin/sh\ncat \"$(dirname \"$0\")/installer.sh\"\n";
+    let cases = [
+        (
+            Some("#!/bin/sh\necho 'curl: (6) Could not resolve host' >&2\nexit 6\n"),
+            None,
+            format!(
+                "skipped   redis-cli  could not download {url}: curl: (6) Could not resolve host"
+            ),
+        ),
+        (
+            Some("#!/bin/sh\nexit 0\n"),
+            None,
+            format!("skipped   redis-cli  {url} served an empty script"),
+        ),
+        (
+            Some(serve),
+            Some("echo 'unsupported platform' >&2\nexit 3\n"),
+            "skipped   redis-cli  the installer failed: unsupported platform".to_string(),
+        ),
+        (
+            Some(serve),
+            Some("true\n"),
+            "skipped   redis-cli  the installer left no redis-cli on PATH or in ~/.local/bin"
+                .to_string(),
+        ),
+        (
+            Some(serve),
+            Some(
+                "mkdir -p \"$HOME/.local/bin\"\necho '#!/bin/sh' > \"$HOME/.local/bin/redis-cli\"\nchmod +x \"$HOME/.local/bin/redis-cli\"\n",
+            ),
+            "created   redis-cli  installed to ~/.local/bin - add it to PATH to use it".to_string(),
+        ),
+        (
+            Some(serve),
+            Some("echo '#!/bin/sh' > \"$BIN/redis-cli\"\nchmod +x \"$BIN/redis-cli\"\n"),
+            "created   redis-cli  installed via the official packages.redis.io script".to_string(),
+        ),
+        (
+            None,
+            None,
+            "skipped   redis-cli  curl not found - the project skill carries docker fallbacks"
+                .to_string(),
+        ),
+    ];
+    for (curl, installer, line) in cases {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        for tool in ["sh", "cat", "dirname", "mkdir", "chmod"] {
+            let real = ["/bin", "/usr/bin"]
+                .iter()
+                .map(|d| std::path::Path::new(d).join(tool))
+                .find(|p| p.exists())
+                .unwrap();
+            std::os::unix::fs::symlink(real, bin.path().join(tool)).unwrap();
+        }
+        if let Some(curl) = curl {
+            std::fs::write(bin.path().join("curl"), curl).unwrap();
+            std::fs::set_permissions(
+                bin.path().join("curl"),
+                std::fs::Permissions::from_mode(0o755),
+            )
+            .unwrap();
+        }
+        if let Some(installer) = installer {
+            std::fs::write(bin.path().join("installer.sh"), installer).unwrap();
+        }
+        let repo = skills_fixture();
+        let run = |dry_run: bool| {
+            let mut cmd = redisctl();
+            cmd.current_dir(dir.path())
+                .env("HOME", home.path())
+                .env("PATH", bin.path())
+                .env("BIN", bin.path())
+                .args(["init", "--url", "redis://127.0.0.1:9", "--agent", "claude"])
+                .arg("--skills-repo")
+                .arg(repo.path());
+            if dry_run {
+                cmd.arg("--dry-run");
+            }
+            let out = cmd.output().unwrap();
+            String::from_utf8_lossy(&out.stdout).into_owned()
+        };
+        if curl.is_none() {
+            assert!(run(true).contains(&line), "dry run: {line}");
+        }
+        let stdout = run(false);
+        assert!(stdout.contains(&line), "{line}\n{stdout}");
+    }
+}
+
+#[test]
+#[cfg(unix)]
+#[should_panic(expected = "the run reached a downloader")]
+fn a_run_that_reaches_a_downloader_fails_its_test() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let mut cmd = redisctl();
+    // Only the fakes on PATH: no redis-cli, so the run plans the installer.
+    let path = cmd.downloaders();
+    cmd.current_dir(dir.path())
+        .env("PATH", path)
+        .args(["init", "--url", "redis://127.0.0.1:9", "--agent", "claude"])
+        .arg("--skills-repo")
+        .arg(repo.path())
+        .assert()
+        .code(10);
+}
+
 #[test]
 fn dry_run_plans_the_standard_skills_install() {
     let dir = tempfile::tempdir().unwrap();
@@ -568,6 +669,7 @@ fn an_explicit_checkout_installs_skills_offline() {
         .current_dir(dir.path())
         .args([
             "init",
+            "--no-install-cli",
             "--url",
             "redis://127.0.0.1:9",
             "--agent",

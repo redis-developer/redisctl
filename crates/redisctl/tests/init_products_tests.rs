@@ -881,3 +881,79 @@ async fn a_placeholder_url_copied_from_the_example_yields_to_the_flag() {
         );
     }
 }
+
+/// Each focused run adds to the project skill: the database and the products earlier
+/// runs set up stay in it, and a dry run predicts the same file.
+#[tokio::test(flavor = "multi_thread")]
+async fn focused_runs_keep_what_the_skill_already_describes() {
+    let project = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let (_shim, path_env) = npm_shim();
+    let api = product_api().await;
+    let port = init_common::fake_redis();
+    let skill = || {
+        read(
+            project.path(),
+            ".agents/skills/redis-project-setup/SKILL.md",
+        )
+    };
+
+    run_init(
+        project.path(),
+        &repo,
+        &path_env,
+        &["--url", &format!("redis://127.0.0.1:{port}")],
+    )
+    .assert()
+    .success();
+    let first = skill();
+    let database = &first[first.find("\n## Connection\n").unwrap()
+        ..first
+            .find("\n## Redis Iris product recommendations")
+            .unwrap()];
+
+    run_init(
+        project.path(),
+        &repo,
+        &path_env,
+        &["--langcache", &api.uri(), "--cache", "cache-456"],
+    )
+    .env("LANGCACHE_API_KEY", KEY)
+    .assert()
+    .success();
+    run_init(
+        project.path(),
+        &repo,
+        &path_env,
+        &["--agent-memory", &api.uri(), "--store", "store-123"],
+    )
+    .env("AGENT_MEMORY_API_KEY", KEY)
+    .assert()
+    .success();
+
+    let last = skill();
+    assert!(last.contains(database), "{last}");
+    assert!(last.contains("## Semantic cache (LangCache)"), "{last}");
+    assert!(last.contains("## Agent Memory (Redis Iris)"), "{last}");
+    assert!(
+        last.contains("(the database, agent memory, langcache)"),
+        "{last}"
+    );
+    run_init(
+        project.path(),
+        &repo,
+        &path_env,
+        &[
+            "--agent-memory",
+            &api.uri(),
+            "--store",
+            "store-123",
+            "--dry-run",
+        ],
+    )
+    .assert()
+    .success()
+    .stdout(predicate::str::contains(
+        "unchanged .agents/skills/redis-project-setup/SKILL.md",
+    ));
+}

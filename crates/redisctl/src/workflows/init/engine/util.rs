@@ -52,6 +52,23 @@ fn run(command: &mut std::process::Command) -> ShOutput {
     }
 }
 
+/// A failed command's first output line, stderr first. Notes render on one line, so
+/// the line is capped.
+pub(crate) fn first_error_line(stderr: &str, stdout: &str, status: i32) -> String {
+    let error = [stderr, stdout]
+        .iter()
+        .flat_map(|out| out.lines())
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .map(str::to_string)
+        .unwrap_or_else(|| format!("exit status {status}"));
+    if error.chars().count() > 160 {
+        format!("{}...", error.chars().take(160).collect::<String>())
+    } else {
+        error
+    }
+}
+
 /// Lowercase, runs of anything non-alphanumeric collapsed to one dash, edges trimmed.
 pub fn slug(s: &str) -> String {
     let mut out = String::new();

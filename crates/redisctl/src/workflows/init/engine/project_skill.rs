@@ -349,9 +349,9 @@ fn iris_recommendations(facts: &SkillFacts) -> String {
 }
 
 /// What the frontmatter description names as this project's Redis surface.
-fn subjects(facts: &SkillFacts) -> String {
+fn subjects(facts: &SkillFacts, database: bool) -> String {
     let mut subjects: Vec<String> = Vec::new();
-    if facts.database {
+    if database {
         subjects.push("the database".to_string());
     }
     subjects.extend(facts.products.iter().map(|p| p.label().to_lowercase()));
@@ -393,7 +393,13 @@ fn database_sections(facts: &SkillFacts) -> String {
     )
 }
 
-pub(crate) fn content(facts: &SkillFacts) -> String {
+/// The skill text. `kept_database` is the database part of the skill already on disk,
+/// which a run without a database keeps as it is.
+pub(crate) fn content(facts: &SkillFacts, kept_database: Option<&str>) -> String {
+    let database = match kept_database {
+        Some(kept) if !facts.database => kept.to_string(),
+        _ => database_sections(facts),
+    };
     format!(
         r#"---
 name: redis-project-setup
@@ -410,8 +416,8 @@ Set up by `redisctl init`; re-running it is safe and never clobbers existing con
 Every credential lives in `.env` and nowhere else - not in code, not in a committed
 file.
 {database}{products}{iris}"#,
-        subjects = subjects(facts),
-        database = database_sections(facts),
+        subjects = subjects(facts, !database.is_empty()),
+        database = database,
         products = product_sections(facts),
         iris = iris_recommendations(facts),
     )
@@ -467,8 +473,9 @@ pub(crate) fn generate(
 
 fn plan_file(cwd: &Path, facts: &SkillFacts) -> Result<FileAction, InitError> {
     let rel = format!("{SKILLS_DIR}/{NAME}/SKILL.md");
-    let content = content(facts);
-    Ok(match read_for_planning(cwd, &rel)? {
+    let existing = read_for_planning(cwd, &rel)?;
+    let content = content(facts, existing.as_deref().and_then(database_part));
+    Ok(match existing {
         Some(existing) if existing == content => FileAction::Unchanged { rel },
         existing => FileAction::Write {
             status: if existing.is_none() {
@@ -481,6 +488,22 @@ fn plan_file(cwd: &Path, facts: &SkillFacts) -> Result<FileAction, InitError> {
             note: NOTE.to_string(),
         },
     })
+}
+
+/// The database part of a generated skill: from `## Connection` up to the first
+/// heading that [`database_sections`] does not write.
+fn database_part(skill: &str) -> Option<&str> {
+    let start = skill.find("\n## Connection\n")?;
+    let end = skill[start + 1..]
+        .match_indices("\n## ")
+        .map(|(i, _)| start + 1 + i)
+        .find(|&i| {
+            !["Tooling", "Conventions", "Handy commands"]
+                .iter()
+                .any(|heading| skill[i + 4..].starts_with(&format!("{heading}\n")))
+        })
+        .unwrap_or(skill.len());
+    Some(&skill[start..end])
 }
 
 /// One `.claude/skills/<name>` entry, decided the same way for preview and apply.
@@ -597,7 +620,7 @@ mod tests {
         let cloud = cloud_facts(crate::workflows::init::engine::CloudTier::Essentials, None);
         let mut f = facts(None, &[]);
         f.cloud = Some(&cloud);
-        let text = content(&f);
+        let text = content(&f, None);
         assert!(
             text.contains("`cloud-db` on Redis Cloud: Essentials subscription `1`, database `9`"),
             "{text}"
@@ -619,7 +642,7 @@ mod tests {
         );
         let mut f = facts(None, &[]);
         f.cloud = Some(&cloud);
-        let text = content(&f);
+        let text = content(&f, None);
         assert!(text.contains("Flexible subscription `1`"), "{text}");
         assert!(
             text.contains("redisctl api cloud get /subscriptions/1/databases/9 -p qa`"),
@@ -630,7 +653,7 @@ mod tests {
     #[test]
     fn content_adapts_to_the_container_and_skills() {
         let skills = vec!["redis-core".to_string(), "redis-search".to_string()];
-        let text = content(&facts(Some("redisctl-demo-1a2b3c4d"), &skills));
+        let text = content(&facts(Some("redisctl-demo-1a2b3c4d"), &skills), None);
         assert!(
             text.contains("docker start redisctl-demo-1a2b3c4d"),
             "{text}"
@@ -649,7 +672,7 @@ mod tests {
         f.name = Some("my-cloud-db");
         f.cli_available = false;
         f.docker = false;
-        let text = content(&f);
+        let text = content(&f, None);
         assert!(
             text.contains("`my-cloud-db` (external, e.g. Redis Cloud)"),
             "{text}"
@@ -662,7 +685,7 @@ mod tests {
     fn container_without_native_cli_offers_docker_exec() {
         let mut f = facts(Some("redisctl-x-1a2b3c4d"), &[]);
         f.cli_available = false;
-        let text = content(&f);
+        let text = content(&f, None);
         assert!(
             text.contains("docker exec -it redisctl-x-1a2b3c4d redis-cli PING"),
             "{text}"

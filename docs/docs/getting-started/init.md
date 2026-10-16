@@ -38,7 +38,9 @@ choice replaces `REDIS_URL`; other env values are kept, including placeholders
 that need filling. A `redis` entry in an agent's MCP
 config that differs from the generated launcher is replaced (reported `updated`);
 other MCP servers in the file survive
-untouched.
+untouched. The generated skill describes the whole project: a run that adds a
+product keeps what the skill says about the database and about the products set
+up before.
 
 ## Options
 
@@ -72,7 +74,10 @@ the generated skill are credential-free and safe to commit: the MCP launcher rea
 file) and hands the server the password through its environment, never on a command
 line other users can see. Passwords are masked in all terminal output. A new `.env` is readable
 only by you, `.gitignore` covers it before it is written, and a `.env` that git
-already tracks is refused rather than handed a secret.
+already tracks is refused rather than handed a secret. A `.env` that sets one of
+init's keys on more than one line is refused too: dotenv loaders read the last line,
+and so does the MCP launcher. With `--cloud`, these checks run before Redis Cloud is
+asked for a database.
 
 ## Exit codes
 
@@ -86,7 +91,7 @@ Built on the standard `redisctl` [exit codes](../reference/agent-error-codes.md#
 | 3 | the redisctl configuration cannot be used, for example `-p` names a profile that is not a Redis Cloud one |
 | 4 | Redis Cloud rejected the API keys |
 | 5 | Redis Cloud has no such resource |
-| 6 | invalid input: no `redis://` URL in `--url`, a product flag missing its companion, `--complete` with nothing to complete, an invalid Cloud database name |
+| 6 | invalid input: no `redis://` URL in `--url`, a product flag missing its companion, `--complete` with nothing to complete, an invalid Cloud database name, a `.env` that sets one of init's keys on more than one line |
 | 7 | Redis Cloud conflict: a paid `redisctl-<name>` subscription, the free plan already used up, a quota reached |
 | 8 | any other Redis Cloud API or server error |
 | 9 | Redis Cloud rate limit |

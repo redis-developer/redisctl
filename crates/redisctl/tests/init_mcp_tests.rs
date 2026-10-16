@@ -188,7 +188,7 @@ fn mcp_launcher_reads_the_url_the_way_init_does() {
         format!("TITLE=My App (dev)\nREDIS_URL=\"{url}\"\n"),
         format!("TITLE=My App (dev)\r\nREDIS_URL=\"{url}\"\r\n"),
         format!("REDIS_URL={url}\r\n"),
-        format!("export REDIS_URL = '{url}'\nREDIS_URL=redis://second:1\n"),
+        format!("REDIS_URL=redis://first:1\nexport REDIS_URL = '{url}'\n"),
         format!("NAME=$(whoami)\nREDIS_URL='{url}'\n"),
         format!("REDIS_URL=\"{url}\" # local\n"),
         format!("REDIS_URL={url} # local\r\n"),
@@ -201,6 +201,21 @@ fn mcp_launcher_reads_the_url_the_way_init_does() {
         );
         assert_eq!(password, "REDIS_PWD=s3cret", "launcher reading of {env:?}");
     }
+
+    // A key set twice resolves to its last line, as application dotenv loaders read it.
+    let twice = format!("REDIS_URL=redis://first:1\nREDIS_URL='{url}'\n");
+    let (argv, _) = launch(&twice);
+    let node = std::process::Command::new("node")
+        .current_dir(dir.path())
+        .env_remove("REDIS_URL")
+        .args(["--env-file=.env", "-p", "process.env.REDIS_URL"])
+        .output()
+        .unwrap();
+    assert_eq!(String::from_utf8(node.stdout).unwrap().trim(), url);
+    assert_eq!(
+        argv.last().map(String::as_str),
+        Some("redis://default@127.0.0.1:6380")
+    );
 
     // The password leaves the URL on the command line, split where `mask_url`
     // splits it, and travels in REDIS_PWD; a URL without one clears a stray value.

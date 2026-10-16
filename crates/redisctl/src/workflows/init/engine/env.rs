@@ -91,6 +91,26 @@ fn key_line(key: &str) -> regex::Regex {
     .expect("escaped key regex")
 }
 
+/// Refuse a `.env` that sets one of `keys` on more than one line: init edits the first
+/// line, dotenv loaders read the last.
+pub(crate) fn refuse_duplicate_keys<'a>(
+    dir: &Path,
+    keys: impl IntoIterator<Item = &'a str>,
+) -> Result<(), InitError> {
+    let Some(content) = read_for_planning(dir, ".env")? else {
+        return Ok(());
+    };
+    match keys
+        .into_iter()
+        .find(|key| key_line(key).find_iter(&content).count() > 1)
+    {
+        Some(key) => Err(InitError::DuplicateEnvKey {
+            key: key.to_string(),
+        }),
+        None => Ok(()),
+    }
+}
+
 /// Read one key out of a dotenv-style file: `KEY=value`, optional `export`, optional
 /// quotes, optional trailing ` # comment`.
 pub fn read_env_key(dir: &Path, rel: &str, key: &str) -> Option<String> {

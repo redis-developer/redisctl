@@ -357,6 +357,33 @@ async fn flexible_reuse_reads_the_pro_path_into_the_skill() {
     );
 }
 
+/// The free subscription (3) is full with `someone-elses`; there is no paid one.
+/// Any create request fails the test.
+async fn mount_full_free_tier(server: &MockServer) {
+    mount_gets(
+        server,
+        vec![
+            (
+                "/fixed/subscriptions",
+                json!({ "subscriptions": [ { "id": 3, "name": "free", "price": 0, "maximumDatabases": 1 } ] }),
+            ),
+            (
+                "/fixed/subscriptions/3/databases",
+                json!({ "subscription": { "subscriptionId": 3, "databases": [
+                    { "databaseId": 5, "name": "someone-elses", "publicEndpoint": "h:1" }
+                ] } }),
+            ),
+            ("/subscriptions", json!({ "subscriptions": [] })),
+        ],
+    )
+    .await;
+    Mock::given(method("POST"))
+        .respond_with(ResponseTemplate::new(500))
+        .expect(0)
+        .mount(server)
+        .await;
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn exhausted_free_tier_fails_with_the_ways_out_writing_nothing() {
     let cfg = tempfile::tempdir().unwrap();
@@ -364,33 +391,36 @@ async fn exhausted_free_tier_fails_with_the_ways_out_writing_nothing() {
     let repo = skills_fixture();
     let server = MockServer::start().await;
     write_cloud_profile(&cfg, &server.uri());
-    Mock::given(method("GET"))
-        .and(path("/fixed/subscriptions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "subscriptions": [ { "id": 3, "name": "free", "price": 0, "maximumDatabases": 1 } ]
-        })))
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/fixed/subscriptions/3/databases"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({
-            "subscription": { "subscriptionId": 3, "databases": [
-                { "databaseId": 5, "name": "someone-elses", "publicEndpoint": "h:1" }
-            ] }
-        })))
-        .mount(&server)
-        .await;
-    Mock::given(method("GET"))
-        .and(path("/subscriptions"))
-        .respond_with(ResponseTemplate::new(200).set_body_json(json!({ "subscriptions": [] })))
-        .mount(&server)
-        .await;
+    mount_full_free_tier(&server).await;
 
-    run_init_cloud(&cfg, project.path(), &repo, &["--name", "second-project"])
+    for extra in [
+        &["--name", "second-project"][..],
+        &["--name", "second-project", "--dry-run"],
+    ] {
+        run_init_cloud(&cfg, project.path(), &repo, extra)
+            .assert()
+            .code(7)
+            .stderr(predicates::str::contains("--cloud --name someone-elses"))
+            .stderr(predicates::str::contains("--cloud-subscription"));
+    }
+    assert!(!project.path().join(".env").exists());
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dry_run_offers_no_free_database_when_the_free_tier_is_full() {
+    let cfg = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let server = MockServer::start().await;
+    write_cloud_profile(&cfg, &server.uri());
+    mount_full_free_tier(&server).await;
+
+    run_init_cloud(&cfg, project.path(), &repo, &["--dry-run"])
         .assert()
-        .code(7)
-        .stderr(predicates::str::contains("--cloud --name someone-elses"))
-        .stderr(predicates::str::contains("--cloud-subscription"));
+        .success()
+        .stdout(predicates::str::contains(
+            "would offer \"someone-elses\" (no new free database: the free plan is already used up)",
+        ));
     assert!(!project.path().join(".env").exists());
 }
 
@@ -462,7 +492,7 @@ async fn dry_run_reports_the_choice_it_would_offer() {
         .assert()
         .success()
         .stdout(predicates::str::contains(
-            "would offer \"essentials-db\", \"flexible-db\" or a new free database",
+            "would offer \"essentials-db\", \"flexible-db\" (no new free database: the free plan is already used up)",
         ));
     assert!(!project.path().join(".env").exists());
     let requests = amplitude.received_requests().await.unwrap();
@@ -907,4 +937,85 @@ async fn a_pinned_dry_run_offers_a_new_database_in_that_subscription() {
         "would offer \"existing-db\" or a new database \"my-app\" in subscription 7",
     ))
     .stdout(predicate::str::contains("free database").not());
+}
+
+/// A run the local checks refuse anyway never reaches Redis Cloud: no database gets
+/// created for a project init then refuses to write.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_local_refusal_stops_cloud_before_any_request() {
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .status()
+            .map(|status| assert!(status.success(), "git {args:?}"))
+    };
+    let tracked = |dir: &std::path::Path| {
+        std::fs::write(dir.join(".env"), "APP=1\n").unwrap();
+        git(dir, &["init", "-q"]).and_then(|()| git(dir, &["add", ".env"]))
+    };
+    let twice = |dir: &std::path::Path| {
+        std::fs::write(
+            dir.join(".env"),
+            "REDIS_URL=redis://a:1\nREDIS_URL=redis://b:2\n",
+        )
+    };
+    let cfg = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let server = MockServer::start().await;
+    write_cloud_profile(&cfg, &server.uri());
+    // A free subscription with room: without the local checks first, init creates.
+    mount_gets(
+        &server,
+        vec![
+            (
+                "/fixed/subscriptions",
+                json!({ "subscriptions": [ { "id": 1, "name": "free", "price": 0, "maximumDatabases": 2 } ] }),
+            ),
+            (
+                "/fixed/subscriptions/1/databases",
+                json!({ "subscription": { "subscriptionId": 1, "databases": [] } }),
+            ),
+            ("/subscriptions", json!({ "subscriptions": [] })),
+        ],
+    )
+    .await;
+
+    for (setup, code, refusal) in [
+        (
+            &tracked as &dyn Fn(&std::path::Path) -> std::io::Result<()>,
+            1,
+            "tracked by git",
+        ),
+        (&twice, 6, ".env sets REDIS_URL on more than one line"),
+    ] {
+        for extra in [
+            &["--name", "new-db"][..],
+            &["--name", "new-db", "--dry-run"],
+        ] {
+            let project = tempfile::tempdir().unwrap();
+            if setup(project.path()).is_err() {
+                eprintln!("skipping the tracked case: git is not installed");
+                continue;
+            }
+            let before = std::fs::read_to_string(project.path().join(".env")).unwrap();
+            run_init_cloud(&cfg, project.path(), &repo, extra)
+                .assert()
+                .code(code)
+                .stderr(predicates::str::contains(refusal));
+            assert_eq!(
+                std::fs::read_to_string(project.path().join(".env")).unwrap(),
+                before
+            );
+            assert!(!project.path().join(".gitignore").exists(), "{extra:?}");
+        }
+    }
+    let requests = server.received_requests().await.unwrap();
+    assert!(
+        requests.is_empty(),
+        "{:?}",
+        requests.iter().map(|r| r.url.path()).collect::<Vec<_>>()
+    );
 }

@@ -14,7 +14,7 @@ use std::path::{Path, PathBuf};
 
 use crate::workflows::init::engine::change::{Change, Status};
 use crate::workflows::init::engine::project::Agent;
-use crate::workflows::init::engine::util::{has_bin, read_if, sh_in};
+use crate::workflows::init::engine::util::{first_error_line, has_bin, read_if, sh_in};
 use crate::workflows::init::engine::{Event, InitError};
 
 use crate::workflows::init::engine::SKILLS_DIR;
@@ -628,24 +628,12 @@ struct CopyStep {
     change: Change,
 }
 
-/// A failed install's note leads with the installer's own first error line - a
-/// generic guess once sent a real failure down the wrong path. Notes render on one
-/// line, so the line is capped.
+/// A failed install's note leads with the installer's own first error line, not a
+/// guess at the cause.
 fn failure_note(stderr: &str, stdout: &str, status: i32) -> String {
-    let error = [stderr, stdout]
-        .iter()
-        .flat_map(|out| out.lines())
-        .map(str::trim)
-        .find(|line| !line.is_empty())
-        .map(str::to_string)
-        .unwrap_or_else(|| format!("exit status {status}"));
-    let error = if error.chars().count() > 160 {
-        format!("{}...", error.chars().take(160).collect::<String>())
-    } else {
-        error
-    };
     format!(
-        "npx skills add failed: {error} - re-run it yourself, or pass --skills-repo <a redis/agent-skills checkout>"
+        "npx skills add failed: {} - re-run it yourself, or pass --skills-repo <a redis/agent-skills checkout>",
+        first_error_line(stderr, stdout, status)
     )
 }
 

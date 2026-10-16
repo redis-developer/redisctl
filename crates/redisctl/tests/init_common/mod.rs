@@ -71,3 +71,70 @@ pub fn fake_redis_on(listener: std::net::TcpListener) -> u16 {
     });
     port
 }
+
+/// `redisctl` with a throwaway HOME and failing `curl`/`wget` fakes first on PATH,
+/// so no run reaches the network or the developer's home. A run that calls a fake
+/// fails the test when this drops: pass `--no-install-cli`, or put your own fakes
+/// on PATH.
+pub struct Hermetic {
+    cmd: assert_cmd::Command,
+    home: TempDir,
+}
+
+pub fn hermetic_redisctl() -> Hermetic {
+    let home = tempfile::tempdir().unwrap();
+    let bin = home.path().join("downloaders");
+    std::fs::create_dir(&bin).unwrap();
+    #[cfg(unix)]
+    for name in ["curl", "wget"] {
+        use std::os::unix::fs::PermissionsExt;
+        let path = bin.join(name);
+        let log = home.path().join("downloads.log");
+        std::fs::write(
+            &path,
+            format!("#!/bin/sh\necho \"$0 $*\" >> '{}'\nexit 1\n", log.display()),
+        )
+        .unwrap();
+        std::fs::set_permissions(&path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let path = std::env::var_os("PATH").unwrap_or_default();
+    let path =
+        std::env::join_paths(std::iter::once(bin).chain(std::env::split_paths(&path))).unwrap();
+    let mut cmd = assert_cmd::Command::cargo_bin("redisctl").unwrap();
+    cmd.env("HOME", home.path())
+        .env("PATH", path)
+        // Explicitly off: a key in the developer's (or CI's) environment must not
+        // make test runs send telemetry.
+        .env("REDISCTL_INIT_AMPLITUDE_KEY", "");
+    Hermetic { cmd, home }
+}
+
+impl Hermetic {
+    /// The fakes' directory, for a test that sets its own PATH.
+    pub fn downloaders(&self) -> std::path::PathBuf {
+        self.home.path().join("downloaders")
+    }
+}
+
+impl std::ops::Deref for Hermetic {
+    type Target = assert_cmd::Command;
+    fn deref(&self) -> &Self::Target {
+        &self.cmd
+    }
+}
+
+impl std::ops::DerefMut for Hermetic {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.cmd
+    }
+}
+
+impl Drop for Hermetic {
+    fn drop(&mut self) {
+        if let Ok(calls) = std::fs::read_to_string(self.home.path().join("downloads.log"))
+            && !std::thread::panicking()
+        {
+            panic!("the run reached a downloader:\n{calls}");
+        }
+    }
+}
