@@ -491,7 +491,7 @@ pub(crate) fn plan_redis_cli(install: bool) -> InstallAction {
 
 fn decide_redis_cli(install: bool, has: &dyn Fn(&str) -> bool, local_bin: bool) -> InstallAction {
     // The official installer falls back to ~/.local/bin, which is often not on
-    // PATH: without this check every run would re-run curl | sh.
+    // PATH: without this check every run would run the installer again.
     if local_bin && !has("redis-cli") {
         return InstallAction::Report(Change::new(
             "redis-cli",
