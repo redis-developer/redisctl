@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Replace the unmaintained YAML output backend with `serde-saphyr`. YAML retains
+  JSON-compatible fields and values, stdout/stderr placement and exit codes, but
+  quoting, long-string wrapping and floating-point exponent spelling can differ.
+  Parse values instead of comparing raw text, and review text snapshots when
+  upgrading. JSON output is unchanged; no production YAML-input support is added.
+
 ## [0.12.1](https://github.com/redis/redisctl/compare/redisctl-v0.12.0...redisctl-v0.12.1) - 2026-10-01
 
 ### Other
