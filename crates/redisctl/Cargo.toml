@@ -62,7 +62,7 @@ keyring = { workspace = true, optional = true }
 tower = { workspace = true }
 tower-resilience = { version = "0.1", features = ["circuitbreaker", "retry", "ratelimiter"] }
 regex = "1.12.2"
-zip = "6.0.0"
+zip = "9.0.0"
 which = "7"
 redis = { workspace = true }
 

@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Update the module archive dependency from ZIP 6 to ZIP 9. Package contents and
+  inspection fields are preserved, but archive bytes and sizes are not a stable
+  contract. Inspection now prefers UTF-8 for valid filename bytes, falling back
+  to CP437; ambiguous legacy names can display differently. Invalid Unicode-path
+  extra fields may also be ignored where older readers rejected the archive.
+  Inspection remains read-only and never extracts or loads module files.
+
 ## [0.12.1](https://github.com/redis/redisctl/compare/redisctl-v0.12.0...redisctl-v0.12.1) - 2026-10-01
 
 ### Other
