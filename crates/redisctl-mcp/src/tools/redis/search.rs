@@ -312,7 +312,8 @@ database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
      Structured pipeline (preferred):\n\
      - group_by: fields to group on, e.g. [\"@category\"] ([] groups everything into one row)\n\
      - reduce: one reducer per entry, e.g. [\"COUNT 0 AS count\", \"AVG 1 @price AS avg_price\"]\n\
-     - sort_by: SORTBY arguments, e.g. [\"@count\", \"DESC\"]\n\
+     - sort_by: properties with optional ASC/DESC, optionally followed by MAX and a count, \
+       e.g. [\"@count\", \"DESC\", \"MAX\", \"10\"]. Use @ for keyword-named properties.\n\
      - load_fields: document fields to load when not grouping\n\n\
      raw_args appends any other FT.AGGREGATE steps after GROUPBY/REDUCE and before SORTBY, e.g. \
      [\"APPLY\", \"@price * 1.1\", \"AS\", \"price_with_tax\"] or [\"FILTER\", \"@count > 5\"].\n\n\
@@ -334,7 +335,9 @@ database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
         /// (e.g. "COUNT 0 AS count", "AVG 1 @price AS avg_price"). Requires group_by.
         #[serde(default)]
         pub reduce: Option<Vec<String>>,
-        /// SORTBY arguments (e.g. ["@count", "DESC"]). Applied after raw_args.
+        /// SORTBY properties with optional ASC/DESC and trailing MAX count
+        /// (e.g. ["@count", "DESC", "MAX", "10"]). Use @ for keyword-named properties.
+        /// Applied after raw_args.
         #[serde(default)]
         pub sort_by: Option<Vec<String>>,
         /// Result offset for pagination
@@ -380,19 +383,55 @@ database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
     }
 );
 
-/// Prefix a field reference with `@` unless it already has one or is a SORTBY keyword.
+/// Prefix a property reference with `@` unless it already has one.
 fn field_ref(field: &str) -> String {
     let trimmed = field.trim();
-    if trimmed.starts_with('@')
-        || matches!(
-            trimmed.to_ascii_uppercase().as_str(),
-            "ASC" | "DESC" | "MAX"
-        )
-    {
+    if trimmed.starts_with('@') {
         trimmed.to_string()
     } else {
         format!("@{trimmed}")
     }
+}
+
+/// SORTBY counts only properties/directions; the optional MAX clause follows them.
+fn aggregate_sort_args(sort: &[String]) -> Result<Vec<String>, String> {
+    if sort.is_empty() {
+        return Err("sort_by must name at least one field, e.g. [\"@count\", \"DESC\"]".into());
+    }
+
+    let mut fields = Vec::new();
+    let mut max = None;
+    let mut tokens = sort.iter().map(|s| s.trim()).peekable();
+    while let Some(property) = tokens.next() {
+        if !fields.is_empty() && property.eq_ignore_ascii_case("MAX") {
+            let count = tokens
+                .next()
+                .ok_or("sort_by MAX requires a non-negative integer count")?;
+            if count.parse::<u64>().is_err() || tokens.next().is_some() {
+                return Err(
+                    "sort_by MAX must be followed by one non-negative integer at the end".into(),
+                );
+            }
+            max = Some(count);
+            break;
+        }
+        if property.is_empty() {
+            return Err("sort_by properties must not be empty".into());
+        }
+        fields.push(field_ref(property));
+        if let Some(direction) =
+            tokens.next_if(|s| s.eq_ignore_ascii_case("ASC") || s.eq_ignore_ascii_case("DESC"))
+        {
+            fields.push(direction.to_ascii_uppercase());
+        }
+    }
+
+    let mut args = vec!["SORTBY".into(), fields.len().to_string()];
+    args.extend(fields);
+    if let Some(count) = max {
+        args.extend(["MAX".into(), count.into()]);
+    }
+    Ok(args)
 }
 
 /// Build the FT.AGGREGATE arguments that follow `index query`.
@@ -458,14 +497,7 @@ fn build_aggregate_args(input: &FtAggregateInput) -> Result<Vec<String>, String>
     }
 
     if let Some(sort) = &input.sort_by {
-        if sort.is_empty() {
-            return Err(
-                "sort_by must name at least one field, e.g. [\"@count\", \"DESC\"]".to_string(),
-            );
-        }
-        args.push("SORTBY".into());
-        args.push(sort.len().to_string());
-        args.extend(sort.iter().map(|f| field_ref(f)));
+        args.extend(aggregate_sort_args(sort)?);
     }
 
     if input.limit_offset.is_some() || input.limit_num.is_some() {
@@ -1010,6 +1042,85 @@ mod tests {
                 "5",
             ]
         );
+    }
+
+    #[test]
+    fn group_by_keyword_names_are_properties() {
+        let input = input(serde_json::json!({
+            "index": "idx", "query": "*",
+            "group_by": ["max", "asc", "DeSc", "category", "@max"]
+        }))
+        .unwrap();
+        assert_eq!(
+            build_aggregate_args(&input).unwrap(),
+            ["GROUPBY", "5", "@max", "@asc", "@DeSc", "@category", "@max"]
+        );
+    }
+
+    #[test]
+    fn sort_max_is_outside_the_sort_argument_count() {
+        let input = input(serde_json::json!({
+            "index": "idx", "query": "*",
+            "sort_by": ["count", "desc", "@category", "ASC", "max", "10"],
+            "limit_offset": 2, "limit_num": 3
+        }))
+        .unwrap();
+        assert_eq!(
+            build_aggregate_args(&input).unwrap(),
+            [
+                "SORTBY",
+                "4",
+                "@count",
+                "DESC",
+                "@category",
+                "ASC",
+                "MAX",
+                "10",
+                "LIMIT",
+                "2",
+                "3"
+            ]
+        );
+    }
+
+    #[test]
+    fn sort_properties_and_optional_directions_are_positional() {
+        for (sort, expected) in [
+            (vec!["max"], vec!["SORTBY", "1", "@max"]),
+            (vec!["asc", "desc"], vec!["SORTBY", "2", "@asc", "DESC"]),
+            (
+                vec!["count", "@max", "DESC"],
+                vec!["SORTBY", "3", "@count", "@max", "DESC"],
+            ),
+            (
+                vec!["count", "MAX", "0"],
+                vec!["SORTBY", "1", "@count", "MAX", "0"],
+            ),
+        ] {
+            let input = input(serde_json::json!({
+                "index": "idx", "query": "*", "sort_by": sort
+            }))
+            .unwrap();
+            assert_eq!(build_aggregate_args(&input).unwrap(), expected);
+        }
+    }
+
+    #[test]
+    fn malformed_sort_max_is_rejected() {
+        for sort in [
+            vec!["count", "DESC", "MAX"],
+            vec!["count", "MAX", "-1"],
+            vec!["count", "MAX", "@10"],
+            vec!["count", "MAX", "1.5"],
+            vec!["count", "MAX", "18446744073709551616"],
+            vec!["count", "MAX", "10", "DESC"],
+        ] {
+            let input = input(serde_json::json!({
+                "index": "idx", "query": "*", "sort_by": sort
+            }))
+            .unwrap();
+            assert!(build_aggregate_args(&input).unwrap_err().contains("MAX"));
+        }
     }
 
     #[test]
