@@ -180,18 +180,20 @@ pub(crate) fn format_value(v: &redis::Value) -> String {
     }
 }
 
-/// Render a Redis error the way the server sent it.
+/// Reconstruct detailed Redis error replies, preserving other diagnostics.
 ///
 /// `redis-rs` splits every error reply on the first space and treats the first
 /// word as an error code. That is right for `ERR ...` and `WRONGTYPE ...`, but
 /// module errors are often plain sentences ("No such index", "Syntax error at
 /// offset 8"), so its `Display` output becomes "No: such index". Rebuilding
-/// `code detail` restores the original text for both cases. Errors without a
-/// server code (I/O, type conversion, client-side) keep their `Display` form.
+/// `code detail` restores the original text for both cases. A code alone does
+/// not prove server origin: redis-rs also assigns codes to client-generated
+/// errors whose explanation lives in their description, not `detail()`.
+/// Without both code and detail, keep `Display` (including bare server codes)
+/// rather than discard a description or guess where the error originated.
 pub(crate) fn describe_redis_error(err: &redis::RedisError) -> String {
     match (err.code(), err.detail()) {
         (Some(code), Some(detail)) => format!("{code} {detail}"),
-        (Some(code), None) => code.to_string(),
         _ => err.to_string(),
     }
 }
@@ -232,7 +234,7 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
 
 #[cfg(test)]
 mod error_format_tests {
-    use super::describe_redis_error;
+    use super::{RedisResultExt, describe_redis_error};
 
     /// Build a `RedisError` exactly as the client would from a raw `-...` reply line.
     fn server_error(line: &str) -> redis::RedisError {
@@ -295,6 +297,64 @@ mod error_format_tests {
 
         let io = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "refused");
         let err = redis::RedisError::from(io);
+        assert_eq!(describe_redis_error(&err), err.to_string());
+    }
+
+    #[test]
+    fn client_side_coded_errors_keep_their_description() {
+        for (kind, description) in [
+            (
+                redis::ErrorKind::CrossSlot,
+                "Received crossed slots in pipeline",
+            ),
+            (
+                redis::ErrorKind::ResponseError,
+                "request wasn't handled due to internal failure",
+            ),
+        ] {
+            let err = redis::RedisError::from((kind, description));
+            assert!(err.code().is_some());
+            assert_eq!(err.detail(), None);
+            assert!(err.to_string().contains(description));
+            assert_eq!(describe_redis_error(&err), err.to_string());
+        }
+    }
+
+    #[test]
+    fn result_context_preserves_coded_client_errors_and_success() {
+        for (kind, description) in [
+            (
+                redis::ErrorKind::CrossSlot,
+                "Received crossed slots in pipeline",
+            ),
+            (
+                redis::ErrorKind::ResponseError,
+                "request wasn't handled due to internal failure",
+            ),
+        ] {
+            let err = redis::RedisError::from((kind, description));
+            let expected = format!("Pipeline failed: {err}");
+            let result: Result<(), redis::RedisError> = Err(err);
+            let tower_mcp::Error::Tool(error) = result.tool_context("Pipeline failed").unwrap_err()
+            else {
+                panic!("Redis handler errors must stay MCP tool errors");
+            };
+            assert_eq!(error.message, expected);
+        }
+
+        assert_eq!(
+            Ok::<_, redis::RedisError>(42)
+                .tool_context("unused")
+                .unwrap(),
+            42
+        );
+    }
+
+    #[test]
+    fn bare_server_codes_keep_display_without_guessing_origin() {
+        let err = server_error("ERR");
+        assert_eq!(err.code(), Some("ERR"));
+        assert_eq!(err.detail(), None);
         assert_eq!(describe_redis_error(&err), err.to_string());
     }
 }
