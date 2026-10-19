@@ -336,7 +336,7 @@ database_tool!(read_only, ft_aggregate, "redis_ft_aggregate",
         #[serde(default)]
         pub reduce: Option<Vec<String>>,
         /// SORTBY properties with optional ASC/DESC and trailing MAX count
-        /// (e.g. ["@count", "DESC", "MAX", "10"]). Use @ for keyword-named properties.
+        /// (e.g. `["@count", "DESC", "MAX", "10"]`). Use @ for keyword-named properties.
         /// Applied after raw_args.
         #[serde(default)]
         pub sort_by: Option<Vec<String>>,
