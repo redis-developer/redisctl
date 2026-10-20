@@ -240,6 +240,51 @@ fn inspect_reads_utf8_and_unambiguous_legacy_cp437_names() {
 }
 
 #[test]
+fn inspect_prefers_valid_utf8_for_ambiguous_legacy_names() {
+    let directory = TempDir::new().unwrap();
+    let archive = directory.path().join("ambiguous-name.zip");
+    write_archive(
+        &archive,
+        &[
+            ("module.json", br#"{"module_name":"fixture"}"#),
+            ("xx.so", b"synthetic"),
+        ],
+        CompressionMethod::Stored,
+    );
+    let mut bytes = fs::read(&archive).unwrap();
+    let positions: Vec<_> = bytes
+        .windows(5)
+        .enumerate()
+        .filter_map(|(index, part)| (part == b"xx.so").then_some(index))
+        .collect();
+    assert_eq!(positions.len(), 2);
+    // Confirm that neither header marks the ASCII placeholder as UTF-8.
+    for (index, name_offset, flags_offset, signature) in [
+        (positions[0], 30, 6, b"PK\x03\x04"),
+        (positions[1], 46, 8, b"PK\x01\x02"),
+    ] {
+        let header = index - name_offset;
+        assert_eq!(&bytes[header..header + 4], signature);
+        let flags = u16::from_le_bytes([
+            bytes[header + flags_offset],
+            bytes[header + flags_offset + 1],
+        ]);
+        assert_eq!(flags & (1 << 11), 0);
+        // Valid UTF-8 á, but CP437 ├í: ZIP 9 deliberately prefers UTF-8 here.
+        bytes[index..index + 2].copy_from_slice(&[0xc3, 0xa1]);
+    }
+    fs::write(&archive, &bytes).unwrap();
+    let report = inspect(&directory, &archive);
+    assert_eq!(report["so_file"], "á.so");
+    assert_eq!(report["files"][1], json!({"name":"á.so","size":9}));
+    assert_eq!(report["valid"], true);
+    assert_eq!(fs::read(archive).unwrap(), bytes);
+    assert!(!directory.path().join("á.so").exists());
+    assert!(!directory.path().join("├í.so").exists());
+    assert!(!directory.path().join("module.json").exists());
+}
+
+#[test]
 fn corrupt_metadata_crc_is_a_controlled_failure_without_extraction() {
     let directory = TempDir::new().unwrap();
     let archive = directory.path().join("crc.zip");
