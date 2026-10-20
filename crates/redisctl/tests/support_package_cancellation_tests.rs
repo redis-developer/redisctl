@@ -51,7 +51,7 @@ fn overwrite_cancellation_preserves_structured_errors_and_existing_file() {
                 let error: Value = if format == "json" {
                     serde_json::from_slice(stderr).unwrap()
                 } else {
-                    serde_yaml::from_slice(stderr).unwrap()
+                    serde_saphyr::from_slice(stderr).unwrap()
                 };
                 assert_eq!(error["error"]["code"], "cancelled");
                 assert_eq!(error["error"]["exit_code"], 12);
