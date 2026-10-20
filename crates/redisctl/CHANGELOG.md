@@ -9,6 +9,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- Update the module archive dependency from ZIP 6 to ZIP 9. Package contents and
+  inspection fields are preserved, but archive bytes and sizes are not a stable
+  contract. Inspection now prefers UTF-8 for valid filename bytes, falling back
+  to CP437; ambiguous legacy names can display differently. Invalid Unicode-path
+  extra fields may also be ignored where older readers rejected the archive.
+  Inspection remains read-only and never extracts or loads module files.
 - Replace the unmaintained YAML output backend with `serde-saphyr`. YAML retains
   JSON-compatible fields and values, stdout/stderr placement and exit codes, but
   quoting, long-string wrapping and floating-point exponent spelling can differ.
