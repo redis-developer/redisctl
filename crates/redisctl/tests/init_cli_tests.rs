@@ -514,7 +514,21 @@ fn the_redis_cli_line_reports_what_the_installer_left_behind() {
         (
             Some(serve),
             Some("true\n"),
-            "skipped   redis-cli  the installer left no redis-cli on PATH or in ~/.local/bin"
+            "skipped   redis-cli  the installer left no runnable redis-cli on PATH or in ~/.local/bin"
+                .to_string(),
+        ),
+        (
+            Some(serve),
+            Some("mkdir -p \"$HOME/.local/bin/redis-cli\"\n"),
+            "skipped   redis-cli  the installer left no runnable redis-cli on PATH or in ~/.local/bin"
+                .to_string(),
+        ),
+        (
+            Some(serve),
+            Some(
+                "mkdir -p \"$HOME/.local/bin\"\necho '#!/bin/sh' > \"$HOME/.local/bin/redis-cli\"\nchmod -x \"$HOME/.local/bin/redis-cli\"\n",
+            ),
+            "skipped   redis-cli  the installer left no runnable redis-cli on PATH or in ~/.local/bin"
                 .to_string(),
         ),
         (
@@ -580,6 +594,10 @@ fn the_redis_cli_line_reports_what_the_installer_left_behind() {
         }
         let stdout = run(false);
         assert!(stdout.contains(&line), "{line}\n{stdout}");
+        if line.starts_with("skipped") {
+            let rerun = run(true);
+            assert!(!rerun.contains("already installed"), "{line}\n{rerun}");
+        }
     }
 }
 

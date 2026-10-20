@@ -171,13 +171,13 @@ fn install_cli() -> Change {
             "installed to ~/.local/bin - add it to PATH to use it",
         )
     } else {
-        skipped("the installer left no redis-cli on PATH or in ~/.local/bin".to_string())
+        skipped("the installer left no runnable redis-cli on PATH or in ~/.local/bin".to_string())
     }
 }
 
 /// The official installer's no-sudo fallback, often not on PATH.
 fn local_bin_cli() -> bool {
-    std::env::home_dir().is_some_and(|home| home.join(".local/bin/redis-cli").exists())
+    std::env::home_dir().is_some_and(|home| which::which(home.join(".local/bin/redis-cli")).is_ok())
 }
 
 pub(crate) fn plan_client_install(cwd: &Path, project: &Project) -> InstallAction {

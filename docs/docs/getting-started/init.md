@@ -76,8 +76,8 @@ line other users can see. Passwords are masked in all terminal output. A new `.e
 only by you, `.gitignore` covers it before it is written, and a `.env` that git
 already tracks is refused rather than handed a secret. A `.env` that sets one of
 init's keys on more than one line is refused too: dotenv loaders read the last line,
-and so does the MCP launcher. With `--cloud`, these checks run before Redis Cloud is
-asked for a database.
+and so does the MCP launcher. With `--cloud`, these checks and every other check on
+the project's files run before Redis Cloud is asked for a database.
 
 ## Exit codes
 

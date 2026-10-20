@@ -962,6 +962,17 @@ async fn a_local_refusal_stops_cloud_before_any_request() {
             "REDIS_URL=redis://a:1\nREDIS_URL=redis://b:2\n",
         )
     };
+    let skill_md = ".agents/skills/redis-project-setup/SKILL.md";
+    let skill_dir = |dir: &std::path::Path| {
+        std::fs::write(dir.join(".env"), "APP=1\n")?;
+        std::fs::create_dir_all(dir.join(skill_md))
+    };
+    let skill_bytes = |dir: &std::path::Path| {
+        std::fs::write(dir.join(".env"), "APP=1\n")?;
+        std::fs::create_dir_all(dir.join(".agents/skills/redis-project-setup"))?;
+        std::fs::write(dir.join(skill_md), b"# notes \xff\n")
+    };
+    let unreadable = "'.agents/skills/redis-project-setup/SKILL.md' exists but cannot be read";
     let cfg = tempfile::tempdir().unwrap();
     let repo = skills_fixture();
     let server = MockServer::start().await;
@@ -990,6 +1001,8 @@ async fn a_local_refusal_stops_cloud_before_any_request() {
             "tracked by git",
         ),
         (&twice, 6, ".env sets REDIS_URL on more than one line"),
+        (&skill_dir, 1, unreadable),
+        (&skill_bytes, 1, unreadable),
     ] {
         for extra in [
             &["--name", "new-db"][..],
@@ -1001,6 +1014,7 @@ async fn a_local_refusal_stops_cloud_before_any_request() {
                 continue;
             }
             let before = std::fs::read_to_string(project.path().join(".env")).unwrap();
+            let skill_before = std::fs::read(project.path().join(skill_md)).ok();
             run_init_cloud(&cfg, project.path(), &repo, extra)
                 .assert()
                 .code(code)
@@ -1008,6 +1022,10 @@ async fn a_local_refusal_stops_cloud_before_any_request() {
             assert_eq!(
                 std::fs::read_to_string(project.path().join(".env")).unwrap(),
                 before
+            );
+            assert_eq!(
+                std::fs::read(project.path().join(skill_md)).ok(),
+                skill_before
             );
             assert!(!project.path().join(".gitignore").exists(), "{extra:?}");
         }

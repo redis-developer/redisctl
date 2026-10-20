@@ -433,11 +433,7 @@ pub(crate) fn preview(
 ) -> Vec<Change> {
     let file = match plan_file(cwd, facts) {
         Ok(action) => action.preview(),
-        Err(_) => Change::new(
-            format!("{SKILLS_DIR}/{NAME}/SKILL.md"),
-            Status::Updated,
-            NOTE,
-        ),
+        Err(e) => Change::new(rel(), Status::Skipped, e.to_string()),
     };
     let mut changes = vec![file];
     if link_for_claude {
@@ -471,8 +467,17 @@ pub(crate) fn generate(
     Ok(changes)
 }
 
+fn rel() -> String {
+    format!("{SKILLS_DIR}/{NAME}/SKILL.md")
+}
+
+/// Refuse a skill file that exists but cannot be read, before anything is written.
+pub(crate) fn refuse_unreadable(cwd: &Path) -> Result<(), InitError> {
+    read_for_planning(cwd, &rel()).map(drop)
+}
+
 fn plan_file(cwd: &Path, facts: &SkillFacts) -> Result<FileAction, InitError> {
-    let rel = format!("{SKILLS_DIR}/{NAME}/SKILL.md");
+    let rel = rel();
     let existing = read_for_planning(cwd, &rel)?;
     let content = content(facts, existing.as_deref().and_then(database_part));
     Ok(match existing {

@@ -334,6 +334,7 @@ pub fn plan(options: &Options) -> Result<Plan, InitError> {
                 .flatten()
         })),
     )?;
+    project_skill::refuse_unreadable(&options.cwd)?;
     let products = products::wire(
         &options.cwd,
         &options.products,
