@@ -417,7 +417,7 @@ impl RedisCtlError {
                         .unwrap_or_else(|_| envelope.to_string())
                 );
             }
-            OutputFormat::Yaml => match serde_yaml::to_string(&self.envelope()) {
+            OutputFormat::Yaml => match serde_saphyr::to_string(&self.envelope()) {
                 Ok(s) => eprint!("{}", s),
                 Err(_) => self.print_human_diagnostic(),
             },

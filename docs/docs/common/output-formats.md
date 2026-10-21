@@ -62,6 +62,29 @@ redisctl cloud subscription list -o json | jq -c '.[]'
 
 ## YAML Output
 
+YAML represents the same JSON-compatible fields and values as JSON output.
+Success output goes to stdout. Ordinary CLI diagnostic envelopes go to stderr;
+existing agent-native workflows (such as `cloud workflow database-credentials`)
+emit their structured error envelopes to stdout in machine-output mode. YAML
+keeps the same channel, error fields and exit codes as JSON for each path.
+
+### Serializer migration
+
+The next release replaces the unmaintained `serde_yaml` / `unsafe-libyaml` backend
+with `serde-saphyr`. This preserves the data model, not identical YAML text:
+ambiguous strings such as `yes` may gain quotes, long strings may use folded
+blocks, and floating-point exponents may be spelled differently. Parse YAML
+values rather than comparing raw text; update text snapshots after checking
+their parsed values. JSON output is unchanged.
+
+Production enables only serialization. The parser is enabled for tests; this
+change adds no YAML configuration input, file includes or variable interpolation.
+The replacement's declared Rust minimum is 1.89, below redisctl's 1.90 minimum,
+and its license is MIT OR Apache-2.0. The dependency change removes the old YAML
+backend's maintenance warning; it is not a claim that unrelated audits are clear.
+
+### Example
+
 ```bash
 redisctl enterprise cluster get -o yaml
 ```

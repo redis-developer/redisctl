@@ -832,7 +832,10 @@ async fn handle_inspect(file: &Path, verbose: bool, output_format: OutputFormat)
         let mut zip_entry = archive
             .by_index(i)
             .with_context(|| format!("Failed to read zip entry {}", i))?;
-        let name = zip_entry.name().to_string();
+        let name = zip_entry
+            .name()
+            .with_context(|| format!("Failed to read zip entry name {}", i))?
+            .into_owned();
         let size = zip_entry.size();
 
         files_info.push((name.clone(), size));

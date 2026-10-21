@@ -51,7 +51,7 @@ flate2 = { workspace = true }
 
 # Shared utility dependencies
 thiserror = { workspace = true }
-serde_yaml = { workspace = true }
+serde-saphyr = { workspace = true }
 jpx-core = { workspace = true }
 config = { workspace = true }
 
@@ -62,7 +62,7 @@ keyring = { workspace = true, optional = true }
 tower = { workspace = true }
 tower-resilience = { version = "0.1", features = ["circuitbreaker", "retry", "ratelimiter"] }
 regex = "1.12.2"
-zip = "6.0.0"
+zip = "9.0.0"
 which = "7"
 redis = { workspace = true }
 
@@ -81,6 +81,8 @@ upload = ["dep:files-sdk"]
 secure-storage = ["redisctl-core/secure-storage", "dep:keyring"]
 
 [dev-dependencies]
+# YAML parsing verifies emitted values in tests; production only serializes.
+serde-saphyr = { workspace = true, features = ["deserialize"] }
 assert_cmd = "2.0"
 predicates = "3.0"
 tempfile = { workspace = true }
