@@ -1579,6 +1579,9 @@ mod tests {
         "redisctl enterprise shard failover",
         "redisctl enterprise shard migrate",
         "redisctl enterprise suffix delete",
+        "redisctl enterprise support-package cluster",
+        "redisctl enterprise support-package database",
+        "redisctl enterprise support-package node",
         "redisctl enterprise user delete",
     ];
 

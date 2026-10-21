@@ -2,7 +2,9 @@
 //! config_get, memory_stats, latency_history, acl_list, acl_whoami, module_list,
 //! config_set, flushdb)
 
-use tower_mcp::{CallToolResult, ResultExt};
+use tower_mcp::CallToolResult;
+
+use super::RedisResultExt;
 
 use crate::serde_helpers;
 use crate::tools::macros::{database_tool, mcp_module};
@@ -56,7 +58,11 @@ database_tool!(read_only, info, "redis_info",
             .await
             .tool_context("INFO failed")?;
 
-        Ok(CallToolResult::text(info))
+        Ok(CallToolResult::text(if info.is_empty() {
+            "(no INFO data returned)".to_string()
+        } else {
+            info
+        }))
     }
 );
 

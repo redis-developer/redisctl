@@ -3,7 +3,9 @@
 //! unlink, copy, dump, restore, randomkey, touch, incr, decr, append, strlen, getrange, setrange,
 //! setnx)
 
-use tower_mcp::{CallToolResult, ResultExt};
+use tower_mcp::CallToolResult;
+
+use super::RedisResultExt;
 
 use super::format_value;
 use crate::serde_helpers;
@@ -854,7 +856,11 @@ database_tool!(read_only, getrange, "redis_getrange",
             .await
             .tool_context("GETRANGE failed")?;
 
-        Ok(CallToolResult::text(value))
+        Ok(CallToolResult::text(if value.is_empty() {
+            "(empty string)".to_string()
+        } else {
+            value
+        }))
     }
 );
 
