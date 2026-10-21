@@ -180,6 +180,44 @@ pub(crate) fn format_value(v: &redis::Value) -> String {
     }
 }
 
+/// Reconstruct detailed Redis error replies, preserving other diagnostics.
+///
+/// `redis-rs` splits every error reply on the first space and treats the first
+/// word as an error code. That is right for `ERR ...` and `WRONGTYPE ...`, but
+/// module errors are often plain sentences ("No such index", "Syntax error at
+/// offset 8"), so its `Display` output becomes "No: such index". Rebuilding
+/// `code detail` restores the original text for both cases. A code alone does
+/// not prove server origin: redis-rs also assigns codes to client-generated
+/// errors whose explanation lives in their description, not `detail()`.
+/// Without both code and detail, keep `Display` (including bare server codes)
+/// rather than discard a description or guess where the error originated.
+pub(crate) fn describe_redis_error(err: &redis::RedisError) -> String {
+    match (err.code(), err.detail()) {
+        (Some(code), Some(detail)) => format!("{code} {detail}"),
+        _ => err.to_string(),
+    }
+}
+
+/// `tool_context` for Redis results that formats the server error faithfully.
+///
+/// Shadows `tower_mcp::ResultExt::tool_context` inside the Redis tool modules so
+/// every handler gets the readable form without per-call changes.
+pub(crate) trait RedisResultExt<T> {
+    fn tool_context(self, context: impl Into<String>) -> Result<T, tower_mcp::Error>;
+}
+
+impl<T> RedisResultExt<T> for Result<T, redis::RedisError> {
+    fn tool_context(self, context: impl Into<String>) -> Result<T, tower_mcp::Error> {
+        self.map_err(|err| {
+            tower_mcp::Error::Tool(ToolError::new(format!(
+                "{}: {}",
+                context.into(),
+                describe_redis_error(&err)
+            )))
+        })
+    }
+}
+
 /// Build an MCP sub-router containing all Redis database tools
 pub fn router(state: Arc<AppState>) -> McpRouter {
     McpRouter::new()
@@ -192,4 +230,131 @@ pub fn router(state: Arc<AppState>) -> McpRouter {
         .merge(bulk::router(state.clone()))
         .merge(raw::router(state.clone()))
         .merge(aliases::router(state))
+}
+
+#[cfg(test)]
+mod error_format_tests {
+    use super::{RedisResultExt, describe_redis_error};
+
+    /// Build a `RedisError` exactly as the client would from a raw `-...` reply line.
+    fn server_error(line: &str) -> redis::RedisError {
+        let raw = format!("-{line}\r\n");
+        redis::parse_redis_value(raw.as_bytes())
+            .expect("error line parses as a value")
+            .extract_error()
+            .expect_err("error reply becomes an error")
+    }
+
+    #[test]
+    fn module_errors_keep_their_first_word() {
+        for line in [
+            "No such index idx:nope",
+            "Syntax error at offset 8 near abc",
+            "Not a tag field",
+            "Index already exists",
+            "idx:nope: no such index",
+            "Existing key has wrong Redis type",
+        ] {
+            let err = server_error(line);
+            assert_ne!(
+                err.to_string(),
+                line,
+                "precondition: redis-rs mangles {line:?}"
+            );
+            assert_eq!(describe_redis_error(&err), line);
+        }
+    }
+
+    #[test]
+    fn core_errors_are_the_original_server_text() {
+        let err = server_error("ERR value is not an integer or out of range");
+        assert_eq!(
+            describe_redis_error(&err),
+            "ERR value is not an integer or out of range"
+        );
+
+        let err = server_error("WRONGTYPE Operation against a key holding the wrong kind of value");
+        assert_eq!(
+            describe_redis_error(&err),
+            "WRONGTYPE Operation against a key holding the wrong kind of value"
+        );
+
+        let err = server_error("NOAUTH Authentication required.");
+        assert_eq!(
+            describe_redis_error(&err),
+            "NOAUTH Authentication required."
+        );
+    }
+
+    #[test]
+    fn client_side_errors_fall_back_to_display() {
+        let err = redis::RedisError::from((
+            redis::ErrorKind::TypeError,
+            "Response was of incompatible type",
+            "expected string".to_string(),
+        ));
+        assert_eq!(describe_redis_error(&err), err.to_string());
+
+        let io = std::io::Error::new(std::io::ErrorKind::ConnectionRefused, "refused");
+        let err = redis::RedisError::from(io);
+        assert_eq!(describe_redis_error(&err), err.to_string());
+    }
+
+    #[test]
+    fn client_side_coded_errors_keep_their_description() {
+        for (kind, description) in [
+            (
+                redis::ErrorKind::CrossSlot,
+                "Received crossed slots in pipeline",
+            ),
+            (
+                redis::ErrorKind::ResponseError,
+                "request wasn't handled due to internal failure",
+            ),
+        ] {
+            let err = redis::RedisError::from((kind, description));
+            assert!(err.code().is_some());
+            assert_eq!(err.detail(), None);
+            assert!(err.to_string().contains(description));
+            assert_eq!(describe_redis_error(&err), err.to_string());
+        }
+    }
+
+    #[test]
+    fn result_context_preserves_coded_client_errors_and_success() {
+        for (kind, description) in [
+            (
+                redis::ErrorKind::CrossSlot,
+                "Received crossed slots in pipeline",
+            ),
+            (
+                redis::ErrorKind::ResponseError,
+                "request wasn't handled due to internal failure",
+            ),
+        ] {
+            let err = redis::RedisError::from((kind, description));
+            let expected = format!("Pipeline failed: {err}");
+            let result: Result<(), redis::RedisError> = Err(err);
+            let tower_mcp::Error::Tool(error) = result.tool_context("Pipeline failed").unwrap_err()
+            else {
+                panic!("Redis handler errors must stay MCP tool errors");
+            };
+            assert_eq!(error.message, expected);
+        }
+
+        assert_eq!(
+            Ok::<_, redis::RedisError>(42)
+                .tool_context("unused")
+                .unwrap(),
+            42
+        );
+    }
+
+    #[test]
+    fn bare_server_codes_keep_display_without_guessing_origin() {
+        let err = server_error("ERR");
+        assert_eq!(err.code(), Some("ERR"));
+        assert_eq!(err.detail(), None);
+        assert_eq!(describe_redis_error(&err), err.to_string());
+    }
 }
