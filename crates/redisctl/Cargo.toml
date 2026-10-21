@@ -51,7 +51,7 @@ flate2 = { workspace = true }
 
 # Shared utility dependencies
 thiserror = { workspace = true }
-serde_yaml = { workspace = true }
+serde_norway = { workspace = true }
 jpx-core = { workspace = true }
 config = { workspace = true }
 
