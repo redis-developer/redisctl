@@ -31,6 +31,13 @@ pub(crate) fn sh(cmd: &str, args: &[&str]) -> ShOutput {
     run(std::process::Command::new(cmd).args(args))
 }
 
+/// Like [`sh`], with extra environment variables on top of the inherited ones.
+pub(crate) fn sh_env(cmd: &str, args: &[&str], env: &[(&str, &str)]) -> ShOutput {
+    run(std::process::Command::new(cmd)
+        .args(args)
+        .envs(env.iter().copied()))
+}
+
 /// Like [`sh`], but in `dir` - commands that act on the project must not depend on
 /// the caller's process cwd.
 pub(crate) fn sh_in(dir: &Path, cmd: &str, args: &[&str]) -> ShOutput {

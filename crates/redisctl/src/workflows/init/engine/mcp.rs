@@ -9,6 +9,7 @@ use crate::workflows::init::engine::InitError;
 use crate::workflows::init::engine::change::{Change, Status};
 use crate::workflows::init::engine::docker::docker_ok;
 use crate::workflows::init::engine::env::{FileAction, read_for_planning};
+use crate::workflows::init::engine::pins;
 use crate::workflows::init::engine::project::Agent;
 use crate::workflows::init::engine::util::has_bin;
 
@@ -36,8 +37,9 @@ fn launcher(keys: &[&str], command: &str) -> serde_json::Value {
 
 /// Splits REDIS_URL where `util::mask_url` does (the last `@`, then the userinfo's
 /// first `:`): `url` keeps everything but the password, which goes in REDIS_PWD.
-/// redis-mcp-server (0.5.1) reads REDIS_PWD when its `--url` carries none, so the password
-/// stays off the command line that `ps` shows to every user. The server sends REDIS_PWD
+/// redis-mcp-server (`pins::REDIS_MCP_SERVER`) reads REDIS_PWD when its `--url` carries
+/// none, so the password stays off the command line that `ps` shows to every user. The
+/// server sends REDIS_PWD
 /// as-is, so it is percent-decoded first the way redis-rs decodes the URL: each `%XX`
 /// becomes its byte (`LC_ALL=C` keeps gawk from re-encoding bytes above 0x7f as UTF-8)
 /// and anything else, a stray `%` included, is kept.
@@ -45,11 +47,18 @@ const SPLIT_PASSWORD: &str = r#"REDIS_PWD=$(printf %s "$REDIS_URL" | sed -n 's~^
 
 fn server_entry(runner: &Runner) -> serde_json::Value {
     let inner = match runner {
-        // Rewrite only the hostname; userinfo and remote hosts stay intact.
-        Runner::Docker => {
-            r#"exec docker run --rm -i -e REDIS_PWD --add-host=host.docker.internal:host-gateway mcp/redis --url "$(printf %s "$url" | sed -E 's~^(rediss?://([^/]*@)?)(localhost|127\.0\.0\.1)([:/?#]|$)~\1host.docker.internal\4~')""#
-        }
-        _ => r#"exec uvx --from redis-mcp-server@latest redis-mcp-server --url "$url""#,
+        // Rewrite only the hostname; userinfo and remote hosts stay intact. The image
+        // has no ENTRYPOINT, so arguments after it replace its CMD: name the server's
+        // console script (`src.main:cli`, the CLI uvx runs) or `--url` would be the
+        // command. Its own `python src/main.py` ignores arguments.
+        Runner::Docker => format!(
+            r#"exec docker run --rm -i -e REDIS_PWD --add-host=host.docker.internal:host-gateway {} uv run redis-mcp-server --url "$(printf %s "$url" | sed -E 's~^(rediss?://([^/]*@)?)(localhost|127\.0\.0\.1)([:/?#]|$)~\1host.docker.internal\4~')""#,
+            pins::REDIS_MCP_IMAGE
+        ),
+        _ => format!(
+            r#"exec uvx --from {} redis-mcp-server --url "$url""#,
+            pins::REDIS_MCP_SERVER
+        ),
     };
     launcher(&["REDIS_URL"], &format!("{SPLIT_PASSWORD}; {inner}"))
 }
@@ -112,7 +121,10 @@ pub(crate) struct McpInputs<'a> {
 fn context_retriever_entry() -> serde_json::Value {
     launcher(
         &["CONTEXT_RETRIEVER_MCP_URL", "CONTEXT_RETRIEVER_AGENT_KEY"],
-        r#"exec npx -y mcp-remote "$CONTEXT_RETRIEVER_MCP_URL" --header 'X-API-Key:${CONTEXT_RETRIEVER_AGENT_KEY}'"#,
+        &format!(
+            r#"exec npx -y {} "$CONTEXT_RETRIEVER_MCP_URL" --header 'X-API-Key:${{CONTEXT_RETRIEVER_AGENT_KEY}}'"#,
+            pins::MCP_REMOTE
+        ),
     )
 }
 
@@ -421,7 +433,10 @@ mod tests {
             .unwrap();
         assert_eq!(
             String::from_utf8(output.stdout).unwrap(),
-            "-y\nmcp-remote\nhttps://ctx.example/mcp\n--header\nX-API-Key:${CONTEXT_RETRIEVER_AGENT_KEY}\nk$y\n"
+            format!(
+                "-y\n{}\nhttps://ctx.example/mcp\n--header\nX-API-Key:${{CONTEXT_RETRIEVER_AGENT_KEY}}\nk$y\n",
+                pins::MCP_REMOTE
+            )
         );
     }
 
@@ -433,6 +448,39 @@ mod tests {
             launcher.contains("--add-host=host.docker.internal:host-gateway"),
             "{launcher}"
         );
+    }
+
+    #[test]
+    fn docker_launcher_runs_the_pinned_image_through_its_server_script() {
+        let entry = server_entry(&Runner::Docker);
+        let launcher = entry["args"][1].as_str().unwrap();
+        assert!(
+            launcher.contains(&format!(
+                "{} uv run redis-mcp-server --url ",
+                pins::REDIS_MCP_IMAGE
+            )),
+            "{launcher}"
+        );
+    }
+
+    #[test]
+    fn no_launcher_floats_to_the_latest_release() {
+        let entries = [
+            server_entry(&Runner::Uvx),
+            server_entry(&Runner::Docker),
+            server_entry(&Runner::UvxMissing),
+            context_retriever_entry(),
+        ];
+        for entry in entries {
+            let launcher = entry["args"][1].as_str().unwrap();
+            assert!(!launcher.contains("@latest"), "{launcher}");
+            assert!(!launcher.contains("mcp/redis "), "{launcher}");
+        }
+        let uvx = server_entry(&Runner::Uvx);
+        assert!(uvx["args"][1].as_str().unwrap().contains(&format!(
+            "uvx --from {} redis-mcp-server",
+            pins::REDIS_MCP_SERVER
+        )));
     }
 
     #[test]

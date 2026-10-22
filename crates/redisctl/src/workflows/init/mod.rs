@@ -204,7 +204,13 @@ async fn run_inner(
         api_key: args.api_key.clone(),
         no_example: args.no_example,
         agents: requested_agents(&args.agents),
-        install_cli: !args.no_install_cli,
+        // The installer runs a remote script: a terminal run asks, anything that
+        // cannot answer gets the command unless --install-cli says yes up front.
+        cli_install: engine::CliInstall::from_flags(
+            args.no_install_cli,
+            args.install_cli,
+            std::io::stdin().is_terminal() && std::io::stderr().is_terminal() && !args.defaults,
+        ),
         skills_repo: args.skills_repo.clone(),
         skills_global: args.skills_global,
         skills_skip: args.no_skills,
@@ -362,7 +368,7 @@ async fn run_inner(
         options.cloud = Some(outcome.facts);
         cloud_changes = outcome.changes;
     }
-    let plan = engine::plan(&options)?;
+    let mut plan = engine::plan(&options)?;
     telemetry.props.database_source = plan.database_source(!dry);
     telemetry.props.cloud_created = options.cloud.as_ref().is_some_and(|c| c.created);
     telemetry.props.runtime = Some(plan.project.runtime.as_str());
@@ -415,6 +421,15 @@ async fn run_inner(
         ))
     );
     println!("{}", output::rail_gap());
+
+    // Asked once the plan is final and only when it would run the installer: the one
+    // step that runs a remote script. A dry run reports the question instead.
+    if !dry
+        && plan.asks_to_install_cli()
+        && !wizard::confirm_cli_install(&engine::redis_cli_version())?
+    {
+        plan.decline_cli_install();
+    }
 
     let subject = |applied: bool| match plan.database_url() {
         Some(url) => format!(

@@ -11,6 +11,7 @@ mod env;
 mod example;
 mod install;
 mod mcp;
+mod pins;
 mod products;
 mod project;
 mod project_skill;
@@ -25,6 +26,7 @@ pub use skills::project_dir as project_skills_dir;
 pub(crate) const SKILLS_DIR: &str = ".agents/skills";
 pub use docker::{LOCAL_REDIS_URL, LocalRedis, PLACEHOLDER_URL, probe_local_redis, validate};
 pub use env::read_env_key;
+pub use install::{CliInstall, cli_version as redis_cli_version};
 pub use products::{
     ProductKey, ProductRequest, SECRET_PLACEHOLDER, WiredProduct, validate_product,
 };
@@ -115,8 +117,8 @@ pub struct Options {
     pub no_example: bool,
     /// `None` detects installed tools; detecting none still configures all agents.
     pub agents: Option<Vec<Agent>>,
-    /// Install redis-cli when it is missing (`--no-install-cli` turns this off).
-    pub install_cli: bool,
+    /// Whether a missing redis-cli is installed, asked about, or only suggested.
+    pub cli_install: CliInstall,
     /// A local redis/agent-skills checkout to copy from instead of the skills CLI.
     pub skills_repo: Option<PathBuf>,
     /// Install the official skills for the user instead of into this project.
@@ -146,7 +148,7 @@ impl std::fmt::Debug for Options {
             .field("api_key", &self.api_key.as_ref().map(|_| "<redacted>"))
             .field("no_example", &self.no_example)
             .field("agents", &self.agents)
-            .field("install_cli", &self.install_cli)
+            .field("cli_install", &self.cli_install)
             .field("skills_repo", &self.skills_repo)
             .field("skills_global", &self.skills_global)
             .field("skills_skip", &self.skills_skip)
@@ -228,6 +230,21 @@ impl Plan {
     /// validated, and the run ends with instructions.
     pub fn database_pending(&self) -> bool {
         matches!(self.database, Some(docker::DatabaseAction::Placeholder))
+    }
+
+    /// The redis-cli installer is planned behind a question the caller must ask.
+    pub fn asks_to_install_cli(&self) -> bool {
+        matches!(
+            self.cli,
+            Some(install::InstallAction::InstallCli { ask: true })
+        )
+    }
+
+    /// The answer was no: the installer becomes a skip that names the command.
+    pub fn decline_cli_install(&mut self) {
+        if self.cli.is_some() {
+            self.cli = Some(install::declined_cli_install());
+        }
     }
 
     /// The database's provenance for the summary line, which wraps it in
@@ -444,7 +461,7 @@ pub fn plan(options: &Options) -> Result<Plan, InitError> {
         .collect();
     let cli = database
         .is_some()
-        .then(|| install::plan_redis_cli(options.install_cli));
+        .then(|| install::plan_redis_cli(options.cli_install));
     let (examples, example_note) =
         example::plan_examples(&options.cwd, project.runtime, &products, options.no_example);
     let skills = skills::SkillsAction {
@@ -663,7 +680,7 @@ mod tests {
             api_key: None,
             no_example: false,
             agents: Some(vec![Agent::Claude]),
-            install_cli: false,
+            cli_install: CliInstall::Never,
             skills_repo: None,
             skills_global: false,
             skills_skip: false,
@@ -691,7 +708,7 @@ mod tests {
             api_key: None,
             no_example: false,
             agents: Some(vec![Agent::Codex]),
-            install_cli: false,
+            cli_install: CliInstall::Never,
             skills_repo: None,
             skills_global: false,
             skills_skip: false,
@@ -730,7 +747,7 @@ mod tests {
             api_key: None,
             no_example: false,
             agents: Some(vec![Agent::Codex]),
-            install_cli: false,
+            cli_install: CliInstall::Never,
             skills_repo: Some(repo.path().to_path_buf()),
             skills_global: false,
             skills_skip: false,

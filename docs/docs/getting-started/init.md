@@ -26,7 +26,8 @@ redisctl init              # apply it
    `--cloud` answer the question up front.
 3. **Wires the project**: `REDIS_URL` written to `.env` (an explicit database
    choice replaces an existing value), a committed `.env.example` placeholder, a `.gitignore` guard,
-   the official Redis client for the detected runtime, and redis-cli when missing.
+   the official Redis client for the detected runtime, and redis-cli when missing
+   (on a terminal init asks first; see `--install-cli`).
 4. **Teaches the agents**: the official [redis/agent-skills](https://github.com/redis/agent-skills)
    via the standard skills CLI, a generated `redis-project-setup` skill carrying this
    project's specific facts, and a credential-free `redis` MCP server registration
@@ -52,6 +53,7 @@ up before.
 | `--name <label>` | database name: with `--cloud` it is the reuse key and the name of a new database; a database outside Docker is named by it in the generated project skill |
 | `--agent <name>` | configure specific agents (`claude`, `cursor`, `vscode`, `codex`, `all`; repeatable or comma-separated). Default: on a terminal the wizard asks; otherwise the detected tools, or all four when none is detected |
 | `--no-install-cli` | skip installing redis-cli when it is missing |
+| `--install-cli` | install a missing redis-cli without asking. On a terminal init asks before running the official installer from packages.redis.io; a run with nothing to ask (piped, CI, `--defaults`) only prints the install command unless this flag is set |
 | `--skills-repo <dir>` | copy skills from a local redis/agent-skills checkout (offline-safe) |
 | `--skills-global` | install the official skills for your user instead of this project |
 | `--no-skills` | skip the official skills; the generated `redis-project-setup` skill is still written. The wizard offers the same as "Skip" |
@@ -82,6 +84,16 @@ git decides whether `.env` is already ignored. A `.env` that sets one of
 init's keys on more than one line is refused too: dotenv loaders read the last line,
 and so does the MCP launcher. With `--cloud`, these checks and every other check on
 the project's files run before Redis Cloud is asked for a database.
+
+## Pinned tools
+
+The MCP configs launch exact versions: redis-mcp-server through uvx, the `mcp/redis`
+image by digest when uvx is missing, and mcp-remote for Context Retriever. init itself
+runs a pinned skills CLI, and tells the redis-cli installer which version to fetch (a
+`REDIS_CLI_VERSION` you export wins). The versions are in the generated configs and
+can move with a redisctl release: after upgrading, run `redisctl init` again to
+refresh them (add `--complete` when Context Retriever is set up). The redis/agent-skills
+content itself comes from that repository's default branch.
 
 ## Exit codes
 

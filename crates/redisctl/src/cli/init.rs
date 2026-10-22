@@ -96,6 +96,12 @@ pub struct InitArgs {
     #[arg(long = "no-install-cli")]
     pub no_install_cli: bool,
 
+    /// Install a missing redis-cli without asking. A terminal run asks first; a run
+    /// with nothing to ask (piped, CI, --defaults) only prints the install command
+    /// unless this is set
+    #[arg(long = "install-cli", conflicts_with = "no_install_cli")]
+    pub install_cli: bool,
+
     /// Path to a redis/agent-skills checkout to copy skills from (offline-safe;
     /// default: install via the standard skills CLI)
     #[arg(long, value_name = "DIR", env = "REDISCTL_INIT_SKILLS_REPO")]
@@ -149,6 +155,7 @@ impl std::fmt::Debug for InitArgs {
             .field("agents", &self.agents)
             .field("defaults", &self.defaults)
             .field("no_install_cli", &self.no_install_cli)
+            .field("install_cli", &self.install_cli)
             .field("skills_repo", &self.skills_repo)
             .field("skills_global", &self.skills_global)
             .field("no_skills", &self.no_skills)
@@ -173,6 +180,7 @@ mod tests {
             agents: vec![AgentArg::Claude],
             defaults: false,
             no_install_cli: false,
+            install_cli: false,
             skills_repo: None,
             skills_global: false,
             no_skills: false,
