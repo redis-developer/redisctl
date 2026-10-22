@@ -58,6 +58,12 @@ fn docker_mcp_rewrites_only_the_local_hostname() {
             "redis://localhost-password@remote.example:6379",
             "",
         ),
+        // The server sends REDIS_PWD as-is, so it arrives decoded, as redis-rs reads it.
+        (
+            "redis://default:p%40ss%3Aw%2Frd@h:1",
+            "redis://default@h:1",
+            "p@ss:w/rd",
+        ),
     ] {
         let dir = tempfile::tempdir().unwrap();
         let bin = dir.path().join("bin");
@@ -110,7 +116,9 @@ fn docker_mcp_rewrites_only_the_local_hostname() {
             argv.windows(2).any(|w| w == ["-e", "REDIS_PWD"]),
             "{argv:?}"
         );
-        assert!(!argv.iter().any(|a| a.contains("s3cret")), "{argv:?}");
+        for secret in ["s3cret", "p%40ss", "p@ss"] {
+            assert!(!argv.iter().any(|a| a.contains(secret)), "{argv:?}");
+        }
     }
 }
 
@@ -234,11 +242,25 @@ fn mcp_launcher_reads_the_url_the_way_init_does() {
             "rediss://u@h:1/0?ssl_cert_reqs=none",
             "s3cret",
         ),
+        // Percent-decoded as redis-rs decodes the URL: every %XX becomes its byte,
+        // anything else (a stray % included) stays.
+        (
+            "redis://default:p%40ss%3Aw%2Frd@h:1",
+            "redis://default@h:1",
+            "p@ss:w/rd",
+        ),
+        (
+            "redis://default:s3c%C3%A9%7e%zz%4@h:1",
+            "redis://default@h:1",
+            "s3c\u{e9}~%zz%4",
+        ),
     ] {
         let (argv, got) = launch(&format!("REDIS_URL='{url}'\n"));
         assert_eq!(argv.last().map(String::as_str), Some(argv_url), "{url}");
         assert_eq!(got, format!("REDIS_PWD={password}"), "{url}");
-        assert!(!argv.iter().any(|a| a.contains("s3c")), "{argv:?}");
+        for secret in ["s3c", "p%40ss", "p@ss"] {
+            assert!(!argv.iter().any(|a| a.contains(secret)), "{argv:?}");
+        }
     }
 }
 

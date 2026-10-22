@@ -37,8 +37,11 @@ fn launcher(keys: &[&str], command: &str) -> serde_json::Value {
 /// Splits REDIS_URL where `util::mask_url` does (the last `@`, then the userinfo's
 /// first `:`): `url` keeps everything but the password, which goes in REDIS_PWD.
 /// redis-mcp-server (0.5.1) reads REDIS_PWD when its `--url` carries none, so the password
-/// stays off the command line that `ps` shows to every user.
-const SPLIT_PASSWORD: &str = r#"REDIS_PWD=$(printf %s "$REDIS_URL" | sed -n 's~^rediss\{0,1\}://[^:@/]*:\(.*\)@.*~\1~p'); export REDIS_PWD; url=$(printf %s "$REDIS_URL" | sed -e 's~^\(rediss\{0,1\}://[^:@/]*\):.*@~\1@~' -e 's~^\(rediss\{0,1\}://\)@~\1~')"#;
+/// stays off the command line that `ps` shows to every user. The server sends REDIS_PWD
+/// as-is, so it is percent-decoded first the way redis-rs decodes the URL: each `%XX`
+/// becomes its byte (`LC_ALL=C` keeps gawk from re-encoding bytes above 0x7f as UTF-8)
+/// and anything else, a stray `%` included, is kept.
+const SPLIT_PASSWORD: &str = r#"REDIS_PWD=$(printf %s "$REDIS_URL" | sed -n 's~^rediss\{0,1\}://[^:@/]*:\(.*\)@.*~\1~p' | LC_ALL=C awk 'function d(c){return index("0123456789abcdef",tolower(c))-1}{s=$0;o="";while((i=index(s,"%"))>0){x=substr(s,i+1,2);if(x~/^[0-9A-Fa-f][0-9A-Fa-f]$/){o=o substr(s,1,i-1) sprintf("%c",d(substr(x,1,1))*16+d(substr(x,2,1)));s=substr(s,i+3)}else{o=o substr(s,1,i);s=substr(s,i+1)}}printf "%s",o s}'); export REDIS_PWD; url=$(printf %s "$REDIS_URL" | sed -e 's~^\(rediss\{0,1\}://[^:@/]*\):.*@~\1@~' -e 's~^\(rediss\{0,1\}://\)@~\1~')"#;
 
 fn server_entry(runner: &Runner) -> serde_json::Value {
     let inner = match runner {
