@@ -447,7 +447,7 @@ async fn run_inner(
         for change in cloud_changes.iter().cloned().chain(plan.changes()) {
             println!("{}", output::change_line(&change));
         }
-        uvx_note(&plan);
+        mcp_notes(&plan);
         println!(
             "{}",
             dim("\nDry run complete. Run again without --dry-run to apply.\n")
@@ -483,7 +483,7 @@ async fn run_inner(
     for change in cloud_changes.iter().chain(report.changes.iter()) {
         println!("{}", output::change_line(change));
     }
-    uvx_note(&plan);
+    mcp_notes(&plan);
 
     telemetry.props.skills_installed_count = report.skills_installed;
     telemetry.step("validate");
@@ -619,7 +619,8 @@ async fn run_inner(
             _ => "Cache the most expensive read path in Redis with a 60-second TTL.".to_string(),
         }
     };
-    let pickup = if plan.database_url().is_some() {
+    // Without sh the launcher cannot start the server; the note above says why.
+    let pickup = if plan.database_url().is_some() && !plan.mcp_shell_missing() {
         "the redis MCP server and the skills"
     } else {
         "the skills"
@@ -633,12 +634,20 @@ async fn run_inner(
     Ok(())
 }
 
-fn uvx_note(plan: &engine::Plan) {
+fn mcp_notes(plan: &engine::Plan) {
     if plan.mcp_runner_missing() {
         println!(
             "{}",
             yellow(
                 "\n  note: neither uvx nor Docker found - .mcp.json is written for uvx; install uv (https://docs.astral.sh/uv/) to use it."
+            )
+        );
+    }
+    if plan.mcp_shell_missing() {
+        println!(
+            "{}",
+            yellow(
+                "\n  note: the MCP launcher runs through sh, which is not on PATH - on Windows use WSL or put Git Bash's sh on PATH."
             )
         );
     }

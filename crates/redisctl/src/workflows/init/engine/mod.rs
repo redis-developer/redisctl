@@ -255,6 +255,12 @@ impl Plan {
         self.mcp.uvx_missing
     }
 
+    /// No `sh` on PATH to run the MCP launchers; the configs are still written and
+    /// the caller should say so rather than promise the servers start.
+    pub fn mcp_shell_missing(&self) -> bool {
+        self.mcp.sh_missing
+    }
+
     /// The change report this plan predicts, in the order a run reports it.
     pub fn changes(&self) -> Vec<Change> {
         let mut changes: Vec<Change> = self

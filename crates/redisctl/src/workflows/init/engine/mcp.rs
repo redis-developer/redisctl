@@ -78,6 +78,9 @@ impl McpAction {
 pub(crate) struct McpPlan {
     pub(crate) actions: Vec<McpAction>,
     pub(crate) uvx_missing: bool,
+    /// A config holds an `sh -c` launcher and no `sh` is on PATH (native Windows
+    /// without Git Bash's sh); the configs are still written.
+    pub(crate) sh_missing: bool,
 }
 
 /// The control-plane server: credentials stay in the redisctl profile, so the
@@ -147,6 +150,10 @@ pub(crate) fn plan_mcp(
                 .to_string(),
         ));
     }
+    // Every launcher but redisctl-mcp's runs through `sh`; Codex gets no config.
+    let sh_missing = servers.iter().any(|(_, entry, _)| entry["command"] == "sh")
+        && agents.iter().any(|agent| *agent != Agent::Codex)
+        && !has_bin("sh");
     let mut actions = Vec::new();
     // No servers means no config files at all - a products-only run without an MCP
     // product writes nothing here.
@@ -181,6 +188,7 @@ pub(crate) fn plan_mcp(
     Ok(McpPlan {
         actions,
         uvx_missing,
+        sh_missing,
     })
 }
 

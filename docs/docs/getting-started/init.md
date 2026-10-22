@@ -72,7 +72,8 @@ up before.
 the generated skill are credential-free and safe to commit: the MCP launcher reads
 `REDIS_URL` from `.env` when the agent starts the server (without executing the
 file) and hands the server the password through its environment, never on a command
-line other users can see. Passwords are masked in all terminal output. A new `.env` is readable
+line other users can see. The launcher runs through `sh`: on native Windows, use WSL or
+put Git Bash's `sh` on PATH, and init notes when it finds no `sh`. Passwords are masked in all terminal output. A new `.env` is readable
 only by you, `.gitignore` covers it before it is written, and a `.env` that git
 already tracks is refused rather than handed a secret. So are a `.env` or `.gitignore`
 that is a symlink, and a `.env` that is the same file as `.env.example`: each could

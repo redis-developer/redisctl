@@ -1,6 +1,8 @@
 //! Launch the generated MCP configuration with offline executable shims.
 #![cfg(unix)]
 
+mod init_common;
+
 use assert_cmd::Command;
 use predicates::prelude::*;
 use serde_json::json;
@@ -282,4 +284,98 @@ fn editing_mcp_json_keeps_the_users_key_order() {
         let start = at(server, 0);
         assert!(at("\"command\"", start) < at("\"args\"", start), "{text}");
     }
+}
+
+/// Every launcher runs through `sh`. Without one on PATH (native Windows without
+/// Git Bash's sh) the configs are still written, and init says the server cannot
+/// start yet instead of promising the agent picks it up.
+#[test]
+fn without_sh_on_path_init_notes_the_launcher_cannot_start() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let repo = init_common::skills_fixture();
+    // Only fakes on PATH: uvx is found, sh is not (the shebang is absolute).
+    let bin = home.path().join("bin");
+    std::fs::create_dir(&bin).unwrap();
+    for name in ["uvx", "docker"] {
+        let path = bin.join(name);
+        std::fs::write(&path, "#!/bin/sh\nexit 1\n").unwrap();
+        std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o755)).unwrap();
+    }
+    let url = format!("redis://127.0.0.1:{}", init_common::fake_redis());
+    let note = "the MCP launcher runs through sh, which is not on PATH - on Windows use WSL or put Git Bash's sh on PATH";
+    let init = |extra: &[&str]| {
+        let mut cmd = Command::cargo_bin("redisctl").unwrap();
+        cmd.current_dir(dir.path())
+            .env("PATH", &bin)
+            .env("HOME", home.path())
+            .env("REDISCTL_INIT_AMPLITUDE_KEY", "")
+            .arg("--config-file")
+            .arg(home.path().join("config.toml"))
+            .args([
+                "init",
+                "--no-telemetry",
+                "--no-install-cli",
+                "--url",
+                &url,
+                "--agent",
+                "claude",
+                "--skills-repo",
+            ])
+            .arg(repo.path())
+            .args(extra);
+        cmd
+    };
+
+    init(&["--dry-run"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(note))
+        .stdout(predicate::str::is_match(r"created +\.mcp\.json  redis:").unwrap());
+    assert!(!dir.path().join(".mcp.json").exists());
+
+    init(&[])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(note))
+        .stdout(predicate::str::contains("it picks up the skills in"))
+        .stdout(predicate::str::contains("redis MCP server").not());
+    let config: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(dir.path().join(".mcp.json")).unwrap())
+            .unwrap();
+    assert_eq!(config["mcpServers"]["redis"]["command"], "sh");
+}
+
+/// With sh on PATH the note stays away and the epilogue names the server.
+#[test]
+fn with_sh_on_path_the_epilogue_names_the_redis_mcp_server() {
+    let dir = tempfile::tempdir().unwrap();
+    let home = tempfile::tempdir().unwrap();
+    let repo = init_common::skills_fixture();
+    let url = format!("redis://127.0.0.1:{}", init_common::fake_redis());
+    Command::cargo_bin("redisctl")
+        .unwrap()
+        .current_dir(dir.path())
+        .env("PATH", "/usr/bin:/bin")
+        .env("HOME", home.path())
+        .env("REDISCTL_INIT_AMPLITUDE_KEY", "")
+        .arg("--config-file")
+        .arg(home.path().join("config.toml"))
+        .args([
+            "init",
+            "--no-telemetry",
+            "--no-install-cli",
+            "--url",
+            &url,
+            "--agent",
+            "claude",
+            "--skills-repo",
+        ])
+        .arg(repo.path())
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("runs through sh").not())
+        .stdout(predicate::str::contains(
+            "it picks up the redis MCP server and the skills",
+        ));
 }
