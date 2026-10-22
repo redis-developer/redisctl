@@ -1,14 +1,19 @@
-//! Every external tool `redisctl init` runs, or writes into a committed MCP config, at
-//! the exact version it was checked with. Dependabot and Renovate cannot see these
-//! strings: bump them with the release checklist in CONTRIBUTING.md. A pin reaches an
-//! existing project when init runs there again, because a differing entry is replaced.
+//! The tools `redisctl init` installs with, or writes into committed MCP configs, at the
+//! exact version they were checked with. Only the top-level package is pinned: uvx and
+//! npx still resolve its dependencies when a machine first runs it. (The local Redis
+//! container image is chosen in `docker.rs`, not here.) Dependabot and Renovate cannot
+//! see these strings: bump them with the release checklist in CONTRIBUTING.md. A pin
+//! reaches an existing project when init runs there again, because a differing entry is
+//! replaced.
 
 /// The data-plane MCP server, run by uvx. The REDIS_PWD handoff in `mcp::SPLIT_PASSWORD`
 /// was verified against this version.
 pub(crate) const REDIS_MCP_SERVER: &str = "redis-mcp-server==0.5.1";
 
-/// The Docker fallback for the same server. Docker's MCP catalog builds `mcp/redis`
-/// from a redis/mcp-redis commit and publishes only `latest`, so it is pinned by digest.
+/// The Docker fallback. Docker's MCP catalog builds `mcp/redis` from a redis/mcp-redis
+/// commit (`source.commit` in docker/mcp-registry's `servers/redis/server.yaml`) and
+/// publishes only `latest`, so it is pinned by digest. This build is commit 53df2bcb:
+/// it reports 0.5.0, has the same `src/` as 0.5.1, and its own locked dependencies.
 /// The image has no ENTRYPOINT, so the launcher names `uv run redis-mcp-server`.
 pub(crate) const REDIS_MCP_IMAGE: &str =
     "mcp/redis@sha256:e886a7e9990a084a20d46adcea8e7c89d539271f1b453ffabdce4c3f96f27fa0";

@@ -184,7 +184,6 @@ pub(crate) fn is_wizard_prompt(prompt: &str) -> bool {
             | LOCAL_NONE_PROMPT
             | AGENTS_PROMPT
             | SKILLS_PROMPT
-            | CLI_INSTALL_PROMPT
             | INTERRUPTED
     ) || prompt == super::cloud::PICKER_PROMPT
         || prompt == super::cloud::NAME_PROMPT
@@ -244,8 +243,9 @@ pub enum SkillsScope {
 }
 
 /// The installer runs a script from packages.redis.io, so a terminal run asks first,
-/// right before applying, and only when the plan would run it. Esc cancels the run
-/// like every other wizard question.
+/// right before applying, and only when the plan would run it. By then `--cloud` may
+/// already have created a database, so Esc means "no" rather than cancelling the run;
+/// Ctrl-C still cancels.
 pub fn confirm_cli_install(version: &str) -> Result<bool, RedisCtlError> {
     let items = [
         format!("Yes, install redis-cli {version}"),
@@ -257,10 +257,7 @@ pub fn confirm_cli_install(version: &str) -> Result<bool, RedisCtlError> {
         .default(0)
         .interact_opt()
         .map_err(prompt_failed)?;
-    match selection {
-        Some(choice) => Ok(choice == 0),
-        None => Err(cancelled(CLI_INSTALL_PROMPT)),
-    }
+    Ok(selection == Some(0))
 }
 
 fn cancelled(prompt: &str) -> RedisCtlError {

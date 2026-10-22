@@ -97,8 +97,8 @@ pub struct InitArgs {
     pub no_install_cli: bool,
 
     /// Install a missing redis-cli without asking. A terminal run asks first; a run
-    /// with nothing to ask (piped, CI, --defaults) only prints the install command
-    /// unless this is set
+    /// with nothing to ask (piped stdin, CI set, or --defaults) only prints the
+    /// install command unless this is set
     #[arg(long = "install-cli", conflicts_with = "no_install_cli")]
     pub install_cli: bool,
 

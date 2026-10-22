@@ -205,11 +205,15 @@ async fn run_inner(
         no_example: args.no_example,
         agents: requested_agents(&args.agents),
         // The installer runs a remote script: a terminal run asks, anything that
-        // cannot answer gets the command unless --install-cli says yes up front.
+        // cannot answer gets the command unless --install-cli says yes up front. CI
+        // counts as unable to answer even behind a PTY.
         cli_install: engine::CliInstall::from_flags(
             args.no_install_cli,
             args.install_cli,
-            std::io::stdin().is_terminal() && std::io::stderr().is_terminal() && !args.defaults,
+            std::io::stdin().is_terminal()
+                && std::io::stderr().is_terminal()
+                && !args.defaults
+                && std::env::var_os("CI").is_none(),
         ),
         skills_repo: args.skills_repo.clone(),
         skills_global: args.skills_global,

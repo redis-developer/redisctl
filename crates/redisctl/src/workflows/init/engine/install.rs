@@ -42,11 +42,19 @@ impl CliInstall {
 }
 
 /// The version the installer is told to fetch: the user's own `REDIS_CLI_VERSION`
-/// when set, the pin otherwise.
+/// when it looks like a version (or `stable`/`latest`), the pin otherwise. It is
+/// printed in a copy-paste command, so nothing shell-special gets through.
 pub fn cli_version() -> String {
-    std::env::var("REDIS_CLI_VERSION")
-        .ok()
-        .filter(|v| !v.trim().is_empty())
+    pick_cli_version(std::env::var("REDIS_CLI_VERSION").ok())
+}
+
+fn pick_cli_version(user: Option<String>) -> String {
+    user.map(|v| v.trim().to_string())
+        .filter(|v| {
+            !v.is_empty()
+                && v.chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '.' | '-' | '_'))
+        })
         .unwrap_or_else(|| REDIS_CLI_VERSION.to_string())
 }
 
@@ -216,10 +224,14 @@ fn install_cli() -> Change {
     if let Err(e) = saved {
         return skipped(format!("could not save the installer: {e}"));
     }
+    // An inherited REDIS_CLI_BASE_URL would point the script's own downloads away
+    // from the packages.redis.io the prompt named. Only init's fetch of the script
+    // is https-only; the script's downloads and its same-origin checksum are its own.
     let run = sh_env(
         "sh",
         &[&script.to_string_lossy()],
         &[("REDIS_CLI_VERSION", &cli_version())],
+        &["REDIS_CLI_BASE_URL"],
     );
     let _ = std::fs::remove_file(&script);
     if run.status != 0 {
@@ -615,31 +627,32 @@ fn decide_redis_cli(
             },
         ));
     }
-    match mode {
-        CliInstall::Never => {
-            return InstallAction::Report(Change::new(
-                "redis-cli",
-                Status::Skipped,
-                "--no-install-cli; the project skill carries docker fallbacks",
-            ));
-        }
-        CliInstall::Suggest => {
-            return InstallAction::Report(Change::new(
-                "redis-cli",
-                Status::Skipped,
-                format!(
-                    "not installed without a terminal or --install-cli; to install: {}",
-                    manual_cli_install()
-                ),
-            ));
-        }
-        CliInstall::Ask | CliInstall::Always => {}
-    }
-    if !has("curl") {
+    if mode == CliInstall::Never {
         return InstallAction::Report(Change::new(
             "redis-cli",
             Status::Skipped,
-            "curl not found - the project skill carries docker fallbacks",
+            "--no-install-cli; the project skill carries docker fallbacks",
+        ));
+    }
+    // Checked before suggesting or asking: neither should offer a command that
+    // cannot run here (native Windows has no sh).
+    for tool in ["curl", "sh"] {
+        if !has(tool) {
+            return InstallAction::Report(Change::new(
+                "redis-cli",
+                Status::Skipped,
+                format!("{tool} not found - the project skill carries docker fallbacks"),
+            ));
+        }
+    }
+    if mode == CliInstall::Suggest {
+        return InstallAction::Report(Change::new(
+            "redis-cli",
+            Status::Skipped,
+            format!(
+                "not installed: nothing to ask (no terminal, or --defaults); pass --install-cli, or run: {}",
+                manual_cli_install()
+            ),
         ));
     }
     InstallAction::InstallCli {
@@ -951,7 +964,12 @@ mod tests {
 
     #[test]
     fn redis_cli_missing_plans_the_installer() {
-        let change = decide_redis_cli(CliInstall::Always, &|bin| bin == "curl", false).preview();
+        let change = decide_redis_cli(
+            CliInstall::Always,
+            &|bin| bin == "curl" || bin == "sh",
+            false,
+        )
+        .preview();
         assert_eq!(change.status, Status::Planned);
         assert!(change.note.contains("packages.redis.io"), "{}", change.note);
         assert!(!change.note.contains("ask"), "{}", change.note);
@@ -959,7 +977,7 @@ mod tests {
 
     #[test]
     fn a_terminal_run_plans_the_installer_behind_a_question() {
-        let action = decide_redis_cli(CliInstall::Ask, &|bin| bin == "curl", false);
+        let action = decide_redis_cli(CliInstall::Ask, &|bin| bin == "curl" || bin == "sh", false);
         assert!(matches!(action, InstallAction::InstallCli { ask: true }));
         assert!(
             action
@@ -977,7 +995,12 @@ mod tests {
             Status::Unchanged,
             "present wins over the mode"
         );
-        let change = decide_redis_cli(CliInstall::Suggest, &|bin| bin == "curl", false).preview();
+        let change = decide_redis_cli(
+            CliInstall::Suggest,
+            &|bin| bin == "curl" || bin == "sh",
+            false,
+        )
+        .preview();
         assert_eq!(change.status, Status::Skipped);
         assert!(change.note.contains("--install-cli"), "{}", change.note);
         assert!(
@@ -991,6 +1014,47 @@ mod tests {
             change.note.contains("REDIS_CLI_VERSION="),
             "{}",
             change.note
+        );
+    }
+
+    #[test]
+    fn a_missing_curl_or_sh_is_named_before_suggesting_or_asking() {
+        for mode in [CliInstall::Suggest, CliInstall::Ask, CliInstall::Always] {
+            let change = decide_redis_cli(mode, &|bin| bin == "sh", false).preview();
+            assert_eq!(
+                change.note,
+                "curl not found - the project skill carries docker fallbacks"
+            );
+            let change = decide_redis_cli(mode, &|bin| bin == "curl", false).preview();
+            assert_eq!(
+                change.note,
+                "sh not found - the project skill carries docker fallbacks"
+            );
+        }
+    }
+
+    #[test]
+    fn a_declined_prompt_is_a_skip_with_the_command() {
+        let change = declined_cli_install().preview();
+        assert_eq!(change.status, Status::Skipped);
+        assert!(
+            change
+                .note
+                .starts_with("not installed; to install later: curl --proto '=https'"),
+            "{}",
+            change.note
+        );
+    }
+
+    #[test]
+    fn only_a_plain_version_from_the_environment_is_used() {
+        assert_eq!(pick_cli_version(None), REDIS_CLI_VERSION);
+        assert_eq!(pick_cli_version(Some(" 7.4.0 ".into())), "7.4.0");
+        assert_eq!(pick_cli_version(Some("stable".into())), "stable");
+        assert_eq!(pick_cli_version(Some("".into())), REDIS_CLI_VERSION);
+        assert_eq!(
+            pick_cli_version(Some("8; rm -rf ~".into())),
+            REDIS_CLI_VERSION
         );
     }
 

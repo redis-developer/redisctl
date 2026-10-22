@@ -479,10 +479,22 @@ fn no_install_cli_is_respected() {
         ])
         .assert()
         .success()
-        // Whether redis-cli is installed here or not, the line must never plan the
-        // installer under --no-install-cli.
+        // Whether redis-cli is installed here or not, the line must never plan,
+        // offer or suggest the installer under --no-install-cli.
         .stdout(predicate::str::contains("install redis-cli").not())
+        .stdout(predicate::str::contains("to install").not())
         .stdout(predicate::str::contains("redis-cli"));
+}
+
+#[test]
+fn install_cli_and_no_install_cli_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    redisctl()
+        .current_dir(dir.path())
+        .args(["init", "--dry-run", "--install-cli", "--no-install-cli"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with"));
 }
 
 /// With nothing to ask (piped stdin) and no --install-cli, the installer never runs:
@@ -495,6 +507,8 @@ fn a_run_with_nothing_to_ask_names_the_installer_instead_of_running_it() {
     let repo = skills_fixture();
     let mut cmd = redisctl();
     let path = cmd.downloaders();
+    // The installer needs sh; nothing else real is on PATH.
+    std::os::unix::fs::symlink("/bin/sh", path.join("sh")).unwrap();
     cmd.current_dir(dir.path())
         .env("PATH", path)
         .args(["init", "--url", "redis://127.0.0.1:9", "--agent", "claude"])
@@ -503,7 +517,7 @@ fn a_run_with_nothing_to_ask_names_the_installer_instead_of_running_it() {
         .assert()
         .code(10)
         .stdout(predicate::str::is_match(
-            r"skipped   redis-cli  not installed without a terminal or --install-cli; to install: curl --proto '=https' --tlsv1\.2 -fsSL https://packages\.redis\.io/redis-cli/install\.sh \| REDIS_CLI_VERSION=\d+\.\d+\.\d+ sh",
+            r"skipped   redis-cli  not installed: nothing to ask \(no terminal, or --defaults\); pass --install-cli, or run: curl --proto '=https' --tlsv1\.2 -fsSL https://packages\.redis\.io/redis-cli/install\.sh \| REDIS_CLI_VERSION=\d+\.\d+\.\d+ sh",
         ).unwrap());
 }
 
@@ -716,6 +730,8 @@ fn a_run_that_reaches_a_downloader_fails_its_test() {
     let mut cmd = redisctl();
     // Only the fakes on PATH: no redis-cli, so --install-cli runs the installer.
     let path = cmd.downloaders();
+    // The installer needs sh; nothing else real is on PATH.
+    std::os::unix::fs::symlink("/bin/sh", path.join("sh")).unwrap();
     cmd.current_dir(dir.path())
         .env("PATH", path)
         .args([

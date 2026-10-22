@@ -335,7 +335,10 @@ impl SkillsAction {
         Change::new(
             self.target(),
             Status::Skipped,
-            "not installed, as asked - add them later with: npx skills add redis/agent-skills",
+            format!(
+                "not installed, as asked - add them later with: npx -y {} add redis/agent-skills",
+                pins::SKILLS_CLI
+            ),
         )
     }
 
@@ -406,7 +409,10 @@ impl SkillsAction {
                         } else {
                             Status::Created
                         },
-                        "redis/agent-skills (local checkout; run npx skills add redis/agent-skills to adopt standard management)",
+                        format!(
+                            "redis/agent-skills (local checkout; run npx -y {} add redis/agent-skills to adopt standard management)",
+                            pins::SKILLS_CLI
+                        ),
                     )
                 };
                 CopyStep {
