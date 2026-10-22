@@ -253,32 +253,24 @@ fn decide_client(cwd: &Path, project: &Project, has: &dyn Fn(&str) -> bool) -> I
         }
         Runtime::Python => {
             let requirements = read_if(cwd, "requirements.txt");
+            let pyproject = read_if(cwd, "pyproject.toml").unwrap_or_default();
             let has_dep = regex::Regex::new(r"(?m)^\s*redis([\[\s=<>~!]|$)")
                 .expect("static regex")
                 .is_match(requirements.as_deref().unwrap_or(""))
                 || regex::Regex::new(r#""redis([\[">=<~]|")"#)
                     .expect("static regex")
-                    .is_match(&read_if(cwd, "pyproject.toml").unwrap_or_default());
+                    .is_match(&pyproject)
+                || poetry_declares(&pyproject, "redis");
             if has_dep {
                 return unchanged("redis client already a dependency");
             }
-            if exists(cwd, "pyproject.toml") && (exists(cwd, "uv.lock") || has("uv")) {
+            if let Some(pm) = python_pm(cwd, has) {
                 return command(
                     has,
-                    "uv",
+                    pm,
                     &["add", "redis"],
                     "pyproject.toml",
-                    "redis-py installed via uv".to_string(),
-                    "client package",
-                );
-            }
-            if exists(cwd, "poetry.lock") {
-                return command(
-                    has,
-                    "poetry",
-                    &["add", "redis"],
-                    "pyproject.toml",
-                    "redis-py installed via poetry".to_string(),
+                    format!("redis-py installed via {pm}"),
                     "client package",
                 );
             }
@@ -343,6 +335,47 @@ fn decide_client(cwd: &Path, project: &Project, has: &dyn Fn(&str) -> bool) -> I
             skipped("no package manifest detected - install the Redis client for your language")
         }
     }
+}
+
+/// Who installs into a Python project. A lockfile names its manager, then a
+/// `[tool.poetry]` table does, and only a bare `pyproject.toml` goes to uv on PATH:
+/// uv being installed says nothing about how this project is managed.
+fn python_pm(cwd: &Path, has: &dyn Fn(&str) -> bool) -> Option<&'static str> {
+    let pyproject = exists(cwd, "pyproject.toml");
+    let poetry_table = regex::Regex::new(r"(?m)^\s*\[\s*tool\.poetry\s*[\].]")
+        .expect("static regex")
+        .is_match(&read_if(cwd, "pyproject.toml").unwrap_or_default());
+    if pyproject && exists(cwd, "uv.lock") {
+        Some("uv")
+    } else if exists(cwd, "poetry.lock") || poetry_table {
+        Some("poetry")
+    } else if pyproject && has("uv") {
+        Some("uv")
+    } else {
+        None
+    }
+}
+
+/// Whether a Poetry dependency table in `pyproject` has `pkg` as a key
+/// (`redis = "^5.0"`). Names compare normalized, as pip compares them.
+fn poetry_declares(pyproject: &str, pkg: &str) -> bool {
+    let normalize = |name: &str| name.to_ascii_lowercase().replace(['_', '.'], "-");
+    let table = regex::Regex::new(
+        r"^\[\s*tool\.poetry\.(dependencies|dev-dependencies|group\.[^\]]+\.dependencies)\s*\]",
+    )
+    .expect("static regex");
+    let key = regex::Regex::new(r#"^["']?([A-Za-z0-9._-]+)["']?\s*="#).expect("static regex");
+    let mut in_dependencies = false;
+    pyproject.lines().map(str::trim).any(|line| {
+        if line.starts_with('[') {
+            in_dependencies = table.is_match(line);
+            return false;
+        }
+        in_dependencies
+            && key
+                .captures(line)
+                .is_some_and(|captures| normalize(&captures[1]) == normalize(pkg))
+    })
 }
 
 /// The product SDK per runtime; everything else talks REST (or MCP) directly.
@@ -433,13 +466,13 @@ fn decide_product(
         }
         Runtime::Python => {
             let requirements = read_if(cwd, "requirements.txt");
+            let pyproject = read_if(cwd, "pyproject.toml").unwrap_or_default();
             let has_dep =
                 regex::Regex::new(&format!(r"(?m)^\s*{}([\[\s=<>~!]|$)", regex::escape(pkg)))
                     .expect("escaped package regex")
                     .is_match(requirements.as_deref().unwrap_or(""))
-                    || read_if(cwd, "pyproject.toml")
-                        .unwrap_or_default()
-                        .contains(&format!("\"{pkg}"));
+                    || pyproject.contains(&format!("\"{pkg}"))
+                    || poetry_declares(&pyproject, pkg);
             if has_dep {
                 return InstallAction::Report(Change::new(
                     &label,
@@ -447,23 +480,13 @@ fn decide_product(
                     format!("{pkg} already a dependency"),
                 ));
             }
-            if exists(cwd, "pyproject.toml") && (exists(cwd, "uv.lock") || has("uv")) {
+            if let Some(pm) = python_pm(cwd, has) {
                 return command(
                     has,
-                    "uv",
+                    pm,
                     &["add", pkg],
                     "pyproject.toml",
-                    format!("{pkg} installed via uv"),
-                    &label,
-                );
-            }
-            if exists(cwd, "poetry.lock") {
-                return command(
-                    has,
-                    "poetry",
-                    &["add", pkg],
-                    "pyproject.toml",
-                    format!("{pkg} installed via poetry"),
+                    format!("{pkg} installed via {pm}"),
                     &label,
                 );
             }
@@ -616,6 +639,104 @@ mod tests {
             InstallAction::Command { cmd, .. } => assert_eq!(cmd, "uv"),
             other => panic!("expected a command, got {other:?}"),
         }
+    }
+
+    fn planned_cmd(action: InstallAction) -> String {
+        match action {
+            InstallAction::Command { cmd, .. } => cmd,
+            other => panic!("expected a command, got {other:?}"),
+        }
+    }
+
+    fn langcache() -> crate::workflows::init::engine::products::WiredProduct {
+        crate::workflows::init::engine::products::WiredProduct {
+            spec: crate::workflows::init::engine::products::SPECS
+                .iter()
+                .find(|spec| spec.key == crate::workflows::init::engine::ProductKey::LangCache)
+                .unwrap(),
+            url: "https://l".to_string(),
+            id: Some("c1".to_string()),
+            key: "k".to_string(),
+            ready: true,
+        }
+    }
+
+    #[test]
+    fn python_picks_the_manager_the_project_uses_over_uv_on_path() {
+        let everything = |_: &str| true;
+        let pyproject = ("pyproject.toml", "[project]\nname = \"x\"\n");
+        for (files, pm) in [
+            (vec![pyproject, ("poetry.lock", "")], "poetry"),
+            (
+                vec![("pyproject.toml", "[tool.poetry]\nname = \"x\"\n")],
+                "poetry",
+            ),
+            (
+                vec![(
+                    "pyproject.toml",
+                    "[tool.poetry.dependencies]\npython = \"^3.11\"\n",
+                )],
+                "poetry",
+            ),
+            (vec![pyproject, ("uv.lock", ""), ("poetry.lock", "")], "uv"),
+            (vec![pyproject], "uv"),
+            // A plugin's table is not Poetry's own.
+            (
+                vec![(
+                    "pyproject.toml",
+                    "[tool.poetry-dynamic-versioning]\nenable = true\n",
+                )],
+                "uv",
+            ),
+        ] {
+            let dir = dir_with(&files);
+            let project = project_in(dir.path());
+            assert_eq!(
+                planned_cmd(decide_client(dir.path(), &project, &everything)),
+                pm,
+                "{files:?}"
+            );
+            assert_eq!(
+                planned_cmd(decide_product(
+                    dir.path(),
+                    &project,
+                    &langcache(),
+                    &everything
+                )),
+                pm,
+                "{files:?}"
+            );
+        }
+    }
+
+    #[test]
+    fn python_poetry_dependency_keys_read_as_unchanged() {
+        let dir = dir_with(&[
+            (
+                "pyproject.toml",
+                "[tool.poetry]\nname = \"x\"\n\n[tool.poetry.dependencies]\npython = \"^3.11\"\nredis = \"^5.0\"\n\n[tool.poetry.group.dev.dependencies]\nLangCache = { version = \"^0.1\" }\n",
+            ),
+            ("poetry.lock", ""),
+        ]);
+        let project = project_in(dir.path());
+        let client = decide_client(dir.path(), &project, &|_| true).preview();
+        assert_eq!(client.status, Status::Unchanged, "{}", client.note);
+        let sdk = decide_product(dir.path(), &project, &langcache(), &|_| true).preview();
+        assert_eq!(sdk.status, Status::Unchanged, "{}", sdk.note);
+
+        // The same key outside a dependency table is not a dependency.
+        let other = dir_with(&[
+            ("pyproject.toml", "[tool.myapp]\nredis = \"redis://h:1\"\n"),
+            ("poetry.lock", ""),
+        ]);
+        assert_eq!(
+            planned_cmd(decide_client(
+                other.path(),
+                &project_in(other.path()),
+                &|_| true
+            )),
+            "poetry"
+        );
     }
 
     #[test]
