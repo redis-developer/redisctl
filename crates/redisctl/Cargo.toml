@@ -51,7 +51,7 @@ flate2 = { workspace = true }
 
 # Shared utility dependencies
 thiserror = { workspace = true }
-serde_yaml = { workspace = true }
+serde_norway = { workspace = true }
 jpx-core = { workspace = true }
 config = { workspace = true }
 
@@ -62,7 +62,7 @@ keyring = { workspace = true, optional = true }
 tower = { workspace = true }
 tower-resilience = { version = "0.1", features = ["circuitbreaker", "retry", "ratelimiter"] }
 regex = "1.12.2"
-zip = "6.0.0"
+zip = "9"
 which = "7"
 redis = { workspace = true }
 
