@@ -406,8 +406,10 @@ async fn exhausted_free_tier_fails_with_the_ways_out_writing_nothing() {
     assert!(!project.path().join(".env").exists());
 }
 
+/// Nothing can prompt, so a dry run refuses where the real run does, listing the
+/// way out the full free plan leaves.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_dry_run_offers_no_free_database_when_the_free_tier_is_full() {
+async fn a_dry_run_without_a_name_lists_the_full_free_tier_and_refuses() {
     let cfg = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     let repo = skills_fixture();
@@ -415,12 +417,16 @@ async fn a_dry_run_offers_no_free_database_when_the_free_tier_is_full() {
     write_cloud_profile(&cfg, &server.uri());
     mount_full_free_tier(&server).await;
 
-    run_init_cloud(&cfg, project.path(), &repo, &["--dry-run"])
-        .assert()
-        .success()
-        .stdout(predicates::str::contains(
-            "would offer \"someone-elses\" (no new free database: the free plan is already used up)",
-        ));
+    for extra in [&["--dry-run"][..], &["--dry-run", "--defaults"]] {
+        run_init_cloud(&cfg, project.path(), &repo, extra)
+            .assert()
+            .code(1)
+            .stderr(predicates::str::contains("someone-elses"))
+            .stderr(predicates::str::contains(
+                "Create another:  --cloud --name <a new name>   (the free plan is already used up)",
+            ))
+            .stdout(predicates::str::contains("would offer").not());
+    }
     assert!(!project.path().join(".env").exists());
 }
 
@@ -465,8 +471,10 @@ fn piped_stdin_without_a_profile_says_how_to_sign_in_and_writes_nothing() {
     );
 }
 
+/// Without a name and with nothing to prompt, a dry run fails exactly as the real
+/// run does: same exit code, same listing, nothing planned.
 #[tokio::test(flavor = "multi_thread")]
-async fn dry_run_reports_the_choice_it_would_offer() {
+async fn a_dry_run_without_a_name_refuses_with_the_real_runs_listing() {
     let cfg = tempfile::tempdir().unwrap();
     let project = tempfile::tempdir().unwrap();
     let repo = skills_fixture();
@@ -474,8 +482,51 @@ async fn dry_run_reports_the_choice_it_would_offer() {
     write_cloud_profile(&cfg, &server.uri());
     mount_both_tiers(&server, "h:1").await;
 
-    // Telemetry pointed at a second mock: a dry run must report the planned
-    // database_source vocabulary, not the applied one.
+    let stderr = |extra: &[&str]| {
+        let output = run_init_cloud(&cfg, project.path(), &repo, extra)
+            .assert()
+            .code(1)
+            .stdout(predicates::str::contains("would offer").not())
+            .get_output()
+            .clone();
+        String::from_utf8(output.stderr).unwrap()
+    };
+    let real = stderr(&[]);
+    for needle in [
+        "essentials-db",
+        "Flexible subscription 2",
+        "--cloud --name <its name>",
+    ] {
+        assert!(real.contains(needle), "{needle}: {real}");
+    }
+    for extra in [
+        &["--dry-run"][..],
+        &["--dry-run", "--defaults"],
+        &["--defaults"],
+    ] {
+        assert_eq!(stderr(extra), real, "{extra:?}");
+    }
+    assert!(!project.path().join(".env").exists());
+}
+
+/// A dry run that plans a new database reports the planned database_source
+/// vocabulary to telemetry, not the applied one.
+#[tokio::test(flavor = "multi_thread")]
+async fn a_dry_run_reports_the_planned_database_to_telemetry() {
+    let cfg = tempfile::tempdir().unwrap();
+    let project = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let server = MockServer::start().await;
+    write_cloud_profile(&cfg, &server.uri());
+    mount_gets(
+        &server,
+        vec![
+            ("/fixed/subscriptions", json!({ "subscriptions": [] })),
+            ("/subscriptions", json!({ "subscriptions": [] })),
+        ],
+    )
+    .await;
+
     let amplitude = MockServer::start().await;
     Mock::given(method("POST"))
         .and(path("/2/httpapi"))
@@ -492,7 +543,7 @@ async fn dry_run_reports_the_choice_it_would_offer() {
         .assert()
         .success()
         .stdout(predicates::str::contains(
-            "would offer \"essentials-db\", \"flexible-db\" (no new free database: the free plan is already used up)",
+            "would create a free Essentials subscription + database",
         ));
     assert!(!project.path().join(".env").exists());
     let requests = amplitude.received_requests().await.unwrap();
@@ -898,9 +949,10 @@ async fn a_name_cloud_would_not_create_still_reuses_its_database() {
     ));
 }
 
-/// Under --cloud-subscription the create lands in that subscription, which need not be free.
+/// Under --cloud-subscription a create lands in that subscription, which need not be
+/// free; without a name and nothing to prompt, a dry run lists it and refuses.
 #[tokio::test(flavor = "multi_thread")]
-async fn a_pinned_dry_run_offers_a_new_database_in_that_subscription() {
+async fn a_pinned_dry_run_without_a_name_lists_and_refuses() {
     let cfg = tempfile::tempdir().unwrap();
     let root = tempfile::tempdir().unwrap();
     let project = root.path().join("my-app");
@@ -932,11 +984,13 @@ async fn a_pinned_dry_run_offers_a_new_database_in_that_subscription() {
         ],
     )
     .assert()
-    .success()
-    .stdout(predicate::str::contains(
-        "would offer \"existing-db\" or a new database \"my-app\" in subscription 7",
+    .code(1)
+    .stderr(predicate::str::contains("existing-db"))
+    .stderr(predicate::str::contains(
+        "Create another:  --cloud --name <a new name>\n",
     ))
-    .stdout(predicate::str::contains("free database").not());
+    .stderr(predicate::str::contains("free plan").not())
+    .stdout(predicate::str::contains("would offer").not());
 }
 
 /// A run the local checks refuse anyway never reaches Redis Cloud: no database gets

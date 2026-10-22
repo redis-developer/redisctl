@@ -104,37 +104,25 @@ pub(crate) async fn resolve(
 
     let free_full = inv.free_full.as_ref().filter(|_| inv.target.is_none());
 
-    // No name, databases exist: report the question (dry), ask (tty), refuse (piped).
+    // No name, databases exist: refuse (piped), report the question (dry), ask (tty).
     if name.is_none() && !inv.candidates.is_empty() {
+        // --defaults promised no prompts; there is no safe default among existing
+        // databases, so it gets the same listing the non-interactive path does. A
+        // dry run refuses here too, so it never plans what the real run refuses.
+        if defaults || !std::io::stdin().is_terminal() {
+            return Err(other(listing(&inv)));
+        }
         if dry {
-            let offered = inv
-                .candidates
-                .iter()
-                .map(|c| format!("\"{}\"", c.name))
-                .collect::<Vec<_>>()
-                .join(", ");
-            let note = match (free_full, pin) {
-                (Some(_), _) => format!(
-                    "would offer {offered} (no new free database: the free plan is already used up)"
-                ),
-                (None, Some(pin)) => format!(
-                    "would offer {offered} or a new database \"{db_name}\" in subscription {pin}"
-                ),
-                (None, None) => {
-                    format!("would offer {offered} or a new free database \"{db_name}\"")
-                }
-            };
             return Ok(planned(
                 &db_name,
                 inv.target,
                 profile,
-                Change::new("cloud:choice", Status::Planned, note),
+                Change::new(
+                    "cloud:choice",
+                    Status::Planned,
+                    offer_note(&inv, &db_name, pin),
+                ),
             ));
-        }
-        // --defaults promised no prompts; there is no safe default among existing
-        // databases, so it gets the same listing the non-interactive path does.
-        if defaults || !std::io::stdin().is_terminal() {
-            return Err(other(listing(&inv)));
         }
         match pick(&inv, &db_name, pin)? {
             Pick::Existing(cand) => return connect(client, cand, profile).await,
@@ -342,6 +330,25 @@ fn describe(cand: &Candidate) -> String {
         cand.tier.as_str(),
         cand.sub_id
     )
+}
+
+/// A terminal dry run's report of the picker the real run would show.
+fn offer_note(inv: &Inventory, db_name: &str, pin: Option<i32>) -> String {
+    let offered = inv
+        .candidates
+        .iter()
+        .map(|c| format!("\"{}\"", c.name))
+        .collect::<Vec<_>>()
+        .join(", ");
+    match (inv.target.is_none() && inv.free_full.is_some(), pin) {
+        (true, _) => format!(
+            "would offer {offered} (no new free database: the free plan is already used up)"
+        ),
+        (false, Some(pin)) => {
+            format!("would offer {offered} or a new database \"{db_name}\" in subscription {pin}")
+        }
+        (false, None) => format!("would offer {offered} or a new free database \"{db_name}\""),
+    }
 }
 
 /// The non-interactive answer to "which database?": name them and the flag to pick one.
@@ -768,12 +775,59 @@ pub(crate) fn sign_in_error(e: RedisCtlError, profile: Option<&str>) -> RedisCtl
 #[cfg(test)]
 mod tests {
     use super::{
-        QuickDatabaseError, RedisCtlError, TempCredentials, api_err, default_db_name, quick_err,
-        sign_in_error, valid_db_name,
+        Candidate, CloudTier, Inventory, QuickDatabaseError, RedisCtlError, TempCredentials,
+        api_err, default_db_name, offer_note, quick_err, sign_in_error, valid_db_name,
     };
     use crate::error::exit_code;
     use crate::structured_error::StructuredError;
     use redis_cloud::CloudError;
+
+    /// Only a terminal dry run reaches the note (anything else gets the listing), so
+    /// the integration suites, which never have a terminal, cannot cover it.
+    #[test]
+    fn offer_note_names_the_create_a_terminal_run_would_offer() {
+        let inv = |target: Option<i32>, free_full: Option<(i32, Vec<String>)>| Inventory {
+            candidates: ["essentials-db", "flexible-db"]
+                .iter()
+                .enumerate()
+                .map(|(i, name)| Candidate {
+                    sub_id: 1,
+                    db_id: i as i32,
+                    name: name.to_string(),
+                    tier: CloudTier::Essentials,
+                    endpoint: None,
+                })
+                .collect(),
+            target,
+            free_full,
+        };
+        let full = Some((1, vec!["essentials-db".to_string()]));
+        for (inventory, pin, note) in [
+            (
+                inv(None, full.clone()),
+                None,
+                "would offer \"essentials-db\", \"flexible-db\" (no new free database: the free plan is already used up)",
+            ),
+            (
+                inv(Some(7), None),
+                Some(7),
+                "would offer \"essentials-db\", \"flexible-db\" or a new database \"my-app\" in subscription 7",
+            ),
+            (
+                inv(Some(1), None),
+                None,
+                "would offer \"essentials-db\", \"flexible-db\" or a new free database \"my-app\"",
+            ),
+            // A pin is a target, so a full free plan does not matter.
+            (
+                inv(Some(7), full),
+                Some(7),
+                "would offer \"essentials-db\", \"flexible-db\" or a new database \"my-app\" in subscription 7",
+            ),
+        ] {
+            assert_eq!(offer_note(&inventory, "my-app", pin), note);
+        }
+    }
 
     #[test]
     fn create_engine_errors_map_onto_inits_exit_codes() {
