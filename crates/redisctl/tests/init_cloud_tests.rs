@@ -1037,3 +1037,97 @@ async fn a_local_refusal_stops_cloud_before_any_request() {
         requests.iter().map(|r| r.url.path()).collect::<Vec<_>>()
     );
 }
+
+/// A `.env` or `.gitignore` symlink that would put the new database's password in a
+/// committed file, or leave `.env` unignored, is refused before Redis Cloud is asked
+/// for anything.
+#[cfg(unix)]
+#[tokio::test(flavor = "multi_thread")]
+async fn a_secret_path_symlink_stops_cloud_before_any_request() {
+    use std::os::unix::fs::symlink;
+    let git = |dir: &std::path::Path, args: &[&str]| {
+        std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir)
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .status()
+            .map(|status| assert!(status.success(), "git {args:?}"))
+    };
+    let example = |dir: &std::path::Path| {
+        std::fs::write(
+            dir.join(".env.example"),
+            "REDIS_URL=redis://localhost:6379\n",
+        )?;
+        symlink(".env.example", dir.join(".env"))
+    };
+    let tracked = |dir: &std::path::Path| {
+        std::fs::write(dir.join(".env.development"), "APP=1\n")?;
+        symlink(".env.development", dir.join(".env"))?;
+        git(dir, &["init", "-q"]).and_then(|()| git(dir, &["add", ".env.development"]))
+    };
+    let dangling = |dir: &std::path::Path| {
+        symlink("gitignore.shared", dir.join(".gitignore"))?;
+        git(dir, &["init", "-q"]).and_then(|()| git(dir, &["add", ".gitignore"]))
+    };
+    let cfg = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let server = MockServer::start().await;
+    write_cloud_profile(&cfg, &server.uri());
+    // A free subscription with room: without the link checks first, init creates.
+    mount_gets(
+        &server,
+        vec![
+            (
+                "/fixed/subscriptions",
+                json!({ "subscriptions": [ { "id": 1, "name": "free", "price": 0, "maximumDatabases": 2 } ] }),
+            ),
+            (
+                "/fixed/subscriptions/1/databases",
+                json!({ "subscription": { "subscriptionId": 1, "databases": [] } }),
+            ),
+            ("/subscriptions", json!({ "subscriptions": [] })),
+        ],
+    )
+    .await;
+
+    for (setup, refusal) in [
+        (
+            &example as &dyn Fn(&std::path::Path) -> std::io::Result<()>,
+            ".env is a symlink to .env.example",
+        ),
+        (&tracked, ".env is a symlink to .env.development"),
+        (&dangling, ".gitignore is a symlink to gitignore.shared"),
+    ] {
+        for extra in [
+            &["--name", "new-db"][..],
+            &["--name", "new-db", "--dry-run"],
+        ] {
+            let project = tempfile::tempdir().unwrap();
+            if setup(project.path()).is_err() {
+                eprintln!("skipping a tracked case: git is not installed");
+                continue;
+            }
+            let snapshot = || {
+                [".env.example", ".env.development", "gitignore.shared"]
+                    .map(|rel| std::fs::read_to_string(project.path().join(rel)).ok())
+            };
+            let before = snapshot();
+            run_init_cloud(&cfg, project.path(), &repo, extra)
+                .assert()
+                .code(1)
+                .stderr(predicates::str::contains(refusal));
+            assert_eq!(snapshot(), before, "{refusal}: {extra:?}");
+            assert!(
+                !project.path().join(".mcp.json").exists(),
+                "{refusal}: {extra:?}"
+            );
+        }
+    }
+    let requests = server.received_requests().await.unwrap();
+    assert!(
+        requests.is_empty(),
+        "{:?}",
+        requests.iter().map(|r| r.url.path()).collect::<Vec<_>>()
+    );
+}

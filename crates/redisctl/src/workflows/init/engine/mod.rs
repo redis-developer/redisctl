@@ -370,6 +370,7 @@ pub fn plan(options: &Options) -> Result<Plan, InitError> {
     let mut file_actions = Vec::new();
     // First, so `.env` is ignored before a credential lands in it.
     if database.is_some() || !products.is_empty() {
+        env::refuse_unsafe_links(&options.cwd)?;
         file_actions.push(env::plan_gitignore_env(&options.cwd)?);
     }
     // Each Write's content threads into the next block, so later planners see

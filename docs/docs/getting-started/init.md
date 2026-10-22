@@ -74,7 +74,10 @@ the generated skill are credential-free and safe to commit: the MCP launcher rea
 file) and hands the server the password through its environment, never on a command
 line other users can see. Passwords are masked in all terminal output. A new `.env` is readable
 only by you, `.gitignore` covers it before it is written, and a `.env` that git
-already tracks is refused rather than handed a secret. A `.env` that sets one of
+already tracks is refused rather than handed a secret. So are a `.env` or `.gitignore`
+that is a symlink, and a `.env` that is the same file as `.env.example`: each could
+put the password in a committed file or leave `.env` unignored. In a git repository,
+git decides whether `.env` is already ignored. A `.env` that sets one of
 init's keys on more than one line is refused too: dotenv loaders read the last line,
 and so does the MCP launcher. With `--cloud`, these checks and every other check on
 the project's files run before Redis Cloud is asked for a database.
@@ -86,7 +89,7 @@ Built on the standard `redisctl` [exit codes](../reference/agent-error-codes.md#
 | Code | Meaning |
 |---|---|
 | 0 | success, including `--dry-run` and a run that ends with "Action required" |
-| 1 | the run cannot finish: Docker unavailable or a `docker` command failed, no free port, a project file cannot be read or written, `.env` tracked by git while init would write a secret into it, a product key rejected, `--cloud` with no sign-in and nothing to prompt on, the OS keyring cannot store a new sign-in, an account with databases and no `--name` when nothing can prompt, a new Cloud database that never gets an endpoint |
+| 1 | the run cannot finish: Docker unavailable or a `docker` command failed, no free port, a project file cannot be read or written, `.env` tracked by git while init would write a secret into it, a `.env` or `.gitignore` symlink, a product key rejected, `--cloud` with no sign-in and nothing to prompt on, the OS keyring cannot store a new sign-in, an account with databases and no `--name` when nothing can prompt, a new Cloud database that never gets an endpoint |
 | 2 | usage: an unknown flag or argument, `--cloud` together with `--url` or a pasted URL, `--cloud-subscription` without `--cloud` |
 | 3 | the redisctl configuration cannot be used, for example `-p` names a profile that is not a Redis Cloud one |
 | 4 | Redis Cloud rejected the API keys |

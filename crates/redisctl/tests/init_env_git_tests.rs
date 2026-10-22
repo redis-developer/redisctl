@@ -52,7 +52,12 @@ impl Sandbox {
 
     /// A repository tracking `.env`, isolated from the machine's git config.
     fn track_env(&self) {
-        for args in [&["init", "-q"][..], &["add", ".env"]] {
+        self.track(".env");
+    }
+
+    /// A repository tracking `rel`, isolated from the machine's git config.
+    fn track(&self, rel: &str) {
+        for args in [&["init", "-q"][..], &["add", rel]] {
             let status = std::process::Command::new("git")
                 .args(args)
                 .current_dir(self.project.path())
@@ -111,6 +116,91 @@ fn a_secret_is_never_written_into_a_tracked_env() {
             .stderr(predicate::str::contains("S3cretKey").not());
         assert_eq!(sandbox.read(".env"), "APP_NAME=demo\n", "{args:?}");
     }
+}
+
+/// init writes `.env` and reads `.gitignore` through whatever they link to, so a
+/// layout that would put the password in a committed file, or leave `.env`
+/// unignored, is refused before anything is written. Dry run and apply agree.
+#[cfg(unix)]
+#[test]
+fn a_secret_path_symlink_is_refused_before_any_write() {
+    use std::os::unix::fs::symlink;
+    if git_missing() {
+        return;
+    }
+    let example: fn(&Sandbox) = |sandbox| {
+        sandbox.write(".env.example", "REDIS_URL=redis://localhost:6379\n");
+        symlink(".env.example", sandbox.project.path().join(".env")).unwrap();
+    };
+    let tracked: fn(&Sandbox) = |sandbox| {
+        sandbox.write(".env.development", "APP_NAME=demo\n");
+        symlink(".env.development", sandbox.project.path().join(".env")).unwrap();
+        sandbox.track(".env.development");
+    };
+    let dangling: fn(&Sandbox) = |sandbox| {
+        symlink(
+            "gitignore.shared",
+            sandbox.project.path().join(".gitignore"),
+        )
+        .unwrap();
+        sandbox.track(".gitignore");
+    };
+    let url = "redis://default:s3cret@127.0.0.1:9";
+    for (setup, refusal) in [
+        (example, ".env is a symlink to .env.example"),
+        (tracked, ".env is a symlink to .env.development"),
+        (dangling, ".gitignore is a symlink to gitignore.shared"),
+    ] {
+        for args in [vec!["--dry-run", "--url", url], vec!["--url", url]] {
+            let sandbox = Sandbox::new();
+            setup(&sandbox);
+            let snapshot = |sandbox: &Sandbox| {
+                [".env.example", ".env.development", "gitignore.shared"]
+                    .map(|rel| std::fs::read_to_string(sandbox.project.path().join(rel)).ok())
+            };
+            let before = snapshot(&sandbox);
+            sandbox
+                .init(&args)
+                .assert()
+                .code(1)
+                .stderr(predicate::str::contains(refusal))
+                .stderr(predicate::str::contains(
+                    "Replace the link with a regular file",
+                ))
+                .stdout(predicate::str::contains("s3cret").not())
+                .stderr(predicate::str::contains("s3cret").not());
+            assert_eq!(snapshot(&sandbox), before, "{refusal}: {args:?}");
+            assert!(
+                !sandbox.project.path().join(".mcp.json").exists(),
+                "{refusal}: {args:?}"
+            );
+        }
+    }
+}
+
+/// A hard link (or `.env.example` linking to `.env`) makes the two one file: the
+/// example would hold the credentials, or `.env` the placeholder.
+#[cfg(unix)]
+#[test]
+fn env_and_env_example_as_one_file_are_refused() {
+    let sandbox = Sandbox::new();
+    sandbox.write(".env.example", "REDIS_URL=redis://localhost:6379\n");
+    std::fs::hard_link(
+        sandbox.project.path().join(".env.example"),
+        sandbox.project.path().join(".env"),
+    )
+    .unwrap();
+    sandbox
+        .init(&["--url", "redis://default:s3cret@127.0.0.1:9"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains(
+            ".env and .env.example are the same file",
+        ));
+    assert_eq!(
+        sandbox.read(".env.example"),
+        "REDIS_URL=redis://localhost:6379\n"
+    );
 }
 
 #[test]

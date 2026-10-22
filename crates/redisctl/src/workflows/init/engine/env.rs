@@ -323,14 +323,69 @@ pub(crate) fn plan_env_set_block(
     ))
 }
 
-/// Make sure `.gitignore` covers `.env` before credentials land in it.
+/// Refuse the layouts where the credentials would not stay in an ignored `.env`:
+/// writes follow a `.env` symlink into its target (often a committed file), git
+/// does not read `.gitignore` through a symlink, and an `.env` that is also
+/// `.env.example` hands the committed example the credentials.
+pub(crate) fn refuse_unsafe_links(dir: &Path) -> Result<(), InitError> {
+    for (rel, consequence) in [
+        (".env", "init would write the credentials into that file"),
+        (
+            ".gitignore",
+            "git does not read .gitignore through a symlink, so .env would not be ignored",
+        ),
+    ] {
+        if let Ok(target) = std::fs::read_link(dir.join(rel)) {
+            return Err(InitError::WriteFailed {
+                rel: rel.to_string(),
+                message: format!(
+                    "{rel} is a symlink to {}, and {consequence}. Replace the link with a regular file and re-run",
+                    target.display()
+                ),
+            });
+        }
+    }
+    if same_file(&dir.join(".env"), &dir.join(".env.example")) {
+        return Err(InitError::WriteFailed {
+            rel: ".env".to_string(),
+            message: ".env and .env.example are the same file, so the committed example would get the credentials. Give each its own file and re-run".to_string(),
+        });
+    }
+    Ok(())
+}
+
+/// Whether both paths exist and are one file: a hard link, or a link either way.
+fn same_file(a: &Path, b: &Path) -> bool {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::MetadataExt;
+        matches!(
+            (std::fs::metadata(a), std::fs::metadata(b)),
+            (Ok(a), Ok(b)) if (a.dev(), a.ino()) == (b.dev(), b.ino())
+        )
+    }
+    #[cfg(not(unix))]
+    {
+        matches!((a.canonicalize(), b.canonicalize()), (Ok(a), Ok(b)) if a == b)
+    }
+}
+
+/// Make sure `.env` is ignored before credentials land in it. In a git work tree
+/// git decides, so every ignore source and negation counts; elsewhere the
+/// `.gitignore` text does.
 pub(crate) fn plan_gitignore_env(dir: &Path) -> Result<FileAction, InitError> {
     let content = read_for_planning(dir, ".gitignore")?;
-    let covered = content
-        .as_deref()
-        .unwrap_or("")
-        .lines()
-        .any(|line| matches!(line.trim(), ".env" | ".env*" | "*.env"));
+    // `--no-index`: a tracked `.env` is still covered by its pattern.
+    let covered = match sh_in(dir, "git", &["check-ignore", "--no-index", "-q", ".env"]).status {
+        0 => true,
+        1 => false,
+        // Not a work tree, or no git.
+        _ => content
+            .as_deref()
+            .unwrap_or("")
+            .lines()
+            .any(|line| matches!(line.trim(), ".env" | ".env*" | "*.env")),
+    };
     if covered {
         return Ok(FileAction::Unchanged {
             rel: ".gitignore".to_string(),
@@ -542,6 +597,66 @@ mod tests {
         fs::write(glob_dir.path().join(".gitignore"), "*.env\n").unwrap();
         let action = plan_gitignore_env(glob_dir.path()).unwrap();
         assert_eq!(action.preview().status, Status::Unchanged);
+    }
+
+    /// A throwaway repository, isolated from the machine's git config; `None` when
+    /// git is not installed.
+    fn git_repo() -> Option<tempfile::TempDir> {
+        let dir = tempfile::tempdir().unwrap();
+        let status = std::process::Command::new("git")
+            .args(["init", "-q"])
+            .current_dir(dir.path())
+            .env("GIT_CONFIG_GLOBAL", "/dev/null")
+            .env("GIT_CONFIG_NOSYSTEM", "1")
+            .status();
+        match status {
+            Ok(status) if status.success() => Some(dir),
+            _ => {
+                eprintln!("skipping: git is not installed");
+                None
+            }
+        }
+    }
+
+    #[test]
+    fn in_a_repository_git_decides_whether_env_is_covered() {
+        // A later negation un-ignores `.env`, though the text lists it.
+        let Some(negated) = git_repo() else { return };
+        fs::write(negated.path().join(".gitignore"), ".env\n!.env\n").unwrap();
+        let action = plan_gitignore_env(negated.path()).unwrap();
+        assert_eq!(action.preview().status, Status::Updated);
+        action.perform(negated.path()).unwrap();
+        let ignored = sh_in(negated.path(), "git", &["check-ignore", "-q", ".env"]);
+        assert_eq!(ignored.status, 0, "{}", ignored.stderr);
+
+        // Ignored outside .gitignore: nothing to add.
+        let Some(excluded) = git_repo() else { return };
+        fs::write(excluded.path().join(".git/info/exclude"), ".env\n").unwrap();
+        let action = plan_gitignore_env(excluded.path()).unwrap();
+        assert_eq!(action.preview().status, Status::Unchanged);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn secret_path_links_are_refused() {
+        use std::os::unix::fs::symlink;
+        let dir = tempfile::tempdir().unwrap();
+        fs::write(dir.path().join(".env"), "A=1\n").unwrap();
+        assert!(refuse_unsafe_links(dir.path()).is_ok());
+
+        symlink(".env", dir.path().join(".env.example")).unwrap();
+        let err = refuse_unsafe_links(dir.path()).unwrap_err().to_string();
+        assert!(
+            err.contains(".env and .env.example are the same file"),
+            "{err}"
+        );
+
+        let dangling = tempfile::tempdir().unwrap();
+        symlink("nowhere", dangling.path().join(".env")).unwrap();
+        let err = refuse_unsafe_links(dangling.path())
+            .unwrap_err()
+            .to_string();
+        assert!(err.contains(".env is a symlink to nowhere"), "{err}");
     }
 
     #[test]
