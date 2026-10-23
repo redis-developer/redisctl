@@ -61,8 +61,9 @@ redis-enterprise = { workspace = true, optional = true }
 redis = { workspace = true, optional = true }
 urlencoding = { workspace = true, optional = true }
 
-# Experimental host integration; immutable revision for coordinated development.
-redis-mcp = { git = "https://github.com/redis-developer/redis-database-mcp-rs", rev = "8eff8240679d38157ee08b9d5e5eaeb656ce7550", default-features = false, features = ["keyspace", "strings"], optional = true }
+# Experimental host integration (the opt-in database-mcp-pilot feature). 0.1.0 is
+# the first release with `validate_redis_target_url` (redis-database-mcp-rs#126).
+redis-mcp = { version = "0.1.0", default-features = false, features = ["keyspace", "strings"], optional = true }
 
 # Policy configuration
 toml = { workspace = true }
