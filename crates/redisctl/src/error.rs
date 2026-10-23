@@ -331,7 +331,7 @@ impl RedisCtlError {
             {
                 vec![
                     "Re-run with --defaults to take the defaults without prompts".to_string(),
-                    "Flags answer questions up front: --url or --cloud, --agent, --skills-global or --no-skills"
+                    "Flags answer questions up front: --url or --cloud, --agent, --skills-global or --no-skills, --install-cli or --no-install-cli"
                         .to_string(),
                 ]
             }

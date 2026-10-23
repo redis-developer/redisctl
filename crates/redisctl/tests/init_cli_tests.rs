@@ -479,10 +479,123 @@ fn no_install_cli_is_respected() {
         ])
         .assert()
         .success()
-        // Whether redis-cli is installed here or not, the line must never plan the
-        // installer under --no-install-cli.
-        .stdout(predicate::str::contains("would install via").not())
+        // Whether redis-cli is installed here or not, the line must never plan,
+        // offer or suggest the installer under --no-install-cli.
+        .stdout(predicate::str::contains("install redis-cli").not())
+        .stdout(predicate::str::contains("to install").not())
         .stdout(predicate::str::contains("redis-cli"));
+}
+
+#[test]
+fn install_cli_and_no_install_cli_conflict() {
+    let dir = tempfile::tempdir().unwrap();
+    redisctl()
+        .current_dir(dir.path())
+        .args(["init", "--dry-run", "--install-cli", "--no-install-cli"])
+        .assert()
+        .code(2)
+        .stderr(predicate::str::contains("cannot be used with"));
+}
+
+/// With nothing to ask (piped stdin) and no --install-cli, the installer never runs:
+/// the line names the pinned, https-only command instead. The fakes fail the test if
+/// a downloader is reached.
+#[test]
+#[cfg(unix)]
+fn a_run_with_nothing_to_ask_names_the_installer_instead_of_running_it() {
+    let dir = tempfile::tempdir().unwrap();
+    let repo = skills_fixture();
+    let mut cmd = redisctl();
+    let path = cmd.downloaders();
+    // The installer needs sh; nothing else real is on PATH.
+    std::os::unix::fs::symlink("/bin/sh", path.join("sh")).unwrap();
+    cmd.current_dir(dir.path())
+        .env("PATH", path)
+        .args(["init", "--url", "redis://127.0.0.1:9", "--agent", "claude"])
+        .arg("--skills-repo")
+        .arg(repo.path())
+        .assert()
+        .code(10)
+        .stdout(predicate::str::is_match(
+            r"skipped   redis-cli  not installed: nothing to ask \(no terminal, or --defaults\); pass --install-cli, or run: curl --proto '=https' --tlsv1\.2 -fsSL https://packages\.redis\.io/redis-cli/install\.sh \| REDIS_CLI_VERSION=\d+\.\d+\.\d+ sh",
+        ).unwrap());
+}
+
+/// --install-cli fetches the script over https only and tells it which version to
+/// install, keeping a REDIS_CLI_VERSION the user already set.
+#[test]
+#[cfg(unix)]
+fn the_installer_is_fetched_https_only_and_pinned() {
+    use std::os::unix::fs::PermissionsExt;
+    for preset in [None, Some("7.4.0")] {
+        let dir = tempfile::tempdir().unwrap();
+        let home = tempfile::tempdir().unwrap();
+        let bin = tempfile::tempdir().unwrap();
+        for tool in ["sh", "cat", "dirname", "chmod"] {
+            let real = ["/bin", "/usr/bin"]
+                .iter()
+                .map(|d| std::path::Path::new(d).join(tool))
+                .find(|p| p.exists())
+                .unwrap();
+            std::os::unix::fs::symlink(real, bin.path().join(tool)).unwrap();
+        }
+        std::fs::write(
+            bin.path().join("curl"),
+            "#!/bin/sh\nprintf '%s ' \"$@\" > \"$(dirname \"$0\")/curl.args\"\ncat \"$(dirname \"$0\")/installer.sh\"\n",
+        )
+        .unwrap();
+        std::fs::set_permissions(
+            bin.path().join("curl"),
+            std::fs::Permissions::from_mode(0o755),
+        )
+        .unwrap();
+        std::fs::write(
+            bin.path().join("installer.sh"),
+            "printf %s \"$REDIS_CLI_VERSION\" > \"$BIN/version\"\necho '#!/bin/sh' > \"$BIN/redis-cli\"\nchmod +x \"$BIN/redis-cli\"\n",
+        )
+        .unwrap();
+        let repo = skills_fixture();
+        let mut cmd = redisctl();
+        cmd.current_dir(dir.path())
+            .env("HOME", home.path())
+            .env("PATH", bin.path())
+            .env("BIN", bin.path())
+            .args([
+                "init",
+                "--install-cli",
+                "--url",
+                "redis://127.0.0.1:9",
+                "--agent",
+                "claude",
+            ])
+            .arg("--skills-repo")
+            .arg(repo.path());
+        if let Some(version) = preset {
+            cmd.env("REDIS_CLI_VERSION", version);
+        }
+        let out = cmd.output().unwrap();
+        let stdout = String::from_utf8_lossy(&out.stdout);
+        assert!(
+            stdout.contains(
+                "created   redis-cli  installed via the official packages.redis.io script"
+            ),
+            "{stdout}"
+        );
+        let args = std::fs::read_to_string(bin.path().join("curl.args")).unwrap();
+        assert_eq!(
+            args.trim_end(),
+            "--proto =https --tlsv1.2 -fsSL https://packages.redis.io/redis-cli/install.sh"
+        );
+        let version = std::fs::read_to_string(bin.path().join("version")).unwrap();
+        match preset {
+            Some(preset) => assert_eq!(version, preset),
+            None => assert!(
+                version.split('.').count() == 3
+                    && version.split('.').all(|p| p.parse::<u32>().is_ok()),
+                "{version}"
+            ),
+        }
+    }
 }
 
 /// The redis-cli line reports what the official installer actually left behind. PATH
@@ -580,7 +693,14 @@ fn the_redis_cli_line_reports_what_the_installer_left_behind() {
                 .env("HOME", home.path())
                 .env("PATH", bin.path())
                 .env("BIN", bin.path())
-                .args(["init", "--url", "redis://127.0.0.1:9", "--agent", "claude"])
+                .args([
+                    "init",
+                    "--install-cli",
+                    "--url",
+                    "redis://127.0.0.1:9",
+                    "--agent",
+                    "claude",
+                ])
                 .arg("--skills-repo")
                 .arg(repo.path());
             if dry_run {
@@ -608,11 +728,20 @@ fn a_run_that_reaches_a_downloader_fails_its_test() {
     let dir = tempfile::tempdir().unwrap();
     let repo = skills_fixture();
     let mut cmd = redisctl();
-    // Only the fakes on PATH: no redis-cli, so the run plans the installer.
+    // Only the fakes on PATH: no redis-cli, so --install-cli runs the installer.
     let path = cmd.downloaders();
+    // The installer needs sh; nothing else real is on PATH.
+    std::os::unix::fs::symlink("/bin/sh", path.join("sh")).unwrap();
     cmd.current_dir(dir.path())
         .env("PATH", path)
-        .args(["init", "--url", "redis://127.0.0.1:9", "--agent", "claude"])
+        .args([
+            "init",
+            "--install-cli",
+            "--url",
+            "redis://127.0.0.1:9",
+            "--agent",
+            "claude",
+        ])
         .arg("--skills-repo")
         .arg(repo.path())
         .assert()
@@ -634,9 +763,12 @@ fn dry_run_plans_the_standard_skills_install() {
         ])
         .assert()
         .success()
-        .stdout(predicate::str::contains(
-            "would run: npx -y skills@latest add redis/agent-skills -s * -a claude-code -a codex -y",
-        ));
+        .stdout(
+            predicate::str::is_match(
+                r"would run: npx -y skills@\d+\.\d+\.\d+ add redis/agent-skills -s \* -a claude-code -a codex -y",
+            )
+            .unwrap(),
+        );
 }
 
 /// The installer's own words must reach the user; a generic "(offline?)" guess sent

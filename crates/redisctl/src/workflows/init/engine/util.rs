@@ -31,6 +31,16 @@ pub(crate) fn sh(cmd: &str, args: &[&str]) -> ShOutput {
     run(std::process::Command::new(cmd).args(args))
 }
 
+/// Like [`sh`], with `set` added to and `remove` taken out of the inherited environment.
+pub(crate) fn sh_env(cmd: &str, args: &[&str], set: &[(&str, &str)], remove: &[&str]) -> ShOutput {
+    let mut command = std::process::Command::new(cmd);
+    command.args(args).envs(set.iter().copied());
+    for key in remove {
+        command.env_remove(key);
+    }
+    run(&mut command)
+}
+
 /// Like [`sh`], but in `dir` - commands that act on the project must not depend on
 /// the caller's process cwd.
 pub(crate) fn sh_in(dir: &Path, cmd: &str, args: &[&str]) -> ShOutput {

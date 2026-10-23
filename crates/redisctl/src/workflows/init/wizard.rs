@@ -171,6 +171,7 @@ const LOCAL_FOUND_PROMPT: &str = "Found a local Redis at localhost:6379 - use it
 const LOCAL_NONE_PROMPT: &str = "No local Redis found - create one?";
 const AGENTS_PROMPT: &str = "Which agent(s) should be configured?";
 const SKILLS_PROMPT: &str = "Where should the Redis skills be installed?";
+const CLI_INSTALL_PROMPT: &str = "redis-cli is not installed - install it from packages.redis.io?";
 const INTERRUPTED: &str = "interrupted";
 
 /// Cancel tips are picked by prompt (see `error.rs`): the wizard's questions get
@@ -239,6 +240,24 @@ pub enum SkillsScope {
     Project,
     Global,
     Skip,
+}
+
+/// The installer runs a script from packages.redis.io, so a terminal run asks first,
+/// right before applying, and only when the plan would run it. By then `--cloud` may
+/// already have created a database, so Esc means "no" rather than cancelling the run;
+/// Ctrl-C still cancels.
+pub fn confirm_cli_install(version: &str) -> Result<bool, RedisCtlError> {
+    let items = [
+        format!("Yes, install redis-cli {version}"),
+        "No, skip it".to_string(),
+    ];
+    let selection = Select::with_theme(&RedisTheme)
+        .with_prompt(CLI_INSTALL_PROMPT)
+        .items(&items)
+        .default(0)
+        .interact_opt()
+        .map_err(prompt_failed)?;
+    Ok(selection == Some(0))
 }
 
 fn cancelled(prompt: &str) -> RedisCtlError {
@@ -474,6 +493,7 @@ mod tests {
             agents: Vec::new(),
             defaults: false,
             no_install_cli: false,
+            install_cli: false,
             skills_repo: None,
             skills_global: false,
             no_skills: false,
