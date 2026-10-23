@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1](https://github.com/redis/redisctl/compare/redisctl-mcp-v0.12.1...redisctl-mcp-v0.13.1) - 2026-10-23
+
+### Added
+
+- *(mcp)* add a capability-aware Search expert reference ([#1249](https://github.com/redis/redisctl/pull/1249))
+- *(mcp)* add opt-in redis-mcp read-only database pilot ([#1176](https://github.com/redis/redisctl/pull/1176))
+- *(mcp)* embed skills and add resource-based onboarding ([#1174](https://github.com/redis/redisctl/pull/1174))
+
+### Fixed
+
+- *(mcp)* refuse non-positive TTLs in redis_expire and redis_hexpire ([#1261](https://github.com/redis/redisctl/pull/1261))
+- *(cli)* pin the external tools init runs and fix its Docker MCP launcher ([#1293](https://github.com/redis/redisctl/pull/1293))
+- *(mcp)* block security-sensitive parameters in redis_config_set ([#1260](https://github.com/redis/redisctl/pull/1260))
+- *(mcp)* make empty GETRANGE and INFO replies explicit ([#1230](https://github.com/redis/redisctl/pull/1230))
+- *(mcp)* handle nil and array replies in json_get, json_arrpop, and xadd ([#1221](https://github.com/redis/redisctl/pull/1221))
+- *(mcp)* render Search and JSON server errors as the server sent them ([#1224](https://github.com/redis/redisctl/pull/1224))
+- *(mcp)* report the configured database default in profiles resources ([#1196](https://github.com/redis/redisctl/pull/1196))
+- *(mcp)* mask Unicode profile credentials without panicking ([#1180](https://github.com/redis/redisctl/pull/1180))
+
+### Other
+
+- *(mcp)* depend on redis-mcp 0.1.0 from crates.io ([#1294](https://github.com/redis/redisctl/pull/1294))
+- *(mcp)* retain safe Docker fixture failure diagnostics ([#1248](https://github.com/redis/redisctl/pull/1248))
+- repair public documentation and contributor links ([#1200](https://github.com/redis/redisctl/pull/1200))
+
 ## [0.12.1](https://github.com/redis/redisctl/compare/redisctl-mcp-v0.12.0...redisctl-mcp-v0.12.1) - 2026-10-01
 
 ### Fixed

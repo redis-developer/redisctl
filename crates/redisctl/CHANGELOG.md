@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.13.1](https://github.com/redis/redisctl/compare/redisctl-v0.13.0...redisctl-v0.13.1) - 2026-10-23
+
+### Other
+
+- *(cli)* carry ZIP module-archive contract tests forward from #1256 ([#1292](https://github.com/redis/redisctl/pull/1292))
+
 ## [0.12.1](https://github.com/redis/redisctl/compare/redisctl-v0.12.0...redisctl-v0.12.1) - 2026-10-01
 
 ### Other
