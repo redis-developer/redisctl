@@ -13,6 +13,7 @@ use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 
 use crate::workflows::init::engine::change::{Change, Status};
+use crate::workflows::init::engine::pins;
 use crate::workflows::init::engine::project::Agent;
 use crate::workflows::init::engine::util::{first_error_line, has_bin, read_if, sh_in};
 use crate::workflows::init::engine::{Event, InitError};
@@ -274,11 +275,12 @@ pub(crate) struct SkillsAction {
 
 impl SkillsAction {
     fn npx_args(&self) -> Vec<String> {
-        // Pinning @latest keeps a stale npx cache from running an old skills CLI
-        // that rejects newer flags.
+        // An exact version: npx never serves a cached copy of a different one, so a
+        // stale cache cannot run an old CLI, and a new release cannot change what
+        // init runs until the pin is bumped.
         let mut args: Vec<String> = [
             "-y",
-            "skills@latest",
+            pins::SKILLS_CLI,
             "add",
             "redis/agent-skills",
             "-s",
@@ -333,7 +335,10 @@ impl SkillsAction {
         Change::new(
             self.target(),
             Status::Skipped,
-            "not installed, as asked - add them later with: npx skills add redis/agent-skills",
+            format!(
+                "not installed, as asked - add them later with: npx -y {} add redis/agent-skills",
+                pins::SKILLS_CLI
+            ),
         )
     }
 
@@ -404,7 +409,10 @@ impl SkillsAction {
                         } else {
                             Status::Created
                         },
-                        "redis/agent-skills (local checkout; run npx skills add redis/agent-skills to adopt standard management)",
+                        format!(
+                            "redis/agent-skills (local checkout; run npx -y {} add redis/agent-skills to adopt standard management)",
+                            pins::SKILLS_CLI
+                        ),
                     )
                 };
                 CopyStep {
@@ -678,7 +686,10 @@ mod tests {
         assert_eq!(change.status, Status::Planned);
         assert_eq!(
             change.note,
-            "would run: npx -y skills@latest add redis/agent-skills -s * -a claude-code -a github-copilot -g -y"
+            format!(
+                "would run: npx -y {} add redis/agent-skills -s * -a claude-code -a github-copilot -g -y",
+                pins::SKILLS_CLI
+            )
         );
     }
 
