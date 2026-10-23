@@ -347,8 +347,9 @@ async fn test_search_tools() {
             "prefixes": ["ft_doc:"],
             "schema": [
                 {"name": "$.title", "alias": "title", "field_type": "TEXT"},
-                {"name": "$.tags", "alias": "tags", "field_type": "TAG"},
-                {"name": "$.score", "alias": "score", "field_type": "NUMERIC", "sortable": true}
+                {"name": "$.tags", "alias": "tags", "field_type": "TAG", "separator": ","},
+                {"name": "$.score", "alias": "score", "field_type": "NUMERIC", "sortable": true},
+                {"name": "$.score", "alias": "max", "field_type": "NUMERIC", "sortable": true}
             ]
         }),
     )
@@ -405,8 +406,91 @@ async fn test_search_tools() {
     )
     .await;
     assert!(
-        text.contains("total") || text.contains("Total results"),
+        text.contains("total") || text.contains("Results"),
         "ft_aggregate: {}",
+        text
+    );
+
+    // redis_ft_aggregate -- structured group_by/reduce instead of raw_args
+    let text = call_tool_text(
+        &redis::ft_aggregate(state.clone()),
+        json!({
+            "index": "ft_test_idx",
+            "query": "*",
+            "group_by": [],
+            "reduce": ["COUNT 0 AS total"]
+        }),
+    )
+    .await;
+    assert!(text.contains("total: 3"), "ft_aggregate group_by: {}", text);
+
+    // Keyword-named GROUPBY properties and SORTBY MAX must match raw syntax.
+    let structured = redis::ft_aggregate(state.clone())
+        .call(json!({
+            "index": "ft_test_idx", "query": "*",
+            "group_by": ["max"], "reduce": ["COUNT 0 AS count"],
+            "sort_by": ["@max", "DESC", "MAX", "2"],
+            "limit_offset": 1, "limit_num": 1
+        }))
+        .await;
+    assert!(!structured.is_error, "structured aggregate: {structured:?}");
+    let raw = redis::ft_aggregate(state.clone())
+        .call(json!({
+            "index": "ft_test_idx", "query": "*",
+            "raw_args": ["GROUPBY", "1", "@max", "REDUCE", "COUNT", "0", "AS", "count",
+                         "SORTBY", "2", "@max", "DESC", "MAX", "2", "LIMIT", "1", "1"]
+        }))
+        .await;
+    assert!(!raw.is_error, "raw aggregate: {raw:?}");
+    let structured_text = structured
+        .content
+        .first()
+        .and_then(|c| c.as_text())
+        .unwrap();
+    let raw_text = raw.content.first().and_then(|c| c.as_text()).unwrap();
+    assert_eq!(structured_text, raw_text);
+    assert!(
+        structured_text.starts_with("Results: 1\n"),
+        "{structured_text}"
+    );
+    assert!(structured_text.contains("max: 9,"), "{structured_text}");
+    assert!(structured_text.contains("count: 1"), "{structured_text}");
+
+    // redis_ft_aggregate -- no pipeline is an error with guidance, not blank rows
+    let result = redis::ft_aggregate(state.clone())
+        .call(json!({"index": "ft_test_idx", "query": "*"}))
+        .await;
+    let text = result
+        .content
+        .first()
+        .and_then(|c: &tower_mcp::Content| c.as_text())
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        result.is_error,
+        "ft_aggregate without pipeline should error: {}",
+        text
+    );
+    assert!(
+        text.contains("needs a pipeline"),
+        "ft_aggregate guidance: {}",
+        text
+    );
+
+    // Unknown input fields are rejected (deny_unknown_fields on all tool inputs)
+    let result = redis::ft_aggregate(state.clone())
+        .call(json!({"index": "ft_test_idx", "query": "*", "groupby": ["@tags"]}))
+        .await;
+    let text = result
+        .content
+        .first()
+        .and_then(|c: &tower_mcp::Content| c.as_text())
+        .unwrap_or_default()
+        .to_string();
+    assert!(result.is_error, "unknown field should error: {}", text);
+    assert!(
+        text.contains("unknown field"),
+        "unknown field message: {}",
         text
     );
 
