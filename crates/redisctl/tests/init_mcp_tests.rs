@@ -116,6 +116,17 @@ fn docker_mcp_rewrites_only_the_local_hostname() {
             argv.windows(2).any(|w| w == ["-e", "REDIS_PWD"]),
             "{argv:?}"
         );
+        // The image has no ENTRYPOINT: arguments after it replace its CMD, so the
+        // launcher names the server script itself, on an image pinned by digest.
+        let image = argv
+            .iter()
+            .position(|a| a.starts_with("mcp/redis@sha256:"))
+            .unwrap_or_else(|| panic!("{argv:?}"));
+        assert_eq!(
+            argv[image + 1..image + 5],
+            ["uv", "run", "redis-mcp-server", "--url"],
+            "{argv:?}"
+        );
         for secret in ["s3cret", "p%40ss", "p@ss"] {
             assert!(!argv.iter().any(|a| a.contains(secret)), "{argv:?}");
         }
@@ -215,6 +226,15 @@ fn mcp_launcher_reads_the_url_the_way_init_does() {
     // A key set twice resolves to its last line, as application dotenv loaders read it.
     let twice = format!("REDIS_URL=redis://first:1\nREDIS_URL='{url}'\n");
     let (argv, _) = launch(&twice);
+    // uvx runs an exact release, never whatever @latest resolves to at launch.
+    let pinned = argv[1].strip_prefix("redis-mcp-server==").unwrap_or("");
+    assert!(
+        argv[0] == "--from"
+            && pinned.split('.').count() == 3
+            && pinned.split('.').all(|p| p.parse::<u32>().is_ok())
+            && argv[2..4] == ["redis-mcp-server", "--url"],
+        "{argv:?}"
+    );
     let node = std::process::Command::new("node")
         .current_dir(dir.path())
         .env_remove("REDIS_URL")

@@ -74,7 +74,8 @@ pub fn fake_redis_on(listener: std::net::TcpListener) -> u16 {
 
 /// `redisctl` with a throwaway HOME and failing `curl`/`wget` fakes first on PATH,
 /// so no run reaches the network or the developer's home. A run that calls a fake
-/// fails the test when this drops: pass `--no-install-cli`, or put your own fakes
+/// fails the test when this drops. Only `--install-cli` reaches the redis-cli
+/// installer from a test (nothing can answer its prompt); with it, put your own fakes
 /// on PATH.
 pub struct Hermetic {
     cmd: assert_cmd::Command,
@@ -105,7 +106,10 @@ pub fn hermetic_redisctl() -> Hermetic {
         .env("PATH", path)
         // Explicitly off: a key in the developer's (or CI's) environment must not
         // make test runs send telemetry.
-        .env("REDISCTL_INIT_AMPLITUDE_KEY", "");
+        .env("REDISCTL_INIT_AMPLITUDE_KEY", "")
+        // The redis-cli installer's own variables: tests set them when they mean to.
+        .env_remove("REDIS_CLI_VERSION")
+        .env_remove("REDIS_CLI_BASE_URL");
     Hermetic { cmd, home }
 }
 
